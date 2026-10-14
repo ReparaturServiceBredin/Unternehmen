@@ -18,6 +18,9 @@ on:
 permissions:
   contents: write
 
+env:
+  PYTHONUTF8: "1"   # Umlaute/Sonderzeichen in Python-Ausgaben auch unter Windows
+
 concurrency:
   group: release
   cancel-in-progress: false

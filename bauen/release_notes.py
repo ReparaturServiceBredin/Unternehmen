@@ -9,4 +9,4 @@ text = (wurzel / "docs/AENDERUNGEN.md").read_text(encoding="utf-8")
 treffer = re.search(rf"^## {re.escape(version)}\b.*?$(.*?)(?=^## |\Z)", text, re.M | re.S)
 notes = treffer.group(1).strip() if treffer else f"Version {version}"
 (wurzel / "release_notes.md").write_text(notes + "\n", encoding="utf-8")
-print(notes)
+print(f"Release-Hinweise geschrieben ({len(notes)} Zeichen)")
