@@ -439,7 +439,8 @@ def interessenten_zum_loeschen(con, einst):
     grenze = (datetime.now() - timedelta(days=30 * monate)).isoformat(timespec="seconds")
     return con.execute(
         "SELECT * FROM kunden k WHERE interessent=1 AND geaendert_am < ? "
-        "AND NOT EXISTS (SELECT 1 FROM dokumente d WHERE d.kunde_id=k.id) ORDER BY geaendert_am", (grenze,)).fetchall()
+        "AND NOT EXISTS (SELECT 1 FROM dokumente d WHERE d.kunde_id=k.id) "
+        "AND NOT EXISTS (SELECT 1 FROM auftraege a WHERE a.kunde_id=k.id) ORDER BY geaendert_am", (grenze,)).fetchall()
 
 
 # ------------------------------------------------------------------ IMAP

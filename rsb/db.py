@@ -39,6 +39,7 @@ STANDARD_EINSTELLUNGEN = {
     "anzahlung_prozent": 50,
     "mahngebuehr_cent": 395,
     "mahnstufen": 2,
+    "kva_gueltig_tage": 30,
     # Layout
     "farbe_primaer": "#1C54A3",
     "farbe_sekundaer": "#5D6670",
@@ -129,9 +130,12 @@ def initialisieren(pfad):
     for k, v in STANDARD_EINSTELLUNGEN.items():
         if k not in vorhanden:
             con.execute("INSERT INTO einstellungen VALUES (?, ?)", (k, json.dumps(v)))
-    if not con.execute("SELECT 1 FROM textbausteine LIMIT 1").fetchone():
-        from .textbausteine_standard import STANDARD_TEXTBAUSTEINE
-        for tb in STANDARD_TEXTBAUSTEINE:
+    from .textbausteine_standard import STANDARD_TEXTBAUSTEINE
+    vorhandene_typen = {r[0] for r in con.execute("SELECT DISTINCT dokumenttyp FROM textbausteine")}
+    leer = not vorhandene_typen
+    for tb in STANDARD_TEXTBAUSTEINE:
+        # beim ersten Start alle; bei Updates nur Bausteine für neu hinzugekommene Dokumenttypen
+        if leer or tb["dokumenttyp"] not in vorhandene_typen:
             con.execute(
                 "INSERT INTO textbausteine (kategorie, dokumenttyp, name, text, standard) VALUES (?,?,?,?,?)",
                 (tb["kategorie"], tb["dokumenttyp"], tb["name"], tb["text"], tb["standard"]),

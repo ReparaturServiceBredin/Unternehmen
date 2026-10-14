@@ -1,0 +1,18 @@
+{% macro karte(a, heute) -%}
+<div class="auftrag" draggable="true" data-id="{{ a.id }}">
+  <div class="a-kopf"><a href="{{ url_for('main.auftrag', aid=a.id) }}">{{ a.auftragsnr }}</a>
+    <span class="klein">{{ 'seit ' ~ a.eingang_am|tage_seit ~ ' Tg.' if a.status != 'erledigt' else (a.erledigt_am|datum) }}</span></div>
+  <div class="a-name">{{ a.firma if a.ktyp == 'firma' and a.firma else ((a.vorname or '') ~ ' ' ~ (a.nachname or '')).strip() }}</div>
+  {% if a.geraet %}<div class="a-geraet">{{ a.geraet }}</div>{% endif %}
+  {% if a.fehler %}<div class="klein">{{ a.fehler|truncate(70) }}</div>{% endif %}
+  <div class="a-docs">
+    {% if a.kva_id %}<a href="{{ url_for('main.dokument', did=a.kva_id) }}" class="marke-status {{ 'st-festgeschrieben' if a.kva_status == 'festgeschrieben' else 'st-entwurf' }}">KVA {{ a.kva_nummer or 'Entwurf' }} · {{ a.kva_betrag|euro }}</a>{% endif %}
+    {% if a.rechnung_id %}<a href="{{ url_for('main.dokument', did=a.rechnung_id) }}" class="marke-status {{ {'festgeschrieben':'st-gesendet','storniert':'st-fehler'}.get(a.re_status, 'st-warnung') }}">{{ a.re_nummer or 'Rechnung: Entwurf' }}{{ (' · ' ~ (a.re_betrag|euro)) if a.re_nummer }}</a>{% endif %}
+  </div>
+  <div class="a-pfeile">
+    {% set reihe = ['offen', 'in_arbeit', 'erledigt'] %}{% set i = reihe.index(a.status) %}
+    {% if i > 0 %}<form method="post" action="{{ url_for('main.auftrag_status', aid=a.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ reihe[i-1] }}"><button class="zweit klein" title="zurück">←</button></form>{% endif %}
+    {% if i < 2 %}<form method="post" action="{{ url_for('main.auftrag_status', aid=a.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ reihe[i+1] }}"><button class="zweit klein" title="weiter">{{ 'Starten →' if i == 0 else 'Erledigt ✓' }}</button></form>{% endif %}
+  </div>
+</div>
+{%- endmacro %}

@@ -4,8 +4,8 @@ import re
 from datetime import date
 from pathlib import Path
 
-from flask import (Blueprint, abort, current_app, flash, redirect, render_template, request, send_file, session,
-                   url_for)
+from flask import (Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file,
+                   session, url_for)
 from PIL import Image
 from werkzeug.security import check_password_hash, generate_password_hash
 
@@ -100,6 +100,9 @@ def start():
             "SELECT COALESCE(SUM(summe_brutto - bezahlt_betrag),0) FROM dokumente "
             "WHERE status='festgeschrieben' AND typ='rechnung'").fetchone()[0],
     }
+    zahlen["auftraege"] = {r[0]: r[1] for r in con.execute(
+        "SELECT status, COUNT(*) FROM auftraege WHERE status<>'erledigt' OR erledigt_am >= date('now','-30 day') "
+        "GROUP BY status")}
     zahlen["anfragen"] = con.execute("SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'"
                                      ).fetchone()[0]
     letzte = con.execute(
@@ -164,7 +167,10 @@ def kunde(kid=None):
                             (kid,)).fetchall() if kid else []
     kunden_anfragen = con.execute("SELECT * FROM anfragen WHERE kunde_id=? ORDER BY eingang_am DESC",
                                   (kid,)).fetchall() if kid else []
-    return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen)
+    kunden_auftraege = con.execute("SELECT * FROM auftraege WHERE kunde_id=? ORDER BY eingang_am DESC",
+                                   (kid,)).fetchall() if kid else []
+    return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen,
+                           auftraege=kunden_auftraege)
 
 
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
@@ -185,6 +191,7 @@ def kunde_loeschen(kid):
         raise EingabeFehler("Dieser Kunde hat festgeschriebene Dokumente und muss wegen der Aufbewahrungspflicht "
                             "erhalten bleiben. Sie können ihn stattdessen archivieren.")
     with dbm.Transaktion(con):
+        con.execute("DELETE FROM auftraege WHERE kunde_id=?", (kid,))
         for d in con.execute("SELECT id FROM dokumente WHERE kunde_id=?", (kid,)).fetchall():
             con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
             con.execute("DELETE FROM dokumente WHERE id=?", (d["id"],))
@@ -271,6 +278,7 @@ def artikel_loeschen(aid):
 @bp.route("/dokumente")
 def dokumente():
     status = request.args.get("status", "")
+    typ = request.args.get("typ", "")
     q = request.args.get("q", "").strip()
     sql = ("SELECT d.*, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM dokumente d "
            "LEFT JOIN kunden k ON k.id=d.kunde_id WHERE 1=1")
@@ -278,42 +286,31 @@ def dokumente():
     if status:
         sql += " AND d.status=?"
         args.append(status)
+    if typ == "kva":
+        sql += " AND d.typ='kva'"
+    elif typ == "rechnung":
+        sql += " AND d.typ IN ('rechnung','storno')"
     if q:
         sql += " AND (d.nummer LIKE ? OR d.betreff LIKE ? OR k.firma LIKE ? OR k.nachname LIKE ?)"
         args += [f"%{q}%"] * 4
     sql += " ORDER BY CASE d.status WHEN 'entwurf' THEN 0 ELSE 1 END, d.datum DESC, d.id DESC"
     return render_template("dokumente.html", dokumente=dbm.get_db().execute(sql, args).fetchall(),
-                           status=status, q=q)
+                           status=status, q=q, typ=typ)
 
 
 def _zahlungsziel(einst, kunde):
-    if kunde and kunde["zahlungsziel_tage"] is not None:
-        return kunde["zahlungsziel_tage"]
-    if kunde and kunde["typ"] == "firma":
-        return int(einst["zahlungsziel_firma"])
-    return int(einst["zahlungsziel_privat"])
+    return logik.zahlungsziel(einst, kunde)
 
 
 @bp.route("/dokumente/neu")
 def dokument_neu():
     con = dbm.get_db()
-    einst = dbm.einstellungen(con)
     typ = request.args.get("typ", "rechnung")
-    if typ not in ("rechnung",):
+    if typ not in ("rechnung", "kva"):
         abort(400)
-    kid = request.args.get("kunde_id", type=int)
-    kunde = con.execute("SELECT * FROM kunden WHERE id=?", (kid,)).fetchone() if kid else None
-    texte = logik.standard_texte(con, typ)
-    ziel = _zahlungsziel(einst, kunde)
     with dbm.Transaktion(con):
-        cur = con.execute(
-            "INSERT INTO dokumente (typ, kunde_id, datum, leistungsdatum, zahlungsziel_tage, faellig_am, einleitung, "
-            "schlusstext, hinweise, steuer_modus, erstellt_am, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
-            (typ, kunde["id"] if kunde else None, heute(), heute(), ziel, plus_tage(heute(), ziel),
-             texte.get("einleitung", ""), texte.get("schluss", ""), texte.get("hinweis", ""),
-             einst["steuer_modus"], dbm.jetzt(), dbm.jetzt()))
-        dbm.protokollieren("entwurf_angelegt", "dokument", cur.lastrowid, {"typ": typ}, con=con)
-    return redirect(url_for("main.dokument", did=cur.lastrowid))
+        did = logik.neuer_entwurf(con, dbm.einstellungen(con), typ, request.args.get("kunde_id", type=int))
+    return redirect(url_for("main.dokument", did=did))
 
 
 def _dokument_laden(did):
@@ -337,12 +334,13 @@ def dokument(did):
             return redirect(url_for("main.dokument", did=did, vorschau=1))
         if aktion == "festschreiben":
             nummer = logik.festschreiben(con, did, daten_dir())
-            flash(f"Rechnung {nummer} wurde festgeschrieben und archiviert.", "ok")
+            flash(f"{logik.titel(d['typ'])} {nummer} wurde festgeschrieben und archiviert.", "ok")
             return redirect(url_for("main.dokument", did=did))
         flash("Entwurf gespeichert.", "ok")
         return redirect(url_for("main.dokument", did=did))
 
     kunde = con.execute("SELECT * FROM kunden WHERE id=?", (d["kunde_id"],)).fetchone() if d["kunde_id"] else None
+    g.auftrag = con.execute("SELECT * FROM auftraege WHERE kva_id=? OR rechnung_id=? LIMIT 1", (did, did)).fetchone()
     if d["status"] != "entwurf":
         snap = json.loads(d["snapshot_json"])
         versand = con.execute("SELECT * FROM versandprotokoll WHERE dokument_id=? ORDER BY id DESC", (did,)).fetchall()
@@ -369,7 +367,12 @@ def _entwurf_speichern(con, d, einst):
     kunde = con.execute("SELECT * FROM kunden WHERE id=?", (kid,)).fetchone() if kid else None
     datum = _f("datum") or heute()
     ziel = _f("zahlungsziel_tage")
-    ziel = int(ziel) if ziel.isdigit() else _zahlungsziel(einst, kunde)
+    if ziel.isdigit():
+        ziel = int(ziel)
+    elif d["typ"] == "kva":
+        ziel = int(einst.get("kva_gueltig_tage") or 30)
+    else:
+        ziel = _zahlungsziel(einst, kunde)
     try:
         faellig = plus_tage(datum, ziel)
         for feld in ("leistungsdatum", "leistungsdatum_bis"):
@@ -448,32 +451,21 @@ def dokument_stornieren(did):
 
 @bp.route("/dokumente/<int:did>/kopieren", methods=["POST"])
 def dokument_kopieren(did):
-    """Legt einen neuen Entwurf mit denselben Positionen an (z. B. als Korrektur nach Storno)."""
+    """Neuer Rechnungsentwurf mit denselben Positionen (Korrektur nach Storno oder KVA → Rechnung)."""
     con = dbm.get_db()
     d = _dokument_laden(did)
-    einst = dbm.einstellungen(con)
-    typ = "rechnung"
-    texte = logik.standard_texte(con, typ)
-    kunde = con.execute("SELECT * FROM kunden WHERE id=?", (d["kunde_id"],)).fetchone() if d["kunde_id"] else None
-    ziel = _zahlungsziel(einst, kunde)
+    pos = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (did,)).fetchall()
     with dbm.Transaktion(con):
-        cur = con.execute(
-            "INSERT INTO dokumente (typ, kunde_id, datum, leistungsdatum, leistungsdatum_bis, zahlungsziel_tage, "
-            "faellig_am, betreff, einleitung, schlusstext, hinweise, steuer_modus, erstellt_am, geaendert_am) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            (typ, d["kunde_id"], heute(), d["leistungsdatum"], d["leistungsdatum_bis"], ziel, plus_tage(heute(), ziel),
-             d["betreff"] if d["typ"] == "rechnung" else "", texte.get("einleitung", ""), texte.get("schluss", ""),
-             d["hinweise"] if d["typ"] == "rechnung" else "", einst["steuer_modus"], dbm.jetzt(), dbm.jetzt()))
-        neu = cur.lastrowid
-        for p in con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (did,)).fetchall():
-            con.execute(
-                "INSERT INTO positionen (dokument_id, pos, artikel_id, bezeichnung, beschreibung, menge, einheit, "
-                "einzelpreis, teilekosten, steuersatz, leistungsart) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (neu, p["pos"], p["artikel_id"], p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"],
-                 abs(p["einzelpreis"]), abs(p["teilekosten"]), p["steuersatz"], p["leistungsart"]))
-        logik.summen_speichern(con, neu)
+        neu = logik.neuer_entwurf(con, dbm.einstellungen(con), "rechnung", d["kunde_id"],
+                                  d["betreff"] if d["typ"] in ("rechnung", "kva") else "", pos)
+        if d["typ"] in ("rechnung", "kva") and d["hinweise"]:
+            con.execute("UPDATE dokumente SET hinweise=? WHERE id=?", (d["hinweise"], neu))
+        # gehört der KVA zu einem Reparaturauftrag ohne Rechnung -> Rechnung dort eintragen
+        con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE kva_id=? AND rechnung_id IS NULL",
+                    (neu, dbm.jetzt(), did))
         dbm.protokollieren("entwurf_kopiert", "dokument", neu, {"von": d["nummer"] or did}, con=con)
-    flash("Neuer Entwurf als Kopie angelegt.", "ok")
+    flash("Rechnungsentwurf aus dem Kostenvoranschlag erstellt." if d["typ"] == "kva"
+          else "Neuer Entwurf als Kopie angelegt.", "ok")
     return redirect(url_for("main.dokument", did=neu))
 
 
@@ -513,8 +505,8 @@ EINSTELLUNGS_BEREICHE = {
     "firma": ["firma_name", "firma_zusatz", "inhaber", "strasse", "plz", "ort", "land", "telefon", "email", "web",
               "steuernummer", "ust_idnr", "bank_name", "kontoinhaber", "iban", "bic"],
     "rechnung": ["steuer_modus", "regel_steuersatz", "kleinunternehmer_hinweis", "zahlungsziel_privat",
-                 "zahlungsziel_firma", "zahlungsarten_text", "anzahlung_prozent", "mahngebuehr_cent", "mahnstufen",
-                 "nummern_format", "praefix_rechnung", "praefix_kunde", "leistungsarten"],
+                 "zahlungsziel_firma", "zahlungsarten_text", "kva_gueltig_tage", "anzahlung_prozent", "mahngebuehr_cent", "mahnstufen",
+                 "nummern_format", "praefix_rechnung", "praefix_angebot", "praefix_kunde", "leistungsarten"],
     "layout": ["farbe_primaer", "farbe_sekundaer", "schrift", "schriftgroesse", "logo_breite_mm", "logo_position",
                "kopfzeile_text", "fusszeile_text", "faltmarken", "girocode"],
     "email": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "absender_name", "absender_email",
@@ -527,7 +519,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {"faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"zahlungsziel_privat", "zahlungsziel_firma", "anzahlung_prozent", "mahnstufen", "smtp_port",
+GANZZAHL = {"zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
@@ -721,7 +713,7 @@ def textbausteine():
 
 TB_KATEGORIEN = {"einleitung": "Einleitung", "schluss": "Schlusstext", "hinweis": "Hinweis",
                  "email_betreff": "E-Mail-Betreff", "email_text": "E-Mail-Text"}
-TB_TYPEN = {"alle": "Alle Dokumente", "rechnung": "Rechnung", "storno": "Stornorechnung"}
+TB_TYPEN = {"alle": "Alle Dokumente", "rechnung": "Rechnung", "storno": "Stornorechnung", "kva": "Kostenvoranschlag"}
 
 
 @bp.route("/textbausteine/neu", methods=["GET", "POST"])
@@ -848,6 +840,7 @@ def anfrage(aid):
     a = _anfrage_laden(aid)
     kunde = con.execute("SELECT * FROM kunden WHERE id=?", (a["kunde_id"],)).fetchone() if a["kunde_id"] else None
     vorhanden = None if kunde else anf.passender_kunde(con, a["email"], a["telefon"])
+    g.auftrag = con.execute("SELECT * FROM auftraege WHERE anfrage_id=? LIMIT 1", (aid,)).fetchone()
     return render_template("anfrage.html", a=a, kunde=kunde, vorhanden=vorhanden,
                            felder=json.loads(a["felder_json"] or "{}"), gruende=json.loads(a["gruende_json"] or "[]"),
                            leistungsart=anf.geraet_zu_leistungsart(a["geraet"]), anzeigename=anf.anfrage_anzeigename)
@@ -901,3 +894,134 @@ def interessenten_loeschen():
                                    con=con)
     flash(f"{len([i for i in ids if i in erlaubt])} Interessent(en) gelöscht.", "ok")
     return redirect(url_for("main.anfragen_liste"))
+
+
+# ====================================================================== Reparaturaufträge (Tafel)
+
+from . import auftraege as auf  # noqa: E402
+
+AUFTRAG_SQL = (
+    "SELECT a.*, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp, k.telefon AS ktelefon, "
+    "kv.status AS kva_status, kv.nummer AS kva_nummer, kv.summe_brutto AS kva_betrag, "
+    "re.status AS re_status, re.nummer AS re_nummer, re.summe_brutto AS re_betrag "
+    "FROM auftraege a JOIN kunden k ON k.id=a.kunde_id "
+    "LEFT JOIN dokumente kv ON kv.id=a.kva_id LEFT JOIN dokumente re ON re.id=a.rechnung_id ")
+
+
+@bp.route("/auftraege")
+def auftraege():
+    con = dbm.get_db()
+    alle_erledigten = request.args.get("alle") == "1"
+    spalten = {}
+    for status in auf.STATUS:
+        sql = AUFTRAG_SQL + "WHERE a.status=? "
+        args = [status]
+        if status == "erledigt" and not alle_erledigten:
+            sql += "AND a.erledigt_am >= date('now', '-30 day') "
+        sql += "ORDER BY a.reihenfolge, a.id"
+        spalten[status] = con.execute(sql, args).fetchall()
+    kunden_liste = con.execute("SELECT * FROM kunden WHERE archiviert=0 "
+                               "ORDER BY COALESCE(NULLIF(firma,''), nachname), vorname").fetchall()
+    return render_template("auftraege.html", spalten=spalten, status_namen=auf.STATUS, kunden=kunden_liste,
+                           leistungsarten=_leistungsarten(), alle_erledigten=alle_erledigten,
+                           heute=date.today().isoformat())
+
+
+def _auftrag_felder():
+    return {f: _f(f) for f in ("geraet", "leistungsart", "seriennummer", "zubehoer", "fehler", "notizen")}
+
+
+@bp.route("/auftraege/neu", methods=["POST"])
+def auftrag_neu():
+    con = dbm.get_db()
+    kid = request.form.get("kunde_id", type=int)
+    anfrage_id = request.form.get("anfrage_id", type=int)
+    with dbm.Transaktion(con):
+        if anfrage_id and not kid:
+            a = con.execute("SELECT * FROM anfragen WHERE id=?", (anfrage_id,)).fetchone()
+            kid = a["kunde_id"] if a and a["kunde_id"] else anf.kunde_aus_anfrage(con, anfrage_id,
+                                                                                  dbm.einstellungen(con))[0]
+        aid = auf.anlegen(con, kid, anfrage_id=anfrage_id, **_auftrag_felder())
+    flash("Reparaturauftrag angelegt.", "ok")
+    return redirect(url_for("main.auftrag", aid=aid))
+
+
+def _auftrag_laden(aid):
+    a = dbm.get_db().execute(AUFTRAG_SQL + "WHERE a.id=?", (aid,)).fetchone()
+    if not a:
+        abort(404)
+    return a
+
+
+@bp.route("/auftraege/<int:aid>", methods=["GET", "POST"])
+def auftrag(aid):
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    if request.method == "POST":
+        felder = _auftrag_felder()
+        with dbm.Transaktion(con):
+            con.execute(f"UPDATE auftraege SET {', '.join(f'{k}=?' for k in felder)}, geaendert_am=? WHERE id=?",
+                        (*felder.values(), dbm.jetzt(), aid))
+            dbm.protokollieren("auftrag_geaendert", "auftrag", aid, con=con)
+        flash("Auftrag gespeichert.", "ok")
+        return redirect(url_for("main.auftrag", aid=aid))
+    anfrage_row = con.execute("SELECT * FROM anfragen WHERE id=?", (a["anfrage_id"],)).fetchone() \
+        if a["anfrage_id"] else None
+    return render_template("auftrag.html", a=a, status_namen=auf.STATUS, leistungsarten=_leistungsarten(),
+                           anfrage=anfrage_row)
+
+
+@bp.route("/auftraege/<int:aid>/status", methods=["POST"])
+def auftrag_status(aid):
+    """Wird von der Tafel (Ziehen & Ablegen) per fetch aufgerufen, oder per Knopf als normales Formular."""
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    status = request.form.get("status", "")
+    with dbm.Transaktion(con):
+        neue_rechnung = auf.status_setzen(con, aid, status, request.form.get("vor_id", type=int))
+    ziel = url_for("main.dokument", did=neue_rechnung) if neue_rechnung else None
+    if neue_rechnung:
+        flash("Auftrag erledigt – Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify(ok=True, rechnung_url=ziel)
+    if neue_rechnung:
+        return redirect(ziel)
+    return redirect(request.referrer or url_for("main.auftraege"))
+
+
+@bp.route("/auftraege/<int:aid>/kva", methods=["POST"])
+def auftrag_kva(aid):
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    with dbm.Transaktion(con):
+        did = auf.kva_erstellen(con, aid)
+    return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/auftraege/<int:aid>/rechnung", methods=["POST"])
+def auftrag_rechnung(aid):
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    with dbm.Transaktion(con):
+        did, neu = auf.rechnung_erstellen(con, aid)
+    if neu:
+        flash("Rechnungsentwurf erstellt. Bitte prüfen und festschreiben.", "ok")
+    return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/auftraege/<int:aid>/loeschen", methods=["POST"])
+def auftrag_loeschen(aid):
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    if a["re_status"] in ("festgeschrieben", "storniert") or a["kva_status"] in ("festgeschrieben",):
+        raise EingabeFehler("Zu diesem Auftrag gibt es festgeschriebene Dokumente – er kann nicht gelöscht werden.")
+    with dbm.Transaktion(con):
+        for did in (a["kva_id"], a["rechnung_id"]):
+            if did:
+                con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
+                con.execute("DELETE FROM positionen WHERE dokument_id=?", (did,))
+                con.execute("DELETE FROM dokumente WHERE id=? AND status='entwurf'", (did,))
+        con.execute("DELETE FROM auftraege WHERE id=?", (aid,))
+        dbm.protokollieren("auftrag_geloescht", "auftrag", aid, {"auftragsnr": a["auftragsnr"]}, con=con)
+    flash("Auftrag gelöscht.", "ok")
+    return redirect(url_for("main.auftraege"))

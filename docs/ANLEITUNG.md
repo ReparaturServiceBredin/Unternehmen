@@ -186,3 +186,33 @@ hineinkopieren. Die Anfrage wird genauso geprüft.
 
 Die Anfragen werden nur abgeholt, **solange das Programm läuft**. Beim nächsten Start holt das Tool alles nach,
 was in den letzten 60 Tagen eingegangen ist.
+
+## 11. Reparaturaufträge (Tafel) und Kostenvoranschläge
+
+Unter **Verkauf → Reparaturaufträge** sehen Sie alle Aufträge auf einer Tafel mit drei Spalten:
+**Offen → In Arbeit → Erledigt**. Die Übersicht zeigt die Anzahl je Spalte.
+
+**Auftrag anlegen** – drei Wege:
+- auf der Tafel über **„+ Neuer Auftrag“** (Kunde, Gerät, Seriennummer/IMEI, Zubehör, Fehler),
+- aus einer **Anfrage** über „Reparaturauftrag anlegen“. Gerät und Fehlerbeschreibung werden übernommen.
+- beim **Kunden** über „+ Reparaturauftrag“.
+
+**Kostenvoranschlag (KVA):** Im Auftrag auf **„KVA erstellen“** klicken. Positionen einfügen wie bei einer Rechnung.
+Danach **festschreiben**, dann bekommt er eine Nummer (`KV-2026-0001`), und **per E-Mail senden**.
+Die Gültigkeit beträgt standardmäßig 30 Tage (*Einstellungen → Rechnung & Steuer*).
+
+**Verschieben:** Ziehen Sie eine Karte mit der Maus in eine andere Spalte.
+Ohne Maus, zum Beispiel auf dem Tablet, nutzen Sie die Knöpfe auf der Karte („Starten →“, „Erledigt ✓“, „←“).
+Innerhalb einer Spalte können Sie die Reihenfolge ebenfalls per Ziehen ändern.
+
+**Erledigt → Rechnung:** Ziehen Sie einen Auftrag auf **Erledigt**, dann passiert Folgendes:
+1. Es entsteht automatisch ein **Rechnungsentwurf**, mit allen Positionen aus dem KVA, dem Kunden, dem Gerät
+   und der Seriennummer im Betreff und dem heutigen Tag als Leistungsdatum.
+2. Der Entwurf öffnet sich sofort. Sie prüfen ihn (z. B. ob noch ein Teil dazukam) und klicken auf
+   **„Festschreiben & Nummer vergeben“**.
+
+Die Rechnung wird bewusst **nicht ungefragt festgeschrieben**. Eine festgeschriebene Rechnung lässt sich nur noch
+stornieren. Ein versehentlicher Zug auf „Erledigt“ soll keine Rechnungsnummer verbrauchen.
+Wird ein Auftrag zurück- und wieder auf „Erledigt“ gezogen, entsteht **keine** zweite Rechnung.
+
+Die Spalte „Erledigt“ zeigt die letzten 30 Tage, ältere Aufträge über „alle anzeigen“.

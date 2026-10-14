@@ -299,7 +299,8 @@ def pdf_erzeugen(snap, daten_dir=None, entwurf=False):
 
 
 def _infoblock(snap):
-    nr_label = {"rechnung": "Rechnungsnummer", "storno": "Stornonummer"}.get(snap["typ"], "Dokumentnummer")
+    nr_label = {"rechnung": "Rechnungsnummer", "storno": "Stornonummer",
+                "kva": "Angebotsnummer"}.get(snap["typ"], "Dokumentnummer")
     info = [(nr_label, snap.get("nummer") or "(Entwurf)"),
             ("Datum", datum_de(snap["datum"]))]
     if snap.get("kunde", {}).get("kundennr"):
@@ -314,6 +315,8 @@ def _infoblock(snap):
         info.append(("Zu Rechnung", snap["bezug"]["nummer"] or ""))
     if snap["typ"] == "rechnung" and snap.get("faellig_am"):
         info.append(("Zahlbar bis", datum_de(snap["faellig_am"])))
+    if snap["typ"] == "kva" and snap.get("faellig_am"):
+        info.append(("Gültig bis", datum_de(snap["faellig_am"])))
     if snap.get("kunde", {}).get("ust_idnr"):
         info.append(("Ihre USt-IdNr.", snap["kunde"]["ust_idnr"]))
     return info

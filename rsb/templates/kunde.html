@@ -5,7 +5,9 @@
 <div class="kopf">
   <h1>{{ (k.kundennr ~ ' · ' ~ (k|kname)) if k else 'Neuer Kunde' }}</h1>
   {% if k %}<div class="leiste">
-    <a class="knopf" href="{{ url_for('main.dokument_neu', kunde_id=k.id) }}">+ Rechnung für diesen Kunden</a>
+    <form method="post" action="{{ url_for('main.auftrag_neu') }}">{{ csrf() }}<input type="hidden" name="kunde_id" value="{{ k.id }}"><button>+ Reparaturauftrag</button></form>
+    <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id, typ='kva') }}">+ KVA</a>
+    <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id) }}">+ Rechnung</a>
   </div>{% endif %}
 </div>
 {% if k and k.archiviert %}<div class="meldung info">Dieser Kunde ist archiviert.</div>{% endif %}
@@ -49,10 +51,19 @@
     <tr><th>Nummer</th><th>Datum</th><th>Betreff</th><th>Status</th><th class="zahl">Betrag</th></tr>
     {% for d in dokumente %}
     <tr><td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a></td><td>{{ d.datum|datum }}</td>
-      <td>{{ d.betreff }}</td><td>{{ status(d.status) }}</td><td class="zahl">{{ d.summe_brutto|euro }}</td></tr>
+      <td>{{ 'KVA · ' if d.typ == 'kva' }}{{ d.betreff }}</td><td>{{ status(d.status) }}</td><td class="zahl">{{ d.summe_brutto|euro }}</td></tr>
     {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
   </table>
 </div>
+{% if auftraege %}
+<div class="karte">
+  <h2>Reparaturaufträge</h2>
+  <table class="liste">
+    <tr><th>Auftrag</th><th>Eingang</th><th>Gerät</th><th>Status</th></tr>
+    {% for a in auftraege %}<tr><td><a href="{{ url_for('main.auftrag', aid=a.id) }}">{{ a.auftragsnr }}</a></td><td>{{ a.eingang_am|datum }}</td><td>{{ a.geraet or '' }}</td><td><span class="marke-status s-{{ a.status }}">{{ {'offen':'Offen','in_arbeit':'In Arbeit','erledigt':'Erledigt'}[a.status] }}</span></td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
 {% if anfragen %}
 <div class="karte">
   <h2>Anfragen</h2>

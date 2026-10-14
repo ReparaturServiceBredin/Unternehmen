@@ -45,6 +45,7 @@
   <div class="felder">
     {{ feld('zahlungsziel_privat', 'Zahlungsziel Privatkunden (Tage)', 'number', 's3') }}
     {{ feld('zahlungsziel_firma', 'Zahlungsziel Firmenkunden (Tage)', 'number', 's3') }}
+    {{ feld('kva_gueltig_tage', 'Kostenvoranschlag gültig (Tage)', 'number', 's3') }}
     {{ feld('anzahlung_prozent', 'Anzahlung Standard (%) – ab Etappe 2', 'number', 's3') }}
     <div class="s3"><label>Mahngebühr je Mahnung (€) – ab Etappe 3</label><input type="text" name="mahngebuehr_cent" value="{{ einst.mahngebuehr_cent|euro(false) }}"></div>
     {{ feld('mahnstufen', 'Mahnstufen – ab Etappe 3', 'number', 's3') }}
@@ -53,8 +54,8 @@
   <br><h2>Nummern &amp; Listen</h2>
   <div class="felder">
     {{ feld('nummern_format', 'Nummernformat', span='s4', hilfe='{praefix}, {jahr}, {nummer:04d} → RE-2026-0001. Gilt ab dem nächsten Jahr bzw. neuen Nummernkreis.') }}
-    {{ feld('praefix_rechnung', 'Präfix Rechnungen', span='s2') }}{{ feld('praefix_kunde', 'Präfix Kunden', span='s2') }}
-    {{ feld('leistungsarten', 'Leistungsarten (mit Komma getrennt)', span='s4') }}
+    {{ feld('praefix_rechnung', 'Präfix Rechnungen', span='s2') }}{{ feld('praefix_angebot', 'Präfix KVA', span='s2') }}{{ feld('praefix_kunde', 'Präfix Kunden', span='s2') }}
+    {{ feld('leistungsarten', 'Leistungsarten (mit Komma getrennt)', span='s2') }}
   </div><br><button>Speichern</button>
 </form>
 

@@ -1,6 +1,6 @@
 """Reparatur Service Bredin – Buchhaltung & Rechnungen."""
 import os
-from datetime import timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, flash, redirect, request, session, url_for
@@ -9,7 +9,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION = "0.2.0 (Etappe 1 + Anfragen)"
+VERSION = "0.3.0 (Aufträge & KVA)"
 PROJEKT = Path(__file__).resolve().parent.parent
 
 
@@ -32,7 +32,14 @@ def create_app(daten_dir=None, testing=False):
     dbm.initialisieren(app.config["DB_PFAD"])
     app.teardown_appcontext(dbm.schliessen)
 
-    app.jinja_env.filters.update(euro=euro, datum=datum_de, zeit=zeit_de, menge=menge_text, kunde_name=kunde_name)
+    def tage_seit(iso):
+        try:
+            return (date.today() - datetime.fromisoformat(iso).date()).days
+        except (TypeError, ValueError):
+            return ""
+
+    app.jinja_env.filters.update(euro=euro, datum=datum_de, zeit=zeit_de, menge=menge_text, kunde_name=kunde_name,
+                                 tage_seit=tage_seit)
     app.jinja_env.globals.update(csrf_token=csrf_token, version=VERSION)
 
     from .views import bp

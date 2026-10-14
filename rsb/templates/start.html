@@ -5,7 +5,8 @@
 <div class="kopf">
   <h1>Übersicht</h1>
   <div class="leiste">
-    <a class="knopf" href="{{ url_for('main.dokument_neu') }}">+ Neue Rechnung</a>
+    <a class="knopf" href="{{ url_for('main.auftraege') }}">Auftragstafel</a>
+    <a class="knopf zweit" href="{{ url_for('main.dokument_neu') }}">+ Neue Rechnung</a>
     <a class="knopf zweit" href="{{ url_for('main.kunde') }}">+ Neuer Kunde</a>
   </div>
 </div>
@@ -14,6 +15,11 @@
 {% endif %}
 {% if zahlen.anfragen %}<div class="meldung info"><b>{{ zahlen.anfragen }} neue Anfrage(n)</b> aus dem Kontaktformular – <a href="{{ url_for('main.anfragen_liste') }}">jetzt ansehen</a></div>{% endif %}
 {% if einst.anfragen_letzter_fehler %}<div class="meldung fehler">Abruf der Anfragen fehlgeschlagen: {{ einst.anfragen_letzter_fehler }}</div>{% endif %}
+<div class="raster">
+  {% for st, name in [('offen','Aufträge offen'),('in_arbeit','In Arbeit'),('erledigt','Erledigt (30 Tage)')] %}
+  <a class="kachel kachel-link s-rand-{{ st }}" href="{{ url_for('main.auftraege') }}"><div class="label">{{ name }}</div><div class="wert">{{ zahlen.auftraege.get(st, 0) }}</div></a>
+  {% endfor %}
+</div>
 <div class="raster">
   <div class="kachel"><div class="label">Umsatz {{ jahr }}</div><div class="wert">{{ zahlen.umsatz_jahr|euro }}</div></div>
   <div class="kachel"><div class="label">Umsatz {{ jahr - 1 }}</div><div class="wert">{{ zahlen.umsatz_vorjahr|euro }}</div></div>
@@ -39,7 +45,7 @@
     <tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Status</th><th class="zahl">Betrag</th></tr>
     {% for d in letzte %}
     <tr>
-      <td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a> <span class="klein">{{ 'Storno' if d.typ == 'storno' }}</span></td>
+      <td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a> <span class="klein">{{ {'storno':'Storno','kva':'KVA'}.get(d.typ, '') }}</span></td>
       <td>{{ dokname(d) }}</td><td>{{ d.datum|datum }}</td><td>{{ status(d.status) }}</td>
       <td class="zahl">{{ d.summe_brutto|euro }}</td>
     </tr>

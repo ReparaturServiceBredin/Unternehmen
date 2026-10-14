@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "_status.html" import csrf %}
+{% from "_auftrag_karte.html" import karte %}
+{% block titel %}Reparaturaufträge{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>Reparaturaufträge</h1>
+  <button type="button" id="neuknopf">+ Neuer Auftrag</button>
+</div>
+<form method="post" action="{{ url_for('main.auftrag_neu') }}" class="karte" id="neuformular" hidden>{{ csrf() }}
+  <h2>Neuer Reparaturauftrag</h2>
+  <div class="felder">
+    <div><label>Kunde</label><select name="kunde_id" required><option value="">– bitte wählen –</option>
+      {% for k in kunden %}<option value="{{ k.id }}">{{ k.kundennr }} · {{ k|kname }}{{ (' · ' ~ k.ort) if k.ort }}</option>{% endfor %}</select>
+      <div class="hilfe"><a href="{{ url_for('main.kunde') }}">+ neuen Kunden anlegen</a></div></div>
+    <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option>{{ l }}</option>{% endfor %}</select></div>
+    <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer"></div>
+    <div><label>Gerät (Marke, Modell)</label><input type="text" name="geraet" placeholder="z. B. Xiaomi 14T Pro"></div>
+    <div><label>Mitgegebenes Zubehör</label><input type="text" name="zubehoer" placeholder="z. B. Ladekabel, Hülle"></div>
+    <div class="s12"><label>Fehlerbeschreibung</label><textarea name="fehler" style="min-height:60px"></textarea></div>
+  </div><br>
+  <div class="leiste"><button>Auftrag anlegen</button><button type="button" class="zweit" onclick="document.getElementById('neuformular').hidden=true">Abbrechen</button></div>
+</form>
+<p class="klein">Karten mit der Maus in eine andere Spalte ziehen – oder die Pfeil-Knöpfe nutzen. Wird ein Auftrag auf <b>Erledigt</b> gezogen, erstellt das Tool automatisch den Rechnungsentwurf (mit den Positionen aus dem KVA) und öffnet ihn.</p>
+<div class="tafel">
+  {% for status, name in status_namen.items() %}
+  <div class="spalte" data-status="{{ status }}">
+    <div class="spalte-kopf s-{{ status }}">{{ name }} <span>{{ spalten[status]|length }}</span></div>
+    <div class="spalte-inhalt">
+      {% for a in spalten[status] %}{{ karte(a, heute) }}{% endfor %}
+      <div class="leer klein">{{ 'Hierher ziehen' }}</div>
+    </div>
+    {% if status == 'erledigt' %}<div class="klein" style="padding:6px 10px">{% if alle_erledigten %}<a href="{{ url_for('main.auftraege') }}">nur letzte 30 Tage</a>{% else %}letzte 30 Tage · <a href="{{ url_for('main.auftraege', alle=1) }}">alle anzeigen</a>{% endif %}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+{% block skript %}
+<script>
+document.getElementById('neuknopf').onclick = () => { const f = document.getElementById('neuformular'); f.hidden = !f.hidden; };
+const CSRF = {{ csrf_token()|tojson }};
+let gezogen = null;
+document.querySelectorAll('.auftrag').forEach(k => {
+  k.addEventListener('dragstart', e => { gezogen = k; k.classList.add('zieht'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', k.dataset.id); });
+  k.addEventListener('dragend', () => { k.classList.remove('zieht'); document.querySelectorAll('.spalte').forEach(s => s.classList.remove('ueber')); });
+});
+function karteNach(spalte, y) {
+  return [...spalte.querySelectorAll('.auftrag:not(.zieht)')].find(k => { const r = k.getBoundingClientRect(); return y < r.top + r.height / 2; });
+}
+document.querySelectorAll('.spalte').forEach(sp => {
+  sp.addEventListener('dragover', e => {
+    e.preventDefault(); sp.classList.add('ueber');
+    const inhalt = sp.querySelector('.spalte-inhalt'), vor = karteNach(sp, e.clientY);
+    if (gezogen) inhalt.insertBefore(gezogen, vor || inhalt.querySelector('.leer'));
+  });
+  sp.addEventListener('dragleave', e => { if (!sp.contains(e.relatedTarget)) sp.classList.remove('ueber'); });
+  sp.addEventListener('drop', async e => {
+    e.preventDefault();
+    if (!gezogen) return;
+    const naechste = gezogen.nextElementSibling;
+    const daten = new FormData();
+    daten.append('csrf', CSRF);
+    daten.append('status', sp.dataset.status);
+    if (naechste && naechste.classList.contains('auftrag')) daten.append('vor_id', naechste.dataset.id);
+    const zielErledigt = sp.dataset.status === 'erledigt';
+    const r = await fetch(`/auftraege/${gezogen.dataset.id}/status`, { method: 'POST', body: daten, headers: { 'X-Requested-With': 'fetch' } });
+    const j = r.ok ? await r.json() : null;
+    if (!j || !j.ok) { alert('Speichern fehlgeschlagen. Bitte Seite neu laden.'); return; }
+    if (j.rechnung_url) { window.location = j.rechnung_url; return; }
+    window.location.reload();
+  });
+});
+</script>
+{% endblock %}

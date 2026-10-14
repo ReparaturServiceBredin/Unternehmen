@@ -12,6 +12,7 @@ DOKUMENTTYPEN = {
     # typ: (Titel, Präfix-Einstellung)
     "rechnung": ("Rechnung", "praefix_rechnung"),
     "storno": ("Stornorechnung", "praefix_rechnung"),
+    "kva": ("Kostenvoranschlag", "praefix_angebot"),
 }
 
 FIRMA_FELDER = ["firma_name", "firma_zusatz", "inhaber", "strasse", "plz", "ort", "land", "telefon", "email",
@@ -22,6 +23,44 @@ LAYOUT_FELDER = ["farbe_primaer", "farbe_sekundaer", "schrift", "schriftgroesse"
 
 def titel(typ):
     return DOKUMENTTYPEN.get(typ, (typ.capitalize(), None))[0]
+
+
+def zahlungsziel(einst, kunde):
+    if kunde and kunde["zahlungsziel_tage"] is not None:
+        return kunde["zahlungsziel_tage"]
+    if kunde and kunde["typ"] == "firma":
+        return int(einst["zahlungsziel_firma"])
+    return int(einst["zahlungsziel_privat"])
+
+
+def neuer_entwurf(con, einst, typ, kunde_id=None, betreff="", positionen=(), leistungsdatum=None):
+    """Legt einen Dokument-Entwurf (Rechnung oder Kostenvoranschlag) an. Muss in einer Transaktion laufen.
+
+    positionen: Zeilen aus der Tabelle positionen (z. B. vom Kostenvoranschlag), werden kopiert.
+    """
+    from .hilfen import heute, plus_tage
+
+    kunde = con.execute("SELECT * FROM kunden WHERE id=?", (kunde_id,)).fetchone() if kunde_id else None
+    texte = standard_texte(con, typ)
+    tage = int(einst.get("kva_gueltig_tage") or 30) if typ == "kva" else zahlungsziel(einst, kunde)
+    if typ == "kva":
+        leistungsdatum = None
+    cur = con.execute(
+        "INSERT INTO dokumente (typ, kunde_id, datum, leistungsdatum, zahlungsziel_tage, faellig_am, betreff, "
+        "einleitung, schlusstext, hinweise, steuer_modus, erstellt_am, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (typ, kunde["id"] if kunde else None, heute(), leistungsdatum if typ == "kva" else (leistungsdatum or heute()),
+         tage, plus_tage(heute(), tage), betreff, texte.get("einleitung", ""), texte.get("schluss", ""),
+         texte.get("hinweis", ""), einst["steuer_modus"], dbm.jetzt(), dbm.jetzt()))
+    did = cur.lastrowid
+    for i, p in enumerate(positionen, 1):
+        con.execute(
+            "INSERT INTO positionen (dokument_id, pos, artikel_id, bezeichnung, beschreibung, menge, einheit, "
+            "einzelpreis, teilekosten, steuersatz, leistungsart) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            (did, i, p["artikel_id"], p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"],
+             abs(p["einzelpreis"]), abs(p["teilekosten"]), p["steuersatz"], p["leistungsart"]))
+    summen_speichern(con, did)
+    dbm.protokollieren("entwurf_angelegt", "dokument", did, {"typ": typ}, con=con)
+    return did
 
 
 # ---------------------------------------------------------------- Summen / Steuer
@@ -109,6 +148,7 @@ def platzhalter_werte(dok, kunde, einst, nummer=None, bezug=None):
         "nummer": nummer or dok.get("nummer") or "(Entwurf)",
         "datum": datum_de(dok.get("datum")),
         "faellig_am": datum_de(dok.get("faellig_am")),
+        "gueltig_bis": datum_de(dok.get("faellig_am")),
         "zahlungsziel_tage": dok.get("zahlungsziel_tage") or "",
         "betrag": euro(dok.get("summe_brutto")),
         "bezug_nummer": (bezug["nummer"] if bezug else "") or "",

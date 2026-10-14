@@ -1,11 +1,14 @@
 {% extends "base.html" %}
 {% from "_status.html" import status, dokname %}
-{% block titel %}Rechnungen{% endblock %}
+{% block titel %}Rechnungen & KVA{% endblock %}
 {% block inhalt %}
 <div class="kopf">
-  <h1>Rechnungen</h1>
+  <h1>Rechnungen &amp; Kostenvoranschläge</h1>
   <div class="leiste">
     <form class="leiste" method="get">
+      <select name="typ" onchange="this.form.submit()" style="width:auto">
+        {% for t, n in [('','Alle Arten'),('rechnung','Rechnungen'),('kva','Kostenvoranschläge')] %}<option value="{{ t }}" {{ 'selected' if typ == t }}>{{ n }}</option>{% endfor %}
+      </select>
       <select name="status" onchange="this.form.submit()" style="width:auto">
         <option value="">Alle</option>
         {% for s, t in [('entwurf','Entwürfe'),('festgeschrieben','Festgeschrieben'),('storniert','Storniert')] %}
@@ -14,6 +17,7 @@
       <input type="text" name="q" value="{{ q }}" placeholder="Nummer, Kunde, Betreff …" style="width:220px">
       <button class="zweit">Suchen</button>
     </form>
+    <a class="knopf zweit" href="{{ url_for('main.dokument_neu', typ='kva') }}">+ Neuer KVA</a>
     <a class="knopf" href="{{ url_for('main.dokument_neu') }}">+ Neue Rechnung</a>
   </div>
 </div>
@@ -23,7 +27,7 @@
   {% for d in dokumente %}
   <tr>
     <td><a href="{{ url_for('main.dokument', did=d.id) }}"><b>{{ d.nummer or 'Entwurf' }}</b></a></td>
-    <td>{{ {'rechnung':'Rechnung','storno':'Storno'}.get(d.typ, d.typ) }}</td>
+    <td>{{ {'rechnung':'Rechnung','storno':'Storno','kva':'KVA'}.get(d.typ, d.typ) }}</td>
     <td>{{ d.datum|datum }}</td><td>{{ dokname(d) }}</td><td>{{ d.betreff or '' }}</td>
     <td>{{ status(d.status) }}</td>
     <td class="klein">{{ d.versendet_am|zeit if d.versendet_am }}</td>

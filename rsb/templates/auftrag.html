@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_status.html" import csrf, status %}
+{% block titel %}Auftrag {{ a.auftragsnr }}{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>Auftrag {{ a.auftragsnr }} <span class="marke-status s-{{ a.status }}">{{ status_namen[a.status] }}</span></h1>
+  <div class="leiste">
+    <a class="knopf zweit" href="{{ url_for('main.auftraege') }}">← Zur Tafel</a>
+    {% for s, n in status_namen.items() if s != a.status %}
+    <form method="post" action="{{ url_for('main.auftrag_status', aid=a.id) }}">{{ csrf() }}<input type="hidden" name="status" value="{{ s }}"><button class="{{ '' if s == 'erledigt' else 'zweit' }}">→ {{ n }}</button></form>
+    {% endfor %}
+  </div>
+</div>
+<div class="zweispaltig">
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Gerät &amp; Fehler</h2>
+  <p>Kunde: <a href="{{ url_for('main.kunde', kid=a.kunde_id) }}"><b>{{ a.kundennr }} · {{ a.firma if a.ktyp == 'firma' and a.firma else (a.vorname or '') ~ ' ' ~ (a.nachname or '') }}</b></a>{% if a.ktelefon %} · <a href="tel:{{ a.ktelefon }}">{{ a.ktelefon }}</a>{% endif %}</p>
+  <div class="felder">
+    <div><label>Gerät (Marke, Modell)</label><input type="text" name="geraet" value="{{ a.geraet or '' }}"></div>
+    <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if a.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer" value="{{ a.seriennummer or '' }}"></div>
+    <div class="s12"><label>Mitgegebenes Zubehör</label><input type="text" name="zubehoer" value="{{ a.zubehoer or '' }}"></div>
+    <div class="s12"><label>Fehlerbeschreibung</label><textarea name="fehler">{{ a.fehler or '' }}</textarea></div>
+    <div class="s12"><label>Interne Notizen (z. B. bestellte Teile, Rücksprache)</label><textarea name="notizen">{{ a.notizen or '' }}</textarea></div>
+  </div><br>
+  <button>Speichern</button>
+  <p class="klein">Eingang {{ a.eingang_am|zeit }}{% if a.begonnen_am %} · begonnen {{ a.begonnen_am|zeit }}{% endif %}{% if a.erledigt_am %} · erledigt {{ a.erledigt_am|zeit }}{% endif %}</p>
+</form>
+<div>
+  <div class="karte">
+    <h2>Kostenvoranschlag</h2>
+    {% if a.kva_id %}
+      <p><a href="{{ url_for('main.dokument', did=a.kva_id) }}"><b>{{ a.kva_nummer or 'Entwurf' }}</b></a> {{ status(a.kva_status) }} · {{ a.kva_betrag|euro }}</p>
+      <div class="leiste">
+        <a class="knopf zweit" href="{{ url_for('main.dokument', did=a.kva_id) }}">{{ 'Öffnen' if a.kva_nummer else 'Bearbeiten' }}</a>
+        {% if a.kva_nummer %}<a class="knopf zweit" href="{{ url_for('main.dokument_email', did=a.kva_id) }}">Per E-Mail senden</a>{% endif %}
+      </div>
+    {% else %}
+      <p class="klein">Noch kein Kostenvoranschlag.</p>
+      <form method="post" action="{{ url_for('main.auftrag_kva', aid=a.id) }}">{{ csrf() }}<button>KVA erstellen</button></form>
+    {% endif %}
+  </div>
+  <div class="karte">
+    <h2>Rechnung</h2>
+    {% if a.rechnung_id %}
+      <p><a href="{{ url_for('main.dokument', did=a.rechnung_id) }}"><b>{{ a.re_nummer or 'Entwurf' }}</b></a> {{ status(a.re_status) }} · {{ a.re_betrag|euro }}</p>
+      {% if a.re_status == 'entwurf' %}<p class="klein">Bitte prüfen und festschreiben – erst dann bekommt sie eine Rechnungsnummer.</p>{% endif %}
+      {% if a.re_status == 'storniert' %}<form method="post" action="{{ url_for('main.auftrag_rechnung', aid=a.id) }}">{{ csrf() }}<button class="zweit">Neue Rechnung erstellen</button></form>{% endif %}
+    {% else %}
+      <p class="klein">Wird automatisch erstellt, wenn der Auftrag auf „Erledigt“ gesetzt wird{{ ' (mit den Positionen aus dem KVA)' if a.kva_id }}.</p>
+      <form method="post" action="{{ url_for('main.auftrag_rechnung', aid=a.id) }}">{{ csrf() }}<button class="zweit">Rechnung jetzt erstellen</button></form>
+    {% endif %}
+  </div>
+  {% if anfrage %}<div class="karte"><h2>Ursprüngliche Anfrage</h2><p class="klein"><a href="{{ url_for('main.anfrage', aid=anfrage.id) }}">{{ anfrage.eingang_am|zeit }}</a></p><p style="white-space:pre-wrap">{{ anfrage.nachricht }}</p></div>{% endif %}
+  <form method="post" action="{{ url_for('main.auftrag_loeschen', aid=a.id) }}" onsubmit="return confirm('Auftrag wirklich löschen? Nicht festgeschriebene Entwürfe werden mitgelöscht.')">{{ csrf() }}<button class="gefahr">Auftrag löschen</button></form>
+</div>
+</div>
+{% endblock %}

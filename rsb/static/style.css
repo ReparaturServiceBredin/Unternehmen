@@ -147,3 +147,32 @@ table.positionen textarea { min-height: 34px; height: 34px; margin-top: 4px; }
 .zaehler { background: #d93025; color: #fff; border-radius: 99px; padding: 0 7px; font-size: 11px; margin-left: auto; }
 .seitenleiste nav a.aktiv .zaehler { background: #fff; color: var(--blau); }
 .st-warnung { background: var(--gelb-hell); color: #7a5b00; }
+
+/* Auftragstafel */
+.tafel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+.spalte { background: #e9edf2; border-radius: var(--radius); min-height: 300px; display: flex; flex-direction: column; }
+.spalte.ueber { outline: 2px dashed var(--blau); background: var(--blau-hell); }
+.spalte-kopf { padding: 10px 12px; font-weight: 700; display: flex; justify-content: space-between; border-radius: var(--radius) var(--radius) 0 0; color: #fff; }
+.spalte-kopf span { background: rgba(255,255,255,.25); border-radius: 99px; padding: 0 9px; }
+.s-offen { background: #5D6670; color: #fff; }
+.s-in_arbeit { background: #d98a00; color: #fff; }
+.s-erledigt { background: var(--gruen); color: #fff; }
+span.marke-status.s-offen, span.marke-status.s-in_arbeit, span.marke-status.s-erledigt { color: #fff; }
+.spalte-inhalt { padding: 10px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
+.spalte-inhalt .leer { text-align: center; padding: 14px; border: 1px dashed #c3cad3; border-radius: 6px; }
+.auftrag { background: #fff; border: 1px solid var(--rand); border-radius: 8px; padding: 10px 12px; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
+.auftrag:hover { border-color: var(--blau); }
+.auftrag.zieht { opacity: .45; }
+.a-kopf { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; }
+.a-name { font-weight: 700; margin-top: 4px; }
+.a-geraet { font-size: 13px; }
+.a-docs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.a-docs a { text-decoration: none; }
+.a-pfeile { display: flex; justify-content: space-between; margin-top: 8px; gap: 6px; }
+.a-pfeile form:only-child { margin-left: auto; }
+.kachel-link { text-decoration: none; color: inherit; border-left: 5px solid var(--rand); }
+.kachel-link:hover { text-decoration: none; border-color: var(--blau); }
+.s-rand-offen { border-left-color: #5D6670; }
+.s-rand-in_arbeit { border-left-color: #d98a00; }
+.s-rand-erledigt { border-left-color: var(--gruen); }
+@media (max-width: 900px) { .tafel { grid-template-columns: 1fr; } }

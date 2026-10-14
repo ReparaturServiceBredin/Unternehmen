@@ -266,3 +266,27 @@ CREATE TABLE IF NOT EXISTS anfragen (
     bearbeitet_am TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_anfragen_status ON anfragen(status, einstufung);
+
+-- Reparaturaufträge (Tafel: offen -> in Arbeit -> erledigt)
+CREATE TABLE IF NOT EXISTS auftraege (
+    id              INTEGER PRIMARY KEY,
+    auftragsnr      TEXT UNIQUE NOT NULL,
+    kunde_id        INTEGER NOT NULL REFERENCES kunden(id),
+    anfrage_id      INTEGER REFERENCES anfragen(id) ON DELETE SET NULL,
+    status          TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'in_arbeit', 'erledigt')),
+    geraet          TEXT,
+    leistungsart    TEXT,
+    seriennummer    TEXT,
+    zubehoer        TEXT,
+    fehler          TEXT,
+    notizen         TEXT,
+    kva_id          INTEGER REFERENCES dokumente(id),
+    rechnung_id     INTEGER REFERENCES dokumente(id),
+    reihenfolge     REAL NOT NULL DEFAULT 0,
+    eingang_am      TEXT NOT NULL,
+    begonnen_am     TEXT,
+    erledigt_am     TEXT,
+    erstellt_am     TEXT NOT NULL,
+    geaendert_am    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_auftraege_status ON auftraege(status);

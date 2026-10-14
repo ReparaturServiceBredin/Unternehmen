@@ -56,6 +56,31 @@ STANDARD_TEXTBAUSTEINE = [
                 "Mit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}\n{firma_web}",
     },
     {
+        "kategorie": "einleitung", "dokumenttyp": "kva", "standard": 1,
+        "name": "Kostenvoranschlag – Standard",
+        "text": "{anrede_brief}\n\nvielen Dank für Ihre Anfrage. Für die Reparatur Ihres Geräts erstelle ich Ihnen "
+                "folgenden Kostenvoranschlag:",
+    },
+    {
+        "kategorie": "schluss", "dokumenttyp": "kva", "standard": 1,
+        "name": "Kostenvoranschlag – Schluss (Beispieltext)",
+        "text": "Dieser Kostenvoranschlag ist gültig bis zum {gueltig_bis}. Sollten sich während der Reparatur "
+                "Mehrkosten ergeben, melde ich mich vorher bei Ihnen.\n\nWenn Sie einverstanden sind, geben Sie mir "
+                "bitte kurz per E-Mail oder telefonisch Bescheid.\n\nMit freundlichen Grüßen\n{inhaber}",
+    },
+    {
+        "kategorie": "email_betreff", "dokumenttyp": "kva", "standard": 1,
+        "name": "E-Mail Kostenvoranschlag – Betreff",
+        "text": "Ihr Kostenvoranschlag {nummer} – {firma_name}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": "kva", "standard": 1,
+        "name": "E-Mail Kostenvoranschlag – Text",
+        "text": "{anrede_brief}\n\nanbei erhalten Sie den Kostenvoranschlag {nummer} über {betrag} für die Reparatur "
+                "Ihres Geräts.\nBitte geben Sie mir kurz Bescheid, ob ich die Reparatur durchführen soll.\n\n"
+                "Mit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}\n{firma_web}",
+    },
+    {
         "kategorie": "email_betreff", "dokumenttyp": "storno", "standard": 1,
         "name": "E-Mail Storno – Betreff",
         "text": "Stornorechnung {nummer} – {firma_name}",
@@ -75,6 +100,7 @@ PLATZHALTER_HILFE = [
     ("{nummer}", "Dokumentnummer, z. B. RE-2026-0001"),
     ("{datum}", "Dokumentdatum"),
     ("{faellig_am}", "Fälligkeitsdatum"),
+    ("{gueltig_bis}", "Gültig bis (Kostenvoranschlag)"),
     ("{zahlungsziel_tage}", "Zahlungsziel in Tagen"),
     ("{betrag}", "Gesamtbetrag, z. B. 89,00 €"),
     ("{bezug_nummer}", "Nummer der ursprünglichen Rechnung (bei Storno)"),

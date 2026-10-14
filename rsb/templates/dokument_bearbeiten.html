@@ -4,6 +4,7 @@
 {% block inhalt %}
 <div class="kopf">
   <h1>{{ titel }} – Entwurf</h1>
+  {% if g.auftrag %}<a class="knopf zweit" href="{{ url_for('main.auftrag', aid=g.auftrag.id) }}">← Auftrag {{ g.auftrag.auftragsnr }}</a>{% endif %}
   <div class="leiste">
     <a class="knopf zweit" href="{{ url_for('main.dokument_pdf', did=d.id) }}" target="_blank">PDF-Vorschau öffnen</a>
   </div>
@@ -21,11 +22,13 @@
           {% for k in kunden %}<option value="{{ k.id }}" {{ 'selected' if d.kunde_id == k.id }}>{{ k.kundennr }} · {{ k|kname }}{{ (' · ' ~ k.ort) if k.ort }}</option>{% endfor %}
         </select>
         <div class="hilfe"><a href="{{ url_for('main.kunde') }}">+ neuen Kunden anlegen</a></div></div>
-      <div class="s4"><label>Rechnungsdatum</label><input type="date" name="datum" value="{{ d.datum }}"></div>
+      <div class="s4"><label>{{ 'Datum' if d.typ == 'kva' else 'Rechnungsdatum' }}</label><input type="date" name="datum" value="{{ d.datum }}"></div>
+      {% if d.typ != 'kva' %}
       <div class="s4"><label>Leistungsdatum (Reparatur am)</label><input type="date" name="leistungsdatum" value="{{ d.leistungsdatum or '' }}"></div>
       <div class="s4"><label>… bis (nur bei Zeitraum)</label><input type="date" name="leistungsdatum_bis" value="{{ d.leistungsdatum_bis or '' }}"></div>
-      <div class="s4"><label>Zahlungsziel (Tage)</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ d.zahlungsziel_tage }}">
-        <div class="hilfe">Fällig am {{ d.faellig_am|datum }} (wird beim Speichern neu berechnet)</div></div>
+      {% endif %}
+      <div class="s4"><label>{{ 'Gültig (Tage)' if d.typ == 'kva' else 'Zahlungsziel (Tage)' }}</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ d.zahlungsziel_tage }}">
+        <div class="hilfe">{{ 'Gültig bis' if d.typ == 'kva' else 'Fällig am' }} {{ d.faellig_am|datum }} (wird beim Speichern neu berechnet)</div></div>
       <div class="s12"><label>Betreff (z. B. Gerät und Seriennummer)</label><input type="text" name="betreff" value="{{ d.betreff or '' }}" placeholder="z. B. Reparatur iPhone 13, IMEI …"></div>
     </div>
   </div>
@@ -69,7 +72,7 @@
     <div class="leiste">
       <button name="aktion" value="speichern" class="zweit">Entwurf speichern</button>
       <button name="aktion" value="vorschau" class="zweit">Speichern &amp; Vorschau</button>
-      <button name="aktion" value="festschreiben" class="gruen" onclick="return confirm('Rechnung jetzt festschreiben?\n\nDie Rechnung erhält eine fortlaufende Nummer und kann danach NICHT mehr geändert oder gelöscht werden (nur noch Storno).')">Festschreiben &amp; Nummer vergeben</button>
+      <button name="aktion" value="festschreiben" class="gruen" onclick='return confirm({{ ('Kostenvoranschlag jetzt festschreiben?\n\nEr erhält eine fortlaufende Nummer und kann danach nicht mehr geändert werden. Für Änderungen einfach einen neuen KVA erstellen.' if d.typ == 'kva' else 'Rechnung jetzt festschreiben?\n\nDie Rechnung erhält eine fortlaufende Nummer und kann danach NICHT mehr geändert oder gelöscht werden (nur noch Storno).')|tojson }})'>Festschreiben &amp; Nummer vergeben</button>
     </div>
     <p class="hilfe">Entwürfe haben noch keine Nummer und können beliebig geändert oder gelöscht werden.</p>
   </div>
