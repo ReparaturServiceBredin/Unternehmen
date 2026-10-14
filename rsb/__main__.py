@@ -1,5 +1,7 @@
-"""Startet das Programm: python -m rsb"""
+"""Startet das Programm: python -m rsb  (bzw. Doppelklick auf RSB-Buchhaltung.exe)"""
 import os
+import socket
+import sys
 import threading
 import time
 import webbrowser
@@ -7,9 +9,12 @@ from datetime import datetime, timedelta
 
 from waitress import serve
 
-from . import create_app
+from . import VERSION, VERSION_NUMMER, create_app
 from . import db as dbm
-from .backup import auto_backup
+from . import update
+from .backup import auto_backup, backup_erstellen
+
+UPDATE_INTERVALL_STUNDEN = 6
 
 
 def anfragen_hintergrund(app):
@@ -41,24 +46,125 @@ def anfragen_hintergrund(app):
             print(f"{datetime.now():%H:%M} Anfragen-Abruf unerwarteter Fehler: {e}")
 
 
+def update_pruefen(app):
+    """Fragt die neueste Version ab und merkt sie sich (für den Hinweis in der Oberfläche)."""
+    con = dbm.verbinden(app.config["DB_PFAD"])
+    try:
+        try:
+            info = update.neueste_version()
+            werte = {"update_letzte_pruefung": dbm.jetzt(), "update_fehler": "",
+                     "update_verfuegbar": info["version"] if update.ist_neuer(info["version"], VERSION_NUMMER) else "",
+                     "update_hinweise": info["hinweise"][:4000]}
+        except update.UpdateFehler as e:
+            info, werte = None, {"update_letzte_pruefung": dbm.jetzt(), "update_fehler": str(e)}
+        dbm.einstellungen_speichern(werte, con)
+        return info
+    finally:
+        con.close()
+
+
+def update_beim_start(app):
+    """Installiert eine neue Version direkt beim Start (vor dem Arbeiten), wenn automatisch erlaubt."""
+    if not update.ist_exe() or os.environ.get("RSB_KEIN_UPDATE"):
+        return
+    con = dbm.verbinden(app.config["DB_PFAD"])
+    try:
+        auto = dbm.einstellungen(con).get("update_auto")
+    finally:
+        con.close()
+    print("Suche nach Updates …")
+    info = update_pruefen(app)
+    if not info or not update.ist_neuer(info["version"], VERSION_NUMMER):
+        print("Programm ist aktuell." if info else "Update-Prüfung nicht möglich (offline?) – es geht trotzdem los.")
+        return
+    if not auto:
+        print(f"Neue Version {info['version']} verfügbar (automatische Installation ist ausgeschaltet).")
+        return
+    print(f"Neue Version {info['version']} gefunden – wird installiert …")
+    try:
+        update.installieren(info, vor_austausch=lambda: _backup_vor_update(app, info["version"]))
+    except update.UpdateFehler as e:
+        print(f"Update fehlgeschlagen, es geht mit der bisherigen Version weiter: {e}")
+        return
+    print("Update installiert – Programm startet neu …")
+    update.neu_starten(verzoegerung=0.5)
+    time.sleep(30)  # neu_starten beendet diesen Prozess
+
+
+def _backup_vor_update(app, version):
+    con = dbm.verbinden(app.config["DB_PFAD"])
+    try:
+        einst = dbm.einstellungen(con)
+        ziel, _ = backup_erstellen(app.config["DATEN"], app.config["DB_PFAD"], einst)
+        dbm.protokollieren("backup_vor_update", "system", None,
+                           {"datei": ziel.name, "von": VERSION_NUMMER, "nach": version}, con=con)
+    finally:
+        con.close()
+
+
+def update_hintergrund(app):
+    while True:
+        time.sleep(UPDATE_INTERVALL_STUNDEN * 3600)
+        try:
+            info = update_pruefen(app)
+            if info and update.ist_neuer(info["version"], VERSION_NUMMER):
+                print(f"{datetime.now():%H:%M} Neue Version {info['version']} verfügbar – "
+                      "wird beim nächsten Start installiert (oder in der Oberfläche auf „Jetzt aktualisieren“).")
+        except Exception as e:
+            print(f"{datetime.now():%H:%M} Update-Prüfung fehlgeschlagen: {e}")
+
+
+def port_belegt(host, port):
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        return s.connect_ex((host if host != "0.0.0.0" else "127.0.0.1", port)) == 0
+
+
+def fenster_titel(text):
+    if os.name == "nt":
+        try:
+            import ctypes
+            ctypes.windll.kernel32.SetConsoleTitleW(text)
+        except Exception:
+            pass
+
+
 def main():
-    app = create_app()
+    fenster_titel(f"Reparatur Service Bredin – Buchhaltung {VERSION_NUMMER} (Fenster offen lassen)")
     host = os.environ.get("RSB_HOST", "127.0.0.1")
     port = int(os.environ.get("RSB_PORT", "5000"))
+    adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
+
+    if os.environ.get("RSB_WARTE_AUF_PORT"):
+        # Neustart nach Update: warten, bis die alte Version den Port freigegeben hat
+        for _ in range(60):
+            if not port_belegt(host, port):
+                break
+            time.sleep(0.5)
+    elif port_belegt(host, port):
+        print("Das Programm läuft bereits – öffne den Browser.")
+        webbrowser.open(adresse)
+        time.sleep(2)
+        return
+
+    update.alte_versionen_aufraeumen()
+    app = create_app()
+    update_beim_start(app)
     try:
         ziel = auto_backup(app.config["DATEN"], app.config["DB_PFAD"])
         if ziel:
             print(f"Automatisches Backup erstellt: {ziel}")
     except Exception as e:  # ein fehlgeschlagenes Backup darf den Start nicht verhindern
         print(f"WARNUNG: Automatisches Backup fehlgeschlagen: {e}")
-    adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
     print("=" * 60)
-    print(" Reparatur Service Bredin – Buchhaltung")
+    print(f" Reparatur Service Bredin – Buchhaltung, Version {VERSION}")
     print(f" Läuft unter: {adresse}")
     print(f" Daten-Ordner: {app.config['DATEN']}")
     print(" Zum Beenden dieses Fenster schließen (oder Strg+C).")
     print("=" * 60)
     threading.Thread(target=anfragen_hintergrund, args=(app,), daemon=True).start()
+    if update.ist_exe() and not os.environ.get("RSB_KEIN_UPDATE"):
+        threading.Thread(target=update_hintergrund, args=(app,), daemon=True).start()
     if not os.environ.get("RSB_KEIN_BROWSER"):
         threading.Timer(1.5, lambda: webbrowser.open(adresse)).start()
     serve(app, host=host, port=port, threads=4)

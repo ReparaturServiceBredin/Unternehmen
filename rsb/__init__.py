@@ -1,5 +1,6 @@
 """Reparatur Service Bredin – Buchhaltung & Rechnungen."""
 import os
+import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -9,8 +10,13 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION = "0.3.0 (Aufträge & KVA)"
-PROJEKT = Path(__file__).resolve().parent.parent
+VERSION_NUMMER = "0.4.0"
+VERSION = f"{VERSION_NUMMER} (Auto-Update)"
+if getattr(sys, "frozen", False):
+    # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
+    PROJEKT = Path(sys.executable).resolve().parent
+else:
+    PROJEKT = Path(__file__).resolve().parent.parent
 
 
 def create_app(daten_dir=None, testing=False):
@@ -45,7 +51,7 @@ def create_app(daten_dir=None, testing=False):
     from .views import bp
     app.register_blueprint(bp)
 
-    offen = {"main.login", "main.einrichten", "static"}
+    offen = {"main.login", "main.einrichten", "main.version_info", "static"}
 
     @app.before_request
     def anmeldung_pruefen():
@@ -68,7 +74,10 @@ def create_app(daten_dir=None, testing=False):
                 "SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'").fetchone()[0]
         except Exception:
             einst, offene_anfragen = {}, 0
-        return {"einst": einst, "offene_anfragen": offene_anfragen}
+        from .update import ist_exe, ist_neuer
+        update_da = einst.get("update_verfuegbar") if ist_neuer(einst.get("update_verfuegbar"), VERSION_NUMMER) \
+            else None
+        return {"einst": einst, "offene_anfragen": offene_anfragen, "update_da": update_da, "ist_exe": ist_exe()}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

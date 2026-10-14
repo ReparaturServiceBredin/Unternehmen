@@ -34,6 +34,9 @@
   </div>
 </aside>
 <main>
+  {% if update_da and request.endpoint != 'main.einstellungen' %}
+  <div class="meldung info">Neue Programmversion {{ update_da }} verfügbar – <a href="{{ url_for('main.einstellungen', bereich='programm') }}">{{ 'jetzt aktualisieren' if ist_exe else 'Details' }}</a>{{ ' (oder einfach beim nächsten Start automatisch)' if ist_exe and einst.update_auto }}</div>
+  {% endif %}
   {% with meldungen = get_flashed_messages(with_categories=true) %}
     {% for art, text in meldungen %}<div class="meldung {{ art }}">{{ text }}</div>{% endfor %}
   {% endwith %}

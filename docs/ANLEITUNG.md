@@ -2,7 +2,7 @@
 
 ## 1. Erste Schritte
 
-1. `start.bat` starten und beim ersten Mal ein Passwort festlegen (mindestens 8 Zeichen).
+1. `RSB-Buchhaltung.exe` starten und beim ersten Mal ein Passwort festlegen (mindestens 8 Zeichen).
 2. **Einstellungen → Firmendaten:** Anschrift, Telefon, Steuernummer, Bank und IBAN eintragen.
    Diese Angaben erscheinen in der Fußzeile jeder Rechnung.
 3. **Einstellungen → E-Mail:** Den Zugang zu Ihrem Postfach eintragen und mit „Test-E-Mail senden“ prüfen.
@@ -106,9 +106,9 @@ oder ein Netzlaufwerk wie `Z:\Backup\Buchhaltung`. Jedes Backup wird dorthin kop
 **Manuell:** *Einstellungen → Backup → Backup jetzt erstellen*.
 
 **Wiederherstellen** (z. B. auf einem neuen PC):
-1. Das Programm wie oben installieren, aber noch **nicht** starten (bzw. das schwarze Fenster schließen).
+1. `RSB-Buchhaltung.exe` in einen Ordner legen, aber noch **nicht** starten (bzw. das schwarze Fenster schließen).
 2. Die Backup-ZIP in den Ordner `Daten` entpacken und vorhandene Dateien ersetzen.
-3. `start.bat` starten und mit dem bisherigen Passwort anmelden.
+3. Die EXE starten und mit dem bisherigen Passwort anmelden.
 4. Unter *Einstellungen → E-Mail* das E-Mail-Passwort **neu eingeben**. Der Schlüssel dafür ist aus Sicherheitsgründen nicht im Backup enthalten.
 5. Unter **Datenprüfung** kontrollieren, ob alles „In Ordnung“ ist.
 

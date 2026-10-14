@@ -512,12 +512,13 @@ EINSTELLUNGS_BEREICHE = {
     "email": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "absender_name", "absender_email",
               "bcc_an_mich"],
     "backup": ["backup_auto", "backup_ziel", "backup_behalten"],
+    "programm": ["update_auto"],
     "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_benutzer",
                  "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {"faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {"update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
 GANZZAHL = {"zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
@@ -528,7 +529,7 @@ KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
 @bp.route("/einstellungen", methods=["GET", "POST"])
 def einstellungen():
     bereich = request.args.get("bereich", "firma")
-    if bereich not in EINSTELLUNGS_BEREICHE and bereich not in ("sicherheit",):
+    if bereich not in EINSTELLUNGS_BEREICHE and bereich not in ("sicherheit", "programm"):
         bereich = "firma"
     con = dbm.get_db()
     if request.method == "POST" and bereich in EINSTELLUNGS_BEREICHE:
@@ -1025,3 +1026,66 @@ def auftrag_loeschen(aid):
         dbm.protokollieren("auftrag_geloescht", "auftrag", aid, {"auftragsnr": a["auftragsnr"]}, con=con)
     flash("Auftrag gelöscht.", "ok")
     return redirect(url_for("main.auftraege"))
+
+
+# ====================================================================== Programm-Version & Updates
+
+from . import update as upd  # noqa: E402
+
+
+@bp.route("/version")
+def version_info():
+    from . import VERSION_NUMMER
+    return jsonify(version=VERSION_NUMMER)
+
+
+@bp.route("/update/pruefen", methods=["POST"])
+def update_pruefen():
+    from . import VERSION_NUMMER
+    con = dbm.get_db()
+    try:
+        info = upd.neueste_version()
+    except upd.UpdateFehler as e:
+        with dbm.Transaktion(con):
+            dbm.einstellungen_speichern({"update_letzte_pruefung": dbm.jetzt(), "update_fehler": str(e)}, con)
+        flash(str(e), "fehler")
+        return redirect(url_for("main.einstellungen", bereich="programm"))
+    neuer = upd.ist_neuer(info["version"], VERSION_NUMMER)
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({"update_letzte_pruefung": dbm.jetzt(), "update_fehler": "",
+                                     "update_verfuegbar": info["version"] if neuer else "",
+                                     "update_hinweise": info["hinweise"][:4000]}, con)
+    flash(f"Neue Version {info['version']} verfügbar." if neuer else f"Sie haben die aktuelle Version ({VERSION_NUMMER}).",
+          "info" if neuer else "ok")
+    return redirect(url_for("main.einstellungen", bereich="programm"))
+
+
+@bp.route("/update/installieren", methods=["POST"])
+def update_installieren():
+    from . import VERSION_NUMMER
+    if not upd.ist_exe():
+        raise EingabeFehler("Automatische Updates gibt es nur in der EXE-Version. Bei der Installation per "
+                            "start.bat bitte die neue Version von GitHub herunterladen.")
+    con = dbm.get_db()
+    try:
+        info = upd.neueste_version()
+    except upd.UpdateFehler as e:
+        flash(str(e), "fehler")
+        return redirect(url_for("main.einstellungen", bereich="programm"))
+    if not upd.ist_neuer(info["version"], VERSION_NUMMER):
+        flash("Es ist bereits die neueste Version installiert.", "ok")
+        return redirect(url_for("main.einstellungen", bereich="programm"))
+
+    def backup_vorher():
+        ziel, _ = backup_erstellen(daten_dir(), current_app.config["DB_PFAD"], dbm.einstellungen(con))
+        with dbm.Transaktion(con):
+            dbm.protokollieren("backup_vor_update", "system", None,
+                               {"datei": ziel.name, "von": VERSION_NUMMER, "nach": info["version"]}, con=con)
+
+    try:
+        upd.installieren(info, vor_austausch=backup_vorher)
+    except upd.UpdateFehler as e:
+        flash(f"Update fehlgeschlagen – es bleibt bei Version {VERSION_NUMMER}: {e}", "fehler")
+        return redirect(url_for("main.einstellungen", bereich="programm"))
+    upd.neu_starten(verzoegerung=1.5)
+    return render_template("update_laeuft.html", alt=VERSION_NUMMER, neu=info["version"])

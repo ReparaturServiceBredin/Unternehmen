@@ -15,29 +15,50 @@ E-Mail-Versand mit Protokoll, Storno, unveränderbare fortlaufende Nummern, Pass
 
 ---
 
-## Installation unter Windows 11 (einmalig, ca. 10 Minuten)
+## Installation unter Windows 11 (2 Minuten)
 
-1. **Programm herunterladen:** Auf GitHub im Repository oben auf **Code → Download ZIP** klicken.
-2. **Entpacken** nach z. B. `C:\RSB-Buchhaltung` (Rechtsklick auf die ZIP-Datei → *Alle extrahieren*).
-   Bitte **nicht** in einen OneDrive-Ordner – die Datenbank verträgt keine gleichzeitige Synchronisation.
-3. Im Ordner doppelt auf **`installieren.bat`** klicken.
-   - Fehlt Python, wird es automatisch installiert (über *winget*). Danach `installieren.bat` **noch einmal** starten.
-   - Falls Windows „Der Computer wurde durch Windows geschützt“ meldet: *Weitere Informationen → Trotzdem ausführen*.
-4. Fertig. Die Installation braucht nur dieses eine Mal Internet.
+1. Ordner anlegen, z. B. **`C:\RSB-Buchhaltung`**. Bitte nicht unter „Programme“ und nicht in OneDrive,
+   denn das Programm muss dort seine Daten und Updates speichern dürfen.
+2. **[RSB-Buchhaltung.exe herunterladen](https://github.com/ReparaturServiceBredin/Unternehmen/releases/latest/download/RSB-Buchhaltung.exe)**
+   und in diesen Ordner legen.
+3. Doppelklick auf **RSB-Buchhaltung.exe**.
+   - Beim allerersten Start meldet Windows evtl. „Der Computer wurde durch Windows geschützt“, weil die Datei
+     nicht kostenpflichtig signiert ist. Dann auf *Weitere Informationen → Trotzdem ausführen* klicken.
+     Das passiert nur einmal, Updates lädt das Programm selbst.
+   - Ein schwarzes Fenster öffnet sich (bitte **offen lassen**, Schließen beendet das Programm), und der
+     Browser zeigt `http://localhost:5000`.
+4. Beim ersten Start ein Passwort festlegen und unter *Einstellungen → Firmendaten* Anschrift, Steuernummer und
+   Bankverbindung eintragen.
 
-## Starten
+**Tipps:**
+- Rechtsklick auf die EXE → *Senden an → Desktop (Verknüpfung erstellen)*.
+- **Mit Windows starten:** `Win + R`, `shell:startup` eingeben und dort eine Verknüpfung zur EXE ablegen.
+- Ein Doppelklick auf die EXE, während das Programm schon läuft, öffnet einfach wieder den Browser.
 
-- Doppelklick auf **`start.bat`**. Es öffnet sich ein schwarzes Fenster (bitte **offen lassen**) und
-  der Browser mit `http://localhost:5000`.
-- Beim **ersten Start** legen Sie ein Passwort fest und tragen unter *Einstellungen → Firmendaten* Anschrift,
-  Steuernummer und Bankverbindung ein.
-- Beenden: das schwarze Fenster schließen.
+### Updates – automatisch
 
-Tipp: Rechtsklick auf `start.bat` → *Weitere Optionen → Verknüpfung erstellen* und die Verknüpfung auf den Desktop legen.
+Das Programm fragt beim Start und alle 6 Stunden nach einer neuen Version. Gibt es eine, passiert Folgendes:
+- Beim **nächsten Start** wird sie automatisch installiert. Vorher erstellt das Programm ein Backup,
+  danach startet es neu. Abschalten können Sie das unter *Einstellungen → Programm & Updates*.
+- Oder Sie klicken in der Oberfläche auf **„Jetzt aktualisieren“**, sobald der Hinweis erscheint.
+
+Ihre Daten bleiben dabei unverändert. Neue Datenbankfelder ergänzt das Programm selbst.
+Jede neue Version wird vor der Veröffentlichung automatisch getestet. Die Datei wird beim Herunterladen
+mit einer Prüfsumme kontrolliert.
+
+### Umstieg von der bisherigen Installation (start.bat)
+
+1. Altes Programm beenden (schwarzes Fenster schließen).
+2. Den Ordner **`Daten`** aus dem alten Programmordner neben die neue `RSB-Buchhaltung.exe` kopieren.
+3. EXE starten und mit dem bisherigen Passwort anmelden. Das E-Mail-Passwort muss nicht neu eingegeben
+   werden, weil `Daten\geheim` mitkopiert wurde.
+
+Die alte Variante mit `installieren.bat` / `start.bat` funktioniert weiterhin, bekommt aber keine automatischen
+Updates.
 
 ## Ihre Daten – ein einziger Ordner
 
-Alles liegt im Ordner **`Daten`** neben dem Programm:
+Alles liegt im Ordner **`Daten`** direkt neben `RSB-Buchhaltung.exe`:
 
 ```
 Daten\
@@ -54,7 +75,10 @@ Backups, Wiederherstellung und NAS-Kopie: siehe [docs/ANLEITUNG.md](docs/ANLEITU
 ## Technik (kurz)
 
 Python 3 · Flask (Weboberfläche) · Waitress (lokaler Webserver) · SQLite (Datenbank in einer Datei) ·
-ReportLab (PDF) · cryptography (Verschlüsselung) – alles Open Source und kostenlos.
+ReportLab (PDF) · cryptography (Verschlüsselung) · PyInstaller (EXE) – alles Open Source und kostenlos.
+Die Windows-EXE baut GitHub Actions bei jeder neuen Versionsnummer automatisch, testet sie und veröffentlicht
+sie unter *Releases* (`.github/workflows/release.yml`). Neue Version veröffentlichen: `VERSION_NUMMER` in
+`rsb/__init__.py` erhöhen und einen Abschnitt in `docs/AENDERUNGEN.md` ergänzen.
 Das Programm ist nur vom eigenen PC aus erreichbar (`127.0.0.1`).
 
 ## Für Entwickler

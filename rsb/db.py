@@ -93,6 +93,12 @@ STANDARD_EINSTELLUNGEN = {
     "interessent_loeschen_monate": 6,
     "anfragen_letzter_abruf": "",
     "anfragen_letzter_fehler": "",
+    # Programm-Updates
+    "update_auto": True,
+    "update_letzte_pruefung": "",
+    "update_verfuegbar": "",
+    "update_hinweise": "",
+    "update_fehler": "",
     # Sicherheit
     "passwort_hash": "",
 }

@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('backup','Backup'),('sicherheit','Passwort')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwort')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -155,6 +155,33 @@
     {% for name, groesse in backups %}<tr><td><a href="{{ url_for('main.backup_herunterladen', name=name) }}">{{ name }}</a></td><td class="zahl">{{ (groesse / 1024)|round|int }} KB</td></tr>
     {% else %}<tr><td colspan="2" class="klein">Noch keine Backups.</td></tr>{% endfor %}</table>
 </div>
+
+{% elif bereich == 'programm' %}
+<div class="karte">
+  <h2>Version {{ version }}</h2>
+  {% if not ist_exe %}
+    <div class="meldung info">Sie nutzen die Installation per <code>start.bat</code>. Automatische Updates gibt es nur in der
+      EXE-Version (<b>RSB-Buchhaltung.exe</b>, siehe Anleitung). Ihre Daten können Sie einfach mitnehmen: den Ordner
+      <code>Daten</code> neben die EXE kopieren.</div>
+  {% endif %}
+  {% if update_da %}
+    <div class="meldung warnung"><b>Neue Version {{ update_da }} verfügbar.</b>
+      {% if einst.update_hinweise %}<pre class="klein" style="white-space:pre-wrap;margin:8px 0 0">{{ einst.update_hinweise }}</pre>{% endif %}</div>
+    {% if ist_exe %}<form method="post" action="{{ url_for('main.update_installieren') }}" onsubmit="return confirm('Jetzt aktualisieren? Vorher wird automatisch ein Backup erstellt. Das Programm startet danach neu (ca. 30 Sekunden).')">{{ csrf() }}<button>Jetzt aktualisieren</button></form>{% endif %}
+  {% else %}
+    <p>Sie verwenden die aktuelle Version.</p>
+  {% endif %}
+  <p class="klein">Zuletzt geprüft: {{ einst.update_letzte_pruefung|zeit if einst.update_letzte_pruefung else 'noch nie' }}{% if einst.update_fehler %} – <span style="color:var(--rot)">{{ einst.update_fehler }}</span>{% endif %}</p>
+  <form method="post" action="{{ url_for('main.update_pruefen') }}">{{ csrf() }}<button class="zweit">Jetzt nach Updates suchen</button></form>
+</div>
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Automatische Updates</h2>
+  <div class="felder">
+    {{ haken('update_auto', 'Neue Versionen beim Programmstart automatisch installieren (vorher wird ein Backup erstellt)') }}
+  </div>
+  <p class="klein">Das Programm fragt beim Start und alle 6 Stunden bei GitHub nach, ob es eine neue Version gibt. Es werden dabei keine Daten von Ihnen übertragen. Die heruntergeladene Datei wird mit einer Prüfsumme kontrolliert.</p>
+  <button>Speichern</button>
+</form>
 
 {% elif bereich == 'sicherheit' %}
 <form method="post" action="{{ url_for('main.passwort_aendern') }}" class="karte">{{ csrf() }}
