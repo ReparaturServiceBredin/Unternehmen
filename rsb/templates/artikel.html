@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% from "_status.html" import csrf %}
+{% block titel %}{{ a.name if a else 'Neue Leistung' }}{% endblock %}
+{% block inhalt %}
+<h1>{{ a.name if a else 'Neue Leistung / neuer Artikel' }}</h1>
+<form method="post" class="karte">
+  {{ csrf() }}
+  <div class="felder">
+    <div class="s8"><label>Bezeichnung (erscheint auf der Rechnung)</label><input type="text" name="name" required value="{{ a.name if a }}"></div>
+    <div class="s4"><label>Artikelnummer (optional)</label><input type="text" name="artikelnr" value="{{ a.artikelnr if a }}"></div>
+    <div class="s12"><label>Beschreibung (zweite Zeile auf der Rechnung)</label><textarea name="beschreibung">{{ a.beschreibung if a }}</textarea></div>
+    <div class="s4"><label>Leistungsart (für Auswertungen)</label>
+      <select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if a and a.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
+    <div class="s4"><label>Typ</label><select name="typ">
+      <option value="leistung" {{ 'selected' if not a or a.typ == 'leistung' }}>Leistung (Arbeit / Festpreis)</option>
+      <option value="material" {{ 'selected' if a and a.typ == 'material' }}>Material / Ersatzteil</option></select></div>
+    <div class="s4"><label>Einheit</label><input type="text" name="einheit" list="einheiten" value="{{ a.einheit if a else 'Stk.' }}">
+      <datalist id="einheiten"><option>Stk.</option><option>pauschal</option><option>Std.</option><option>km</option></datalist></div>
+    <div class="s3"><label>Teilekosten / Einkauf (€)</label><input type="text" name="teilekosten" id="teile" value="{{ (a.teilekosten|euro(false)) if a else '0,00' }}"></div>
+    <div class="s3"><label>Aufschlag (%)</label><input type="text" name="aufschlag_prozent" id="aufschlag" value="{{ (a.aufschlag_prozent|menge) if a and a.aufschlag_prozent is not none }}">
+      <div class="hilfe"><a href="#" id="berechnen">Preis aus Aufschlag berechnen</a></div></div>
+    <div class="s3"><label>Verkaufspreis (€)</label><input type="text" name="preis" id="preis" value="{{ (a.preis|euro(false)) if a }}"></div>
+    <div class="s3"><label>Steuersatz bei Regelbesteuerung (%)</label><input type="text" name="steuersatz" value="{{ (a.steuersatz|menge) if a else '19' }}">
+      <div class="hilfe">Wird nur verwendet, wenn Sie später auf Umsatzsteuer umstellen.</div></div>
+    <div class="s12"><div class="meldung info" id="margeanzeige" style="margin:0">Marge: –</div></div>
+    <div class="s12"><label class="check"><input type="checkbox" name="aktiv" {{ 'checked' if not a or a.aktiv }}> aktiv (in der Auswahl beim Rechnung schreiben anzeigen)</label></div>
+  </div>
+  <br>
+  <div class="leiste"><button>Speichern</button><a class="knopf zweit" href="{{ url_for('main.artikel_liste') }}">Abbrechen</a></div>
+</form>
+{% if a %}
+<form method="post" action="{{ url_for('main.artikel_loeschen', aid=a.id) }}" onsubmit="return confirm('Wirklich löschen?')">{{ csrf() }}<button class="gefahr">Löschen</button></form>
+{% endif %}
+{% endblock %}
+{% block skript %}
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+<script>
+  const teile = document.getElementById('teile'), auf = document.getElementById('aufschlag'), preis = document.getElementById('preis');
+  function zeigeMarge() {
+    const t = zahl(teile.value), p = zahl(preis.value), m = p - t;
+    const el = document.getElementById('margeanzeige');
+    el.textContent = 'Marge: ' + euro(m) + (p ? ' (' + Math.round(m / p * 100) + ' % vom Preis)' : '') + (t ? ' · Aufschlag auf Teile: ' + Math.round(m / t * 100) + ' %' : '');
+    el.className = 'meldung ' + (m < 0 ? 'fehler' : 'ok');
+  }
+  document.getElementById('berechnen').onclick = e => { e.preventDefault(); preis.value = euroText(zahl(teile.value) * (1 + zahl(auf.value) / 100)); zeigeMarge(); };
+  [teile, auf, preis].forEach(el => el.addEventListener('input', zeigeMarge));
+  zeigeMarge();
+</script>
+{% endblock %}

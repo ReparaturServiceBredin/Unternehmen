@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% from "_status.html" import status, dokname %}
+{% block titel %}Übersicht{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>Übersicht</h1>
+  <div class="leiste">
+    <a class="knopf" href="{{ url_for('main.dokument_neu') }}">+ Neue Rechnung</a>
+    <a class="knopf zweit" href="{{ url_for('main.kunde') }}">+ Neuer Kunde</a>
+  </div>
+</div>
+{% if not einst.strasse or not einst.iban or not einst.steuernummer %}
+<div class="meldung warnung">Bitte vervollständigen Sie Ihre <a href="{{ url_for('main.einstellungen') }}">Firmendaten</a> (Anschrift, Steuernummer, Bankverbindung). Diese erscheinen auf jeder Rechnung.</div>
+{% endif %}
+<div class="raster">
+  <div class="kachel"><div class="label">Umsatz {{ jahr }}</div><div class="wert">{{ zahlen.umsatz_jahr|euro }}</div></div>
+  <div class="kachel"><div class="label">Umsatz {{ jahr - 1 }}</div><div class="wert">{{ zahlen.umsatz_vorjahr|euro }}</div></div>
+  <div class="kachel"><div class="label">Noch nicht bezahlt</div><div class="wert">{{ zahlen.offen|euro }}</div><div class="klein">Zahlungseingänge erfassen folgt in Etappe 3</div></div>
+  <div class="kachel"><div class="label">Kunden / Entwürfe</div><div class="wert">{{ zahlen.kunden }} / {{ zahlen.entwuerfe }}</div></div>
+</div>
+{% if einst.steuer_modus == 'kleinunternehmer' %}
+{% set anteil = (zahlen.umsatz_jahr / 10000000 * 100) %}
+<div class="karte">
+  <h2>Kleinunternehmergrenze {{ jahr }}</h2>
+  <p class="klein">Grenzen nach § 19 UStG (Stand 2025): Vorjahr höchstens 25.000 €, laufendes Jahr höchstens 100.000 €. Wird die 100.000-€-Grenze im laufenden Jahr überschritten, endet die Befreiung sofort ab dem Umsatz, mit dem sie überschritten wird. Bitte im Zweifel mit dem Finanzamt/Steuerberater klären.</p>
+  <div class="leiste">
+    <span>Vorjahr: <b>{{ zahlen.umsatz_vorjahr|euro }}</b> von 25.000,00 €
+      {% if zahlen.umsatz_vorjahr > 2500000 %}<span class="marke-status st-fehler">überschritten</span>{% endif %}</span>
+    <span>· Laufendes Jahr: <b>{{ zahlen.umsatz_jahr|euro }}</b> von 100.000,00 €
+      {% if zahlen.umsatz_jahr > 8000000 %}<span class="marke-status st-fehler">über 80 %</span>{% endif %}</span>
+  </div>
+</div>
+{% endif %}
+<div class="karte">
+  <h2>Zuletzt bearbeitet</h2>
+  <table class="liste">
+    <tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Status</th><th class="zahl">Betrag</th></tr>
+    {% for d in letzte %}
+    <tr>
+      <td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a> <span class="klein">{{ 'Storno' if d.typ == 'storno' }}</span></td>
+      <td>{{ dokname(d) }}</td><td>{{ d.datum|datum }}</td><td>{{ status(d.status) }}</td>
+      <td class="zahl">{{ d.summe_brutto|euro }}</td>
+    </tr>
+    {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

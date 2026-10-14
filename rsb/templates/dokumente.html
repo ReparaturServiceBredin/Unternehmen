@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% from "_status.html" import status, dokname %}
+{% block titel %}Rechnungen{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>Rechnungen</h1>
+  <div class="leiste">
+    <form class="leiste" method="get">
+      <select name="status" onchange="this.form.submit()" style="width:auto">
+        <option value="">Alle</option>
+        {% for s, t in [('entwurf','Entwürfe'),('festgeschrieben','Festgeschrieben'),('storniert','Storniert')] %}
+        <option value="{{ s }}" {{ 'selected' if status == s }}>{{ t }}</option>{% endfor %}
+      </select>
+      <input type="text" name="q" value="{{ q }}" placeholder="Nummer, Kunde, Betreff …" style="width:220px">
+      <button class="zweit">Suchen</button>
+    </form>
+    <a class="knopf" href="{{ url_for('main.dokument_neu') }}">+ Neue Rechnung</a>
+  </div>
+</div>
+<div class="karte">
+<table class="liste">
+  <tr><th>Nummer</th><th>Art</th><th>Datum</th><th>Kunde</th><th>Betreff</th><th>Status</th><th>Versand</th><th class="zahl">Betrag</th></tr>
+  {% for d in dokumente %}
+  <tr>
+    <td><a href="{{ url_for('main.dokument', did=d.id) }}"><b>{{ d.nummer or 'Entwurf' }}</b></a></td>
+    <td>{{ {'rechnung':'Rechnung','storno':'Storno'}.get(d.typ, d.typ) }}</td>
+    <td>{{ d.datum|datum }}</td><td>{{ dokname(d) }}</td><td>{{ d.betreff or '' }}</td>
+    <td>{{ status(d.status) }}</td>
+    <td class="klein">{{ d.versendet_am|zeit if d.versendet_am }}</td>
+    <td class="zahl">{{ d.summe_brutto|euro }}</td>
+  </tr>
+  {% else %}<tr><td colspan="8" class="klein">Keine Dokumente gefunden.</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}

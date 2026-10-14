@@ -1,0 +1,6 @@
+# Laufzeit-Abhängigkeiten (alle Open Source, kostenlos)
+Flask>=3.0,<4
+waitress>=3.0,<4
+reportlab>=4.2,<6
+cryptography>=42
+pillow>=10

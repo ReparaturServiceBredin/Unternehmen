@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% from "_status.html" import status, csrf %}
+{% block titel %}{{ k|kname if k else 'Neuer Kunde' }}{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>{{ (k.kundennr ~ ' · ' ~ (k|kname)) if k else 'Neuer Kunde' }}</h1>
+  {% if k %}<div class="leiste">
+    <a class="knopf" href="{{ url_for('main.dokument_neu', kunde_id=k.id) }}">+ Rechnung für diesen Kunden</a>
+  </div>{% endif %}
+</div>
+{% if k and k.archiviert %}<div class="meldung info">Dieser Kunde ist archiviert.</div>{% endif %}
+<form method="post" class="karte">
+  {{ csrf() }}
+  <div class="felder">
+    <div class="s3"><label>Kundenart</label>
+      <select name="typ" id="typ">
+        <option value="privat" {{ 'selected' if not k or k.typ == 'privat' }}>Privatkunde</option>
+        <option value="firma" {{ 'selected' if k and k.typ == 'firma' }}>Firmenkunde</option>
+      </select></div>
+    <div class="s9" style="grid-column: span 9"><label>Firma</label><input type="text" name="firma" value="{{ k.firma if k }}"></div>
+    <div class="s2"><label>Anrede</label>
+      <select name="anrede">{% for a in ['', 'Frau', 'Herr', 'Divers'] %}<option {{ 'selected' if k and k.anrede == a }}>{{ a }}</option>{% endfor %}</select></div>
+    <div class="s4"><label>Vorname</label><input type="text" name="vorname" value="{{ k.vorname if k }}"></div>
+    <div><label>Nachname</label><input type="text" name="nachname" value="{{ k.nachname if k }}"></div>
+    <div class="s12"><label>Straße und Hausnummer</label><input type="text" name="strasse" value="{{ k.strasse if k }}"></div>
+    <div class="s2"><label>PLZ</label><input type="text" name="plz" value="{{ k.plz if k }}"></div>
+    <div class="s4"><label>Ort</label><input type="text" name="ort" value="{{ k.ort if k }}"></div>
+    <div><label>Land</label><input type="text" name="land" value="{{ k.land if k else 'Deutschland' }}"></div>
+    <div><label>E-Mail</label><input type="email" name="email" value="{{ k.email if k }}"></div>
+    <div><label>Telefon</label><input type="tel" name="telefon" value="{{ k.telefon if k }}"></div>
+    <div><label>USt-IdNr. (nur Firmenkunden, optional)</label><input type="text" name="ust_idnr" value="{{ k.ust_idnr if k }}"></div>
+    <div><label>Abweichendes Zahlungsziel (Tage)</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ k.zahlungsziel_tage if k and k.zahlungsziel_tage is not none }}">
+      <div class="hilfe">Leer lassen = Standard ({{ einst.zahlungsziel_privat }} Tage privat / {{ einst.zahlungsziel_firma }} Tage Firma)</div></div>
+    <div class="s12"><label>Notizen (intern, erscheinen nicht auf Dokumenten)</label><textarea name="notizen">{{ k.notizen if k }}</textarea></div>
+  </div>
+  <br>
+  <div class="leiste">
+    <button>Speichern</button>
+    {% if not k %}<button class="zweit" name="danach" value="rechnung">Speichern und Rechnung schreiben</button>{% endif %}
+    <a class="knopf zweit" href="{{ url_for('main.kunden') }}">Abbrechen</a>
+  </div>
+</form>
+
+{% if k %}
+<div class="karte">
+  <h2>Dokumente</h2>
+  <table class="liste">
+    <tr><th>Nummer</th><th>Datum</th><th>Betreff</th><th>Status</th><th class="zahl">Betrag</th></tr>
+    {% for d in dokumente %}
+    <tr><td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a></td><td>{{ d.datum|datum }}</td>
+      <td>{{ d.betreff }}</td><td>{{ status(d.status) }}</td><td class="zahl">{{ d.summe_brutto|euro }}</td></tr>
+    {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
+  </table>
+</div>
+<div class="karte">
+  <h2>Datenschutz</h2>
+  <p class="klein">Kunden mit festgeschriebenen Rechnungen dürfen wegen der Aufbewahrungspflicht nicht gelöscht werden – sie können archiviert werden. Kunden ohne Rechnungen können vollständig gelöscht werden.</p>
+  <div class="leiste">
+    <form method="post" action="{{ url_for('main.kunde_archivieren', kid=k.id) }}" class="inline">{{ csrf() }}
+      {% if k.archiviert %}<input type="hidden" name="zurueck" value="1"><button class="zweit">Wieder aktivieren</button>
+      {% else %}<button class="zweit">Archivieren</button>{% endif %}
+    </form>
+    <form method="post" action="{{ url_for('main.kunde_loeschen', kid=k.id) }}" class="inline" onsubmit="return confirm('Kunden wirklich endgültig löschen?')">{{ csrf() }}
+      <button class="gefahr">Löschen</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

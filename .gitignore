@@ -1,0 +1,7 @@
+# Ihre Daten gehören NICHT ins Code-Repository
+Daten/
+Testdaten/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

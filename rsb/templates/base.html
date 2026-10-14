@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titel %}Buchhaltung{% endblock %} – {{ einst.firma_name or "Reparatur Service Bredin" }}</title>
+  <link rel="icon" href="{{ url_for('static', filename='bilder/favicon.png') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+{% set ep = request.endpoint or "" %}
+<aside class="seitenleiste">
+  <div class="marke"><a href="{{ url_for('main.start') }}"><img src="{{ url_for('main.logo_anzeigen') }}" alt="Logo"></a></div>
+  <nav>
+    <a href="{{ url_for('main.start') }}" class="{{ 'aktiv' if ep == 'main.start' }}">Übersicht</a>
+    <div class="gruppe">Verkauf</div>
+    <a href="{{ url_for('main.kunden') }}" class="{{ 'aktiv' if ep.startswith('main.kunde') }}">Kunden</a>
+    <a href="{{ url_for('main.artikel_liste') }}" class="{{ 'aktiv' if ep.startswith('main.artikel') }}">Leistungen &amp; Artikel</a>
+    <a href="{{ url_for('main.dokumente') }}" class="{{ 'aktiv' if ep.startswith('main.dokument') }}">Rechnungen</a>
+    <div class="gruppe">Verwaltung</div>
+    <a href="{{ url_for('main.einstellungen') }}" class="{{ 'aktiv' if ep.startswith('main.einstellungen') }}">Einstellungen</a>
+    <a href="{{ url_for('main.textbausteine') }}" class="{{ 'aktiv' if ep.startswith('main.textbaustein') }}">Textbausteine</a>
+    <a href="{{ url_for('main.protokoll') }}" class="{{ 'aktiv' if ep == 'main.protokoll' }}">Protokoll</a>
+    <a href="{{ url_for('main.pruefung') }}" class="{{ 'aktiv' if ep == 'main.pruefung' }}">Datenprüfung</a>
+  </nav>
+  <div class="fuss">
+    Version {{ version }}
+    <form method="post" action="{{ url_for('main.abmelden') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="zweit klein">Abmelden</button>
+    </form>
+  </div>
+</aside>
+<main>
+  {% with meldungen = get_flashed_messages(with_categories=true) %}
+    {% for art, text in meldungen %}<div class="meldung {{ art }}">{{ text }}</div>{% endfor %}
+  {% endwith %}
+  {% block inhalt %}{% endblock %}
+</main>
+{% block skript %}{% endblock %}
+</body>
+</html>
