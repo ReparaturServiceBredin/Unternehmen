@@ -144,3 +144,6 @@ table.positionen textarea { min-height: 34px; height: 34px; margin-top: 4px; }
 /* Anmeldung */
 .anmeldung { margin: auto; width: 100%; max-width: 380px; padding: 24px; }
 .anmeldung img { width: 100%; margin-bottom: 20px; }
+.zaehler { background: #d93025; color: #fff; border-radius: 99px; padding: 0 7px; font-size: 11px; margin-left: auto; }
+.seitenleiste nav a.aktiv .zaehler { background: #fff; color: var(--blau); }
+.st-warnung { background: var(--gelb-hell); color: #7a5b00; }

@@ -1,5 +1,6 @@
 """Alle Seiten der Weboberfläche."""
 import json
+import re
 from datetime import date
 from pathlib import Path
 
@@ -99,6 +100,8 @@ def start():
             "SELECT COALESCE(SUM(summe_brutto - bezahlt_betrag),0) FROM dokumente "
             "WHERE status='festgeschrieben' AND typ='rechnung'").fetchone()[0],
     }
+    zahlen["anfragen"] = con.execute("SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'"
+                                     ).fetchone()[0]
     letzte = con.execute(
         "SELECT d.*, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM dokumente d "
         "LEFT JOIN kunden k ON k.id=d.kunde_id ORDER BY d.geaendert_am DESC LIMIT 8").fetchall()
@@ -111,14 +114,16 @@ def start():
 def kunden():
     q = request.args.get("q", "").strip()
     archiv = request.args.get("archiv") == "1"
-    sql = "SELECT * FROM kunden WHERE archiviert=?"
+    nur_interessenten = request.args.get("interessenten") == "1"
+    sql = "SELECT * FROM kunden WHERE archiviert=?" + (" AND interessent=1" if nur_interessenten else "")
     args = [1 if archiv else 0]
     if q:
         sql += (" AND (kundennr LIKE ? OR firma LIKE ? OR vorname LIKE ? OR nachname LIKE ? OR email LIKE ? "
                 "OR ort LIKE ? OR telefon LIKE ?)")
         args += [f"%{q}%"] * 7
     sql += " ORDER BY COALESCE(NULLIF(firma,''), nachname), vorname"
-    return render_template("kunden.html", kunden=dbm.get_db().execute(sql, args).fetchall(), q=q, archiv=archiv)
+    return render_template("kunden.html", kunden=dbm.get_db().execute(sql, args).fetchall(), q=q, archiv=archiv,
+                           nur_interessenten=nur_interessenten)
 
 
 @bp.route("/kunden/neu", methods=["GET", "POST"])
@@ -137,6 +142,7 @@ def kunde(kid=None):
             raise EingabeFehler("Bitte mindestens Nachname oder Firma angeben.")
         ziel = _f("zahlungsziel_tage")
         felder["zahlungsziel_tage"] = int(ziel) if ziel.isdigit() else None
+        felder["interessent"] = 1 if request.form.get("interessent") else 0
         with dbm.Transaktion(con):
             if k:
                 con.execute(f"UPDATE kunden SET {', '.join(f'{f}=?' for f in felder)}, geaendert_am=? WHERE id=?",
@@ -156,7 +162,9 @@ def kunde(kid=None):
         return redirect(url_for("main.kunde", kid=kid))
     dokumente = con.execute("SELECT * FROM dokumente WHERE kunde_id=? ORDER BY datum DESC, id DESC",
                             (kid,)).fetchall() if kid else []
-    return render_template("kunde.html", k=k, dokumente=dokumente)
+    kunden_anfragen = con.execute("SELECT * FROM anfragen WHERE kunde_id=? ORDER BY eingang_am DESC",
+                                  (kid,)).fetchall() if kid else []
+    return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen)
 
 
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
@@ -180,6 +188,7 @@ def kunde_loeschen(kid):
         for d in con.execute("SELECT id FROM dokumente WHERE kunde_id=?", (kid,)).fetchall():
             con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
             con.execute("DELETE FROM dokumente WHERE id=?", (d["id"],))
+        con.execute("DELETE FROM anfragen WHERE kunde_id=?", (kid,))
         con.execute("DELETE FROM kunden WHERE id=?", (kid,))
         dbm.protokollieren("kunde_geloescht", "kunde", kid, con=con)
     flash("Kunde gelöscht.", "ok")
@@ -511,10 +520,16 @@ EINSTELLUNGS_BEREICHE = {
     "email": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "absender_name", "absender_email",
               "bcc_an_mich"],
     "backup": ["backup_auto", "backup_ziel", "backup_behalten"],
+    "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_benutzer",
+                 "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
+                 "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
+                 "interessent_loeschen_monate"],
 }
-JA_NEIN = {"faltmarken", "girocode", "bcc_an_mich", "backup_auto"}
+JA_NEIN = {"faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+           "anfrage_auto_kunde"}
 GANZZAHL = {"zahlungsziel_privat", "zahlungsziel_firma", "anzahlung_prozent", "mahnstufen", "smtp_port",
-            "backup_behalten", "regel_steuersatz"}
+            "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
+            "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
 
 
@@ -541,6 +556,10 @@ def einstellungen():
             neu["iban"] = neu["iban"].replace(" ", "").upper()
         if bereich == "email" and request.form.get("smtp_passwort"):
             neu["smtp_passwort_enc"] = verschluesseln(request.form["smtp_passwort"])
+        if bereich == "anfragen" and request.form.get("imap_passwort"):
+            neu["imap_passwort_enc"] = verschluesseln(request.form["imap_passwort"])
+        if bereich == "anfragen" and neu["anfrage_schwelle_spam"] <= neu["anfrage_schwelle_unsicher"]:
+            raise EingabeFehler("Die Spam-Schwelle muss größer sein als die Schwelle für „unsicher“.")
         if bereich == "rechnung":
             if neu["steuer_modus"] not in ("kleinunternehmer", "regel"):
                 neu["steuer_modus"] = "kleinunternehmer"
@@ -552,14 +571,17 @@ def einstellungen():
         with dbm.Transaktion(con):
             alt = dbm.einstellungen(con)
             dbm.einstellungen_speichern(neu, con)
-            geaendert = {k: v for k, v in neu.items() if alt.get(k) != v and k != "smtp_passwort_enc"}
-            if "smtp_passwort_enc" in neu:
-                geaendert["smtp_passwort"] = "(geändert)"
+            geheim = ("smtp_passwort_enc", "imap_passwort_enc")
+            geaendert = {k: v for k, v in neu.items() if alt.get(k) != v and k not in geheim}
+            for k in geheim:
+                if k in neu:
+                    geaendert[k.replace("_enc", "")] = "(geändert)"
             dbm.protokollieren("einstellungen_geaendert", "einstellungen", None, geaendert, con=con)
         flash("Einstellungen gespeichert.", "ok")
         return redirect(url_for("main.einstellungen", bereich=bereich))
     return render_template("einstellungen.html", bereich=bereich, schriften=list(SCHRIFTEN),
                            smtp_passwort_gesetzt=bool(dbm.einstellung("smtp_passwort_enc")),
+                           imap_passwort_gesetzt=bool(dbm.einstellung("imap_passwort_enc")),
                            backups=_backup_liste())
 
 
@@ -755,3 +777,127 @@ def pruefung():
 @bp.app_template_filter("kname")
 def _kname(row):
     return kunde_name(row)
+
+
+# ====================================================================== Anfragen (Kontaktformular)
+
+from . import anfragen as anf  # noqa: E402
+
+ANFRAGE_FILTER = {
+    "offen": ("Zu prüfen", "status='neu' AND einstufung<>'spam'"),
+    "kunden": ("Kunde angelegt/zugeordnet", "status IN ('kunde_angelegt','zugeordnet')"),
+    "spam": ("Spam", "status='neu' AND einstufung='spam'"),
+    "verworfen": ("Verworfen", "status='verworfen'"),
+    "alle": ("Alle", "1=1"),
+}
+
+
+@bp.route("/anfragen")
+def anfragen_liste():
+    con = dbm.get_db()
+    filt = request.args.get("filter", "offen")
+    if filt not in ANFRAGE_FILTER:
+        filt = "offen"
+    liste = con.execute(f"SELECT a.*, k.kundennr FROM anfragen a LEFT JOIN kunden k ON k.id=a.kunde_id "
+                        f"WHERE {ANFRAGE_FILTER[filt][1]} ORDER BY a.eingang_am DESC LIMIT 300").fetchall()
+    anzahl = {k: con.execute(f"SELECT COUNT(*) FROM anfragen WHERE {w}").fetchone()[0]
+              for k, (_, w) in ANFRAGE_FILTER.items()}
+    loeschvorschlaege = anf.interessenten_zum_loeschen(con, dbm.einstellungen(con))
+    return render_template("anfragen.html", liste=liste, filt=filt, filter=ANFRAGE_FILTER, anzahl=anzahl,
+                           loeschvorschlaege=loeschvorschlaege, anzeigename=anf.anfrage_anzeigename)
+
+
+@bp.route("/anfragen/abrufen", methods=["POST"])
+def anfragen_abrufen():
+    try:
+        e = anf.abruf_mit_protokoll(dbm.get_db())
+    except anf.AbrufFehler as fehler:
+        flash(str(fehler), "fehler")
+        return redirect(url_for("main.anfragen_liste"))
+    flash(f"Postfach geprüft: {e['neu']} neue Anfrage(n) – {e['echt']} echt, {e['unsicher']} unsicher, "
+          f"{e['spam']} Spam. {e['verschoben']} E-Mail(s) in den Ordner „{dbm.einstellung('imap_zielordner')}“ "
+          f"verschoben.", "ok")
+    return redirect(url_for("main.anfragen_liste"))
+
+
+@bp.route("/anfragen/einfuegen", methods=["GET", "POST"])
+def anfrage_einfuegen():
+    """Formular-E-Mail per Kopieren/Einfügen übernehmen (z. B. zum Testen oder ohne IMAP)."""
+    if request.method == "POST":
+        text = request.form.get("text", "").strip()
+        if not text:
+            raise EingabeFehler("Bitte den Text der Anfrage einfügen.")
+        if "<" in text and ">" in text and re.search(r"</?(p|div|br|td|strong)\b", text, re.I):
+            text = anf.html_zu_text(text)
+        con = dbm.get_db()
+        aid = anf.verarbeiten(con, text, dbm.einstellungen(con), quelle="manuell")
+        return redirect(url_for("main.anfrage", aid=aid))
+    return render_template("anfrage_einfuegen.html")
+
+
+def _anfrage_laden(aid):
+    a = dbm.get_db().execute("SELECT * FROM anfragen WHERE id=?", (aid,)).fetchone()
+    if not a:
+        abort(404)
+    return a
+
+
+@bp.route("/anfragen/<int:aid>")
+def anfrage(aid):
+    con = dbm.get_db()
+    a = _anfrage_laden(aid)
+    kunde = con.execute("SELECT * FROM kunden WHERE id=?", (a["kunde_id"],)).fetchone() if a["kunde_id"] else None
+    vorhanden = None if kunde else anf.passender_kunde(con, a["email"], a["telefon"])
+    return render_template("anfrage.html", a=a, kunde=kunde, vorhanden=vorhanden,
+                           felder=json.loads(a["felder_json"] or "{}"), gruende=json.loads(a["gruende_json"] or "[]"),
+                           leistungsart=anf.geraet_zu_leistungsart(a["geraet"]), anzeigename=anf.anfrage_anzeigename)
+
+
+@bp.route("/anfragen/<int:aid>/aktion", methods=["POST"])
+def anfrage_aktion(aid):
+    con = dbm.get_db()
+    a = _anfrage_laden(aid)
+    aktion = request.form.get("aktion")
+    with dbm.Transaktion(con):
+        if aktion == "kunde":
+            if a["kunde_id"]:
+                raise EingabeFehler("Zu dieser Anfrage gibt es bereits einen Kunden.")
+            con.execute("UPDATE anfragen SET vorname=?, nachname=? WHERE id=?",
+                        (_f("vorname"), _f("nachname"), aid))
+            kid, neu = anf.kunde_aus_anfrage(con, aid, dbm.einstellungen(con), _f("vorname"), _f("nachname"))
+            meldung = "Kunde als Interessent angelegt." if neu else "Anfrage dem vorhandenen Kunden zugeordnet."
+        elif aktion == "verwerfen":
+            con.execute("UPDATE anfragen SET status='verworfen', bearbeitet_am=? WHERE id=?", (dbm.jetzt(), aid))
+            dbm.protokollieren("anfrage_verworfen", "anfrage", aid, con=con)
+            meldung, kid = "Anfrage verworfen (wird nach 30 Tagen automatisch gelöscht).", None
+        elif aktion == "spam":
+            con.execute("UPDATE anfragen SET einstufung='spam', status='neu', bearbeitet_am=? WHERE id=?",
+                        (dbm.jetzt(), aid))
+            dbm.protokollieren("anfrage_als_spam", "anfrage", aid, con=con)
+            meldung, kid = "Als Spam markiert.", None
+        elif aktion == "kein_spam":
+            con.execute("UPDATE anfragen SET einstufung='unsicher', bearbeitet_am=? WHERE id=?", (dbm.jetzt(), aid))
+            dbm.protokollieren("anfrage_kein_spam", "anfrage", aid, con=con)
+            meldung, kid = "Anfrage zurück in „Zu prüfen“ verschoben.", None
+        else:
+            abort(400)
+    flash(meldung, "ok")
+    if kid and request.form.get("danach") == "kunde":
+        return redirect(url_for("main.kunde", kid=kid))
+    return redirect(url_for("main.anfrage", aid=aid))
+
+
+@bp.route("/anfragen/interessenten-loeschen", methods=["POST"])
+def interessenten_loeschen():
+    con = dbm.get_db()
+    ids = [int(i) for i in request.form.getlist("kunde_id") if i.isdigit()]
+    erlaubt = {k["id"] for k in anf.interessenten_zum_loeschen(con, dbm.einstellungen(con))}
+    with dbm.Transaktion(con):
+        for kid in ids:
+            if kid in erlaubt:
+                con.execute("DELETE FROM anfragen WHERE kunde_id=?", (kid,))
+                con.execute("DELETE FROM kunden WHERE id=?", (kid,))
+                dbm.protokollieren("interessent_geloescht", "kunde", kid, "Löschfrist abgelaufen, kein Auftrag",
+                                   con=con)
+    flash(f"{len([i for i in ids if i in erlaubt])} Interessent(en) gelöscht.", "ok")
+    return redirect(url_for("main.anfragen_liste"))

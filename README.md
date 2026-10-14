@@ -3,7 +3,7 @@
 Eigenes Rechnungs- und Buchhaltungsprogramm für **Reparatur Service Bredin** (Inhaber Dennis Bredin, Möckmühl).
 Es läuft lokal auf Ihrem Windows-PC, die Bedienung erfolgt im Browser, und es entstehen **keine laufenden Kosten**.
 
-**Stand: Etappe 1** – Kunden, Leistungen/Artikel mit Marge, Rechnungen als PDF mit Logo und GiroCode, Druck,
+**Stand: Etappe 1 + Anfragen** – Anfragen aus dem Kontaktformular mit Spam-Erkennung, Kunden, Leistungen/Artikel mit Marge, Rechnungen als PDF mit Logo und GiroCode, Druck,
 E-Mail-Versand mit Protokoll, Storno, unveränderbare fortlaufende Nummern, Passwortschutz, tägliches Backup.
 
 | Dokument | Inhalt |

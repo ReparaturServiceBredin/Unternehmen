@@ -230,6 +230,7 @@ def festschreiben(con, dok_id, daten_dir):
             "festgeschrieben_am=?, geaendert_am=? WHERE id=?",
             (nummer, json.dumps(snap, ensure_ascii=False), rel.as_posix(), sha, dbm.jetzt(), dbm.jetzt(), dok_id),
         )
+        con.execute("UPDATE kunden SET interessent=0 WHERE id=?", (dok["kunde_id"],))  # jetzt echter Kunde
         dbm.protokollieren("festgeschrieben", "dokument", dok_id,
                            {"nummer": nummer, "betrag": snap["summen"]["brutto"], "pdf_sha256": sha}, con=con)
     return nummer

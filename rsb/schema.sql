@@ -240,3 +240,29 @@ BEFORE DELETE ON versandprotokoll
 BEGIN
     SELECT RAISE(ABORT, 'Das Versandprotokoll kann nicht gelöscht werden.');
 END;
+
+-- Anfragen aus dem Kontaktformular (per E-Mail abgeholt oder manuell eingefügt)
+CREATE TABLE IF NOT EXISTS anfragen (
+    id           INTEGER PRIMARY KEY,
+    eingang_am   TEXT NOT NULL,
+    quelle       TEXT NOT NULL DEFAULT 'email',   -- email / manuell
+    message_id   TEXT UNIQUE,
+    absender     TEXT,
+    betreff      TEXT,
+    name         TEXT,
+    vorname      TEXT,
+    nachname     TEXT,
+    telefon      TEXT,
+    email        TEXT,
+    geraet       TEXT,
+    nachricht    TEXT,
+    felder_json  TEXT,
+    rohtext      TEXT,
+    spam_punkte  INTEGER NOT NULL DEFAULT 0,
+    gruende_json TEXT,
+    einstufung   TEXT NOT NULL,                   -- echt / unsicher / spam
+    status       TEXT NOT NULL DEFAULT 'neu',     -- neu / kunde_angelegt / zugeordnet / verworfen
+    kunde_id     INTEGER REFERENCES kunden(id) ON DELETE SET NULL,
+    bearbeitet_am TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_anfragen_status ON anfragen(status, einstufung);

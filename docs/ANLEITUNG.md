@@ -138,3 +138,51 @@ Prüfen Sie dann auch Ihre Preise, denn bisher sind es Endpreise.
 - Kunden **ohne** festgeschriebene Rechnungen können Sie vollständig löschen.
 - Kunden **mit** Rechnungen müssen wegen der Aufbewahrungspflicht erhalten bleiben. Sie lassen sich **archivieren** und verschwinden dann aus den Listen.
 - Das vollständige Löschkonzept steht in [RECHT_UND_GOBD.md](RECHT_UND_GOBD.md#datenschutz-und-löschkonzept).
+
+## 10. Anfragen aus dem Kontaktformular
+
+Wer auf www.reparatur-bredin.de das Kontaktformular ausfüllt, erzeugt eine E-Mail an kontakt@reparatur-bredin.de.
+Das Tool holt diese E-Mails selbst ab und wertet sie aus:
+
+1. Es liest die Felder **Name, Telefon, Email, Geraet und Nachricht**.
+   Vor- und Nachname werden automatisch getrennt, auch bei „Kochendörfer Kai“, also Nachname zuerst.
+2. Es vergibt **Punkte** nach festen Regeln. Für Spam sprechen zum Beispiel Links, Werbewörter wie SEO oder Krypto,
+   Zeichensalat, fremde Schriftzeichen, ungültige Kontaktdaten und englische Werbetexte. Für eine echte Anfrage sprechen
+   Wörter wie Display, Akku, Jura, Laptop, defekt oder eine deutsche Telefonnummer.
+   Unter jeder Anfrage steht, wie die Punkte zustande kamen.
+3. Das Ergebnis:
+   - **Echte Anfrage:** Der Kunde wird automatisch als **Interessent** angelegt, die Anfrage steht in seinen Notizen.
+     Gibt es die E-Mail-Adresse oder Telefonnummer schon, wird die Anfrage dem **vorhandenen** Kunden zugeordnet.
+   - **Unsicher:** Die Anfrage erscheint unter *Anfragen → Zu prüfen*. Sie können den Namen korrigieren und mit
+     einem Klick den Kunden anlegen. Alternativ verwerfen oder als Spam markieren.
+   - **Spam:** Es wird kein Kunde angelegt. Spam wird nach 30 Tagen automatisch gelöscht.
+4. Schreiben Sie dem Interessenten eine Rechnung, wird er automatisch zum normalen Kunden.
+5. Interessenten ohne Auftrag schlägt das Tool nach 6 Monaten (einstellbar) zum Löschen vor (Datenschutz).
+
+Neue Anfragen sehen Sie in der Navigation an der roten Zahl neben **Anfragen** und auf der Übersicht.
+
+### Einrichtung (Einstellungen → Anfragen)
+
+| Feld | Eintrag |
+|---|---|
+| IMAP-Server | `imap.ionos.de`, Port `993` |
+| Benutzername / Passwort | leer lassen, dann werden die Zugangsdaten vom E-Mail-Versand verwendet |
+| Ordner | `INBOX` (Posteingang) |
+| Erledigte verschieben nach | `Anfragen erledigt` (der Ordner wird automatisch angelegt) |
+| Formular-E-Mails erkennen am Text | `A new form has been submitted` |
+
+Dann den Haken **„Postfach automatisch prüfen“** setzen und einmal **„Postfach jetzt prüfen“** klicken.
+Andere E-Mails im Postfach werden **nicht** angefasst.
+
+**Wichtig – Weiterleitung an Gmail:** Das Tool liest bei IONOS nur E-Mails, die dort auch **gespeichert**
+bleiben. Prüfen Sie im IONOS-Webmail bzw. Kundenkonto bei der Weiterleitung von kontakt@ an Gmail, dass
+**„Kopie im Postfach behalten“** (oder ähnlich) eingeschaltet ist. Ist kontakt@ nur eine reine Weiterleitung
+ohne eigenes Postfach, tragen Sie stattdessen Gmail ein: `imap.gmail.com`, Port 993, Benutzer
+reparatur-bredin@gmail.com. Als Passwort dient dort ein **App-Passwort**
+(Google-Konto → Sicherheit → 2-Faktor-Bestätigung → App-Passwörter).
+
+**Ohne Postfach-Zugang oder zum Testen:** Über *Anfragen → Anfrage einfügen* den Text einer Formular-E-Mail
+hineinkopieren. Die Anfrage wird genauso geprüft.
+
+Die Anfragen werden nur abgeholt, **solange das Programm läuft**. Beim nächsten Start holt das Tool alles nach,
+was in den letzten 60 Tagen eingegangen ist.

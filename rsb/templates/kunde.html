@@ -31,6 +31,7 @@
     <div><label>USt-IdNr. (nur Firmenkunden, optional)</label><input type="text" name="ust_idnr" value="{{ k.ust_idnr if k }}"></div>
     <div><label>Abweichendes Zahlungsziel (Tage)</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ k.zahlungsziel_tage if k and k.zahlungsziel_tage is not none }}">
       <div class="hilfe">Leer lassen = Standard ({{ einst.zahlungsziel_privat }} Tage privat / {{ einst.zahlungsziel_firma }} Tage Firma)</div></div>
+    <div class="s12"><label class="check"><input type="checkbox" name="interessent" {{ 'checked' if k and k.interessent }}> Interessent (hat angefragt, noch keine Rechnung){% if k and k.quelle %} – Quelle: {{ k.quelle }}{% endif %}</label></div>
     <div class="s12"><label>Notizen (intern, erscheinen nicht auf Dokumenten)</label><textarea name="notizen">{{ k.notizen if k }}</textarea></div>
   </div>
   <br>
@@ -52,6 +53,15 @@
     {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
   </table>
 </div>
+{% if anfragen %}
+<div class="karte">
+  <h2>Anfragen</h2>
+  <table class="liste">
+    <tr><th>Eingang</th><th>Gerät</th><th>Nachricht</th></tr>
+    {% for a in anfragen %}<tr><td><a href="{{ url_for('main.anfrage', aid=a.id) }}">{{ a.eingang_am|zeit }}</a></td><td>{{ a.geraet }}</td><td class="klein">{{ (a.nachricht or '')|truncate(120) }}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
 <div class="karte">
   <h2>Datenschutz</h2>
   <p class="klein">Kunden mit festgeschriebenen Rechnungen dürfen wegen der Aufbewahrungspflicht nicht gelöscht werden – sie können archiviert werden. Kunden ohne Rechnungen können vollständig gelöscht werden.</p>

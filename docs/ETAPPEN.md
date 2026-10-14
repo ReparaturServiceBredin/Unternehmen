@@ -38,6 +38,8 @@ weil WeasyPrint unter Windows zusätzliche Systembibliotheken braucht. Das wider
 | Etappe | Inhalt | Stand |
 |---|---|---|
 | **1** | Kunden, Leistungen/Artikel mit Teilekosten und Marge, Rechnung als PDF mit Logo und GiroCode, Druck, E-Mail-Versand mit Vorlagen und Protokoll, Storno, unveränderbare Nummern, Login, Textbausteine, Layout-Einstellungen, tägliches Backup inkl. NAS, Datenprüfung | ✅ fertig |
+| **1b** | Anfragen aus dem Kontaktformular: Abruf per IMAP, Spam-/Unsinn-Erkennung, automatisches Anlegen als Interessent, Dubletten-Erkennung, Löschvorschläge | ✅ fertig |
+| 3a | Bankumsätze (N26-CSV) importieren, Zahlungen per Rechnungsnummer zuordnen, Freigabe bzw. später automatisch | als Nächstes (wartet auf CSV-Beispiel) |
 | 2 | Kostenvoranschlag, Auftragsbestätigung, Anzahlungsrechnung (50 % Standard), Schlussrechnung mit Abzug der Anzahlung, Gutschrift; optional ZUGFeRD | geplant |
 | 3 | Zahlungseingänge (teilweise/vollständig, bar/Überweisung), Status offen/teilweise/bezahlt/überfällig, Zahlungserinnerung und 2 Mahnstufen mit 3,95 € Gebühr | geplant |
 | 4 | Einnahmen/Ausgaben mit Belegen (Foto/PDF/E-Rechnung), Kategorien nach Anlage EÜR, EÜR-Auswertung, Monats-/Jahresübersicht, Umsatz pro Leistungsart, offene Posten | geplant |

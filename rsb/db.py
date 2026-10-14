@@ -74,6 +74,24 @@ STANDARD_EINSTELLUNGEN = {
     "backup_ziel": "",
     "backup_behalten": 30,
     "letztes_backup": "",
+    # Anfragen aus dem Kontaktformular
+    "anfragen_aktiv": False,
+    "anfragen_intervall_min": 5,
+    "imap_host": "imap.ionos.de",
+    "imap_port": 993,
+    "imap_benutzer": "",
+    "imap_passwort_enc": "",
+    "imap_ordner": "INBOX",
+    "imap_zielordner": "Anfragen erledigt",
+    "imap_verschieben": True,
+    "anfrage_erkennung": "A new form has been submitted",
+    "anfrage_auto_kunde": True,
+    "anfrage_schwelle_unsicher": 2,
+    "anfrage_schwelle_spam": 5,
+    "anfrage_namensreihenfolge": "auto",   # auto / vorname_nachname / nachname_vorname
+    "interessent_loeschen_monate": 6,
+    "anfragen_letzter_abruf": "",
+    "anfragen_letzter_fehler": "",
     # Sicherheit
     "passwort_hash": "",
 }
@@ -106,6 +124,7 @@ def schliessen(_exc=None):
 def initialisieren(pfad):
     con = verbinden(pfad)
     con.executescript(SCHEMA.read_text(encoding="utf-8"))
+    _migrieren(con)
     vorhanden = {r["schluessel"] for r in con.execute("SELECT schluessel FROM einstellungen")}
     for k, v in STANDARD_EINSTELLUNGEN.items():
         if k not in vorhanden:
@@ -118,6 +137,15 @@ def initialisieren(pfad):
                 (tb["kategorie"], tb["dokumenttyp"], tb["name"], tb["text"], tb["standard"]),
             )
     con.close()
+
+
+def _migrieren(con):
+    """Ergänzt neue Spalten in bestehenden Datenbanken (Updates ohne Datenverlust)."""
+    spalten = {r["name"] for r in con.execute("PRAGMA table_info(kunden)")}
+    if "interessent" not in spalten:
+        con.execute("ALTER TABLE kunden ADD COLUMN interessent INTEGER NOT NULL DEFAULT 0")
+    if "quelle" not in spalten:
+        con.execute("ALTER TABLE kunden ADD COLUMN quelle TEXT")
 
 
 # ---------------------------------------------------------------- Einstellungen

@@ -14,6 +14,7 @@
   <nav>
     <a href="{{ url_for('main.start') }}" class="{{ 'aktiv' if ep == 'main.start' }}">Übersicht</a>
     <div class="gruppe">Verkauf</div>
+    <a href="{{ url_for('main.anfragen_liste') }}" class="{{ 'aktiv' if ep.startswith('main.anfrage') }}">Anfragen{% if offene_anfragen %} <span class="zaehler">{{ offene_anfragen }}</span>{% endif %}</a>
     <a href="{{ url_for('main.kunden') }}" class="{{ 'aktiv' if ep.startswith('main.kunde') }}">Kunden</a>
     <a href="{{ url_for('main.artikel_liste') }}" class="{{ 'aktiv' if ep.startswith('main.artikel') }}">Leistungen &amp; Artikel</a>
     <a href="{{ url_for('main.dokumente') }}" class="{{ 'aktiv' if ep.startswith('main.dokument') }}">Rechnungen</a>

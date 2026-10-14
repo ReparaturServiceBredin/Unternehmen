@@ -9,7 +9,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION = "0.1.0 (Etappe 1)"
+VERSION = "0.2.0 (Etappe 1 + Anfragen)"
 PROJEKT = Path(__file__).resolve().parent.parent
 
 
@@ -57,9 +57,11 @@ def create_app(daten_dir=None, testing=False):
             return {}
         try:
             einst = dbm.einstellungen()
+            offene_anfragen = dbm.get_db().execute(
+                "SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'").fetchone()[0]
         except Exception:
-            einst = {}
-        return {"einst": einst}
+            einst, offene_anfragen = {}, 0
+        return {"einst": einst, "offene_anfragen": offene_anfragen}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('backup','Backup'),('sicherheit','Passwort')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('backup','Backup'),('sicherheit','Passwort')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -104,6 +104,37 @@
 <form method="post" action="{{ url_for('main.testmail') }}" class="karte">{{ csrf() }}
   <h2>Test</h2>
   <div class="leiste"><input type="email" name="an" placeholder="{{ einst.absender_email }}" style="width:280px"><button class="zweit">Test-E-Mail senden</button></div>
+</form>
+
+{% elif bereich == 'anfragen' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Posteingang (IMAP)</h2>
+  <p class="klein">Das Tool holt Formular-E-Mails aus diesem Postfach ab. IONOS: <code>imap.ionos.de</code>, Port 993 (SSL). Gmail: <code>imap.gmail.com</code>, Port 993, nur mit App-Passwort. Leeres Benutzer-/Passwortfeld = gleiche Zugangsdaten wie beim E-Mail-Versand.</p>
+  <div class="felder">
+    {{ haken('anfragen_aktiv', 'Postfach automatisch prüfen (solange das Programm läuft)') }}
+    {{ feld('anfragen_intervall_min', 'Alle … Minuten', 'number', 's3') }}
+    {{ feld('imap_host', 'IMAP-Server', span='s6') }}{{ feld('imap_port', 'Port', 'number', 's3') }}
+    {{ feld('imap_benutzer', 'Benutzername (leer = wie E-Mail-Versand)') }}
+    <div><label>Passwort (leer = wie E-Mail-Versand)</label><input type="password" name="imap_passwort" autocomplete="new-password" placeholder="{{ '•••••••• (gespeichert)' if imap_passwort_gesetzt else '' }}"></div>
+    {{ feld('imap_ordner', 'Ordner mit den Anfragen', span='s4') }}
+    {{ feld('imap_zielordner', 'Erledigte verschieben nach', span='s4') }}
+    <div class="s4" style="align-self:end">{{ haken('imap_verschieben', 'verarbeitete Formular-E-Mails verschieben') }}</div>
+    {{ feld('anfrage_erkennung', 'Formular-E-Mails erkennen am Text', span='s12', hilfe='Nur E-Mails, die diesen Text enthalten, werden verarbeitet. Alle anderen E-Mails bleiben unberührt.') }}
+  </div>
+  <br><h2>Prüfung &amp; Kunden</h2>
+  <div class="felder">
+    {{ haken('anfrage_auto_kunde', 'Bei echten Anfragen automatisch Kunden (Interessent) anlegen') }}
+    {{ feld('anfrage_schwelle_unsicher', 'ab … Punkten „unsicher“', 'number', 's3') }}
+    {{ feld('anfrage_schwelle_spam', 'ab … Punkten „Spam“', 'number', 's3') }}
+    <div class="s3"><label>Reihenfolge im Feld „Name“</label><select name="anfrage_namensreihenfolge">
+      {% for k, t in [('auto','automatisch erkennen'),('vorname_nachname','Vorname Nachname'),('nachname_vorname','Nachname Vorname')] %}<option value="{{ k }}" {{ 'selected' if einst.anfrage_namensreihenfolge == k }}>{{ t }}</option>{% endfor %}</select></div>
+    {{ feld('interessent_loeschen_monate', 'Interessenten ohne Auftrag löschen nach … Monaten', 'number', 's3') }}
+  </div><br><button>Speichern</button>
+</form>
+<form method="post" action="{{ url_for('main.anfragen_abrufen') }}" class="karte">{{ csrf() }}
+  <h2>Test</h2>
+  <p class="klein">Zuletzt geprüft: {{ einst.anfragen_letzter_abruf|zeit if einst.anfragen_letzter_abruf else 'noch nie' }}{% if einst.anfragen_letzter_fehler %} – <span style="color:var(--rot)">{{ einst.anfragen_letzter_fehler }}</span>{% endif %}</p>
+  <button class="zweit">Postfach jetzt prüfen</button>
 </form>
 
 {% elif bereich == 'backup' %}
