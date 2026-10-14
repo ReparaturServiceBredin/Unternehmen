@@ -10,8 +10,8 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.4.0"
-VERSION = f"{VERSION_NUMMER} (Auto-Update)"
+VERSION_NUMMER = "0.5.0"
+VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
     PROJEKT = Path(sys.executable).resolve().parent
@@ -56,6 +56,12 @@ def create_app(daten_dir=None, testing=False):
     @app.before_request
     def anmeldung_pruefen():
         if request.endpoint in offen:
+            return None
+        if not dbm.einstellung("login_aktiv"):
+            # Passwortschutz ausgeschaltet: direkt angemeldet (Programm ist nur am eigenen PC erreichbar)
+            session["angemeldet"] = True
+            session["benutzer"] = "inhaber"
+            csrf_pruefen()
             return None
         if not dbm.einstellung("passwort_hash"):
             return redirect(url_for("main.einrichten"))

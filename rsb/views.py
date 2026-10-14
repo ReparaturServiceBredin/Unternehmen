@@ -34,6 +34,8 @@ def _f(name, standard=""):
 
 @bp.route("/einrichten", methods=["GET", "POST"])
 def einrichten():
+    if not dbm.einstellung("login_aktiv"):
+        return redirect(url_for("main.start"))
     if dbm.einstellung("passwort_hash"):
         return redirect(url_for("main.login"))
     if request.method == "POST":
@@ -58,6 +60,8 @@ def einrichten():
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
+    if not dbm.einstellung("login_aktiv"):
+        return redirect(url_for("main.start"))
     if request.method == "POST":
         if check_password_hash(dbm.einstellung("passwort_hash") or "", request.form.get("passwort", "")):
             session.clear()
@@ -512,7 +516,7 @@ EINSTELLUNGS_BEREICHE = {
     "email": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "absender_name", "absender_email",
               "bcc_an_mich"],
     "backup": ["backup_auto", "backup_ziel", "backup_behalten"],
-    "programm": ["update_auto"],
+    "programm": ["update_auto", "fenster_modus"],
     "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_benutzer",
                  "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
@@ -668,16 +672,28 @@ def testmail():
 
 @bp.route("/einstellungen/passwort", methods=["POST"])
 def passwort_aendern():
+    """Passwortschutz ein-/ausschalten oder Passwort ändern."""
     con = dbm.get_db()
-    if not check_password_hash(dbm.einstellung("passwort_hash"), request.form.get("alt", "")):
+    aktion = request.form.get("aktion", "aendern")
+    if aktion == "aus":
+        with dbm.Transaktion(con):
+            dbm.einstellungen_speichern({"login_aktiv": False}, con)
+            dbm.protokollieren("passwortschutz_aus", "system", con=con)
+        flash("Passwortschutz ausgeschaltet. Das Programm öffnet sich ohne Anmeldung.", "ok")
+        return redirect(url_for("main.einstellungen", bereich="sicherheit"))
+    bisher = dbm.einstellung("passwort_hash")
+    if aktion == "aendern" and bisher and not check_password_hash(bisher, request.form.get("alt", "")):
         raise EingabeFehler("Das bisherige Passwort ist falsch.")
     neu = request.form.get("neu", "")
     if len(neu) < 8 or neu != request.form.get("neu2"):
-        raise EingabeFehler("Das neue Passwort muss mindestens 8 Zeichen haben und zweimal gleich eingegeben werden.")
+        raise EingabeFehler("Das Passwort muss mindestens 8 Zeichen haben und zweimal gleich eingegeben werden.")
     with dbm.Transaktion(con):
-        dbm.einstellungen_speichern({"passwort_hash": generate_password_hash(neu)}, con)
-        dbm.protokollieren("passwort_geaendert", "system", con=con)
-    flash("Passwort geändert.", "ok")
+        werte = {"passwort_hash": generate_password_hash(neu)}
+        if aktion == "an":
+            werte["login_aktiv"] = True
+        dbm.einstellungen_speichern(werte, con)
+        dbm.protokollieren("passwortschutz_an" if aktion == "an" else "passwort_geaendert", "system", con=con)
+    flash("Passwortschutz eingeschaltet." if aktion == "an" else "Passwort geändert.", "ok")
     return redirect(url_for("main.einstellungen", bereich="sicherheit"))
 
 

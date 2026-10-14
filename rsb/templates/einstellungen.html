@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwort')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -175,7 +175,13 @@
   <form method="post" action="{{ url_for('main.update_pruefen') }}">{{ csrf() }}<button class="zweit">Jetzt nach Updates suchen</button></form>
 </div>
 <form method="post" class="karte">{{ csrf() }}
-  <h2>Automatische Updates</h2>
+  <h2>Programmfenster</h2>
+  <div class="felder">
+    <div class="s8"><label>Buchhaltung öffnen als</label><select name="fenster_modus">
+      <option value="app" {{ 'selected' if einst.fenster_modus == 'app' }}>eigenes Programmfenster (ohne Browser-Leiste)</option>
+      <option value="browser" {{ 'selected' if einst.fenster_modus == 'browser' }}>Tab im normalen Browser</option></select></div>
+  </div>
+  <br><h2>Automatische Updates</h2>
   <div class="felder">
     {{ haken('update_auto', 'Neue Versionen beim Programmstart automatisch installieren (vorher wird ein Backup erstellt)') }}
   </div>
@@ -184,13 +190,31 @@
 </form>
 
 {% elif bereich == 'sicherheit' %}
+{% if not einst.login_aktiv %}
+<form method="post" action="{{ url_for('main.passwort_aendern') }}" class="karte">{{ csrf() }}
+  <h2>Passwortschutz ist ausgeschaltet</h2>
+  <p class="klein">Das Programm öffnet sich ohne Anmeldung. Von anderen Geräten ist es nicht erreichbar (nur dieser PC),
+    aber jeder, der an diesem PC sitzt, kann es öffnen. Tipp: Windows-Anmeldung mit Passwort/PIN und Bildschirmsperre nutzen.</p>
+  <h2>Passwortschutz einschalten</h2>
+  <div class="felder">
+    <div class="s4"><label>Passwort (mind. 8 Zeichen)</label><input type="password" name="neu" required minlength="8"></div>
+    <div class="s4"><label>Passwort wiederholen</label><input type="password" name="neu2" required minlength="8"></div>
+  </div><br><button name="aktion" value="an">Passwortschutz einschalten</button>
+</form>
+{% else %}
 <form method="post" action="{{ url_for('main.passwort_aendern') }}" class="karte">{{ csrf() }}
   <h2>Passwort ändern</h2>
   <div class="felder">
     <div class="s4"><label>Bisheriges Passwort</label><input type="password" name="alt" required></div>
     <div class="s4"><label>Neues Passwort</label><input type="password" name="neu" required minlength="8"></div>
     <div class="s4"><label>Neues Passwort wiederholen</label><input type="password" name="neu2" required minlength="8"></div>
-  </div><br><button>Passwort ändern</button>
+  </div><br><button name="aktion" value="aendern">Passwort ändern</button>
 </form>
+<form method="post" action="{{ url_for('main.passwort_aendern') }}" class="karte">{{ csrf() }}
+  <h2>Passwortschutz ausschalten</h2>
+  <p class="klein">Danach öffnet sich das Programm ohne Anmeldung.</p>
+  <button name="aktion" value="aus" class="gefahr">Passwortschutz ausschalten</button>
+</form>
+{% endif %}
 {% endif %}
 {% endblock %}

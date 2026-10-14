@@ -8,7 +8,7 @@ datas = [
     ("rsb/schema.sql", "rsb"),
 ]
 binaries = []
-hiddenimports = ["waitress"]
+hiddenimports = ["waitress", "pystray._win32"]
 for paket in ("reportlab",):
     d, b, h = collect_all(paket)
     datas += d
@@ -32,7 +32,7 @@ exe = EXE(
     a.datas,
     [],
     name="RSB-Buchhaltung",
-    console=True,          # schwarzes Fenster: zeigt den Status, Schließen beendet das Programm
+    console=False,         # kein schwarzes Fenster; Bedienung über das Symbol neben der Uhr
     icon="rsb/static/bilder/programm.ico",
     upx=False,
     version="version_info.txt" if __import__("os").path.exists("version_info.txt") else None,

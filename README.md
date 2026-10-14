@@ -25,15 +25,18 @@ E-Mail-Versand mit Protokoll, Storno, unveränderbare fortlaufende Nummern, Pass
    - Beim allerersten Start meldet Windows evtl. „Der Computer wurde durch Windows geschützt“, weil die Datei
      nicht kostenpflichtig signiert ist. Dann auf *Weitere Informationen → Trotzdem ausführen* klicken.
      Das passiert nur einmal, Updates lädt das Programm selbst.
-   - Ein schwarzes Fenster öffnet sich (bitte **offen lassen**, Schließen beendet das Programm), und der
-     Browser zeigt `http://localhost:5000`.
-4. Beim ersten Start ein Passwort festlegen und unter *Einstellungen → Firmendaten* Anschrift, Steuernummer und
-   Bankverbindung eintragen.
+   - Die Buchhaltung öffnet sich als **eigenes Programmfenster**. Das Programm läuft im Hintergrund weiter,
+     erkennbar am **Symbol unten rechts neben der Uhr** (ggf. unter dem Pfeil `^`).
+     Klick auf das Symbol öffnet das Fenster wieder, Rechtsklick → **Beenden** schließt das Programm ganz.
+4. Unter *Einstellungen → Firmendaten* Anschrift, Steuernummer und Bankverbindung eintragen.
+   Ein Passwort ist nicht nötig. Bei Bedarf schalten Sie es unter *Einstellungen → Passwortschutz* ein.
 
 **Tipps:**
 - Rechtsklick auf die EXE → *Senden an → Desktop (Verknüpfung erstellen)*.
 - **Mit Windows starten:** `Win + R`, `shell:startup` eingeben und dort eine Verknüpfung zur EXE ablegen.
-- Ein Doppelklick auf die EXE, während das Programm schon läuft, öffnet einfach wieder den Browser.
+- Ein Doppelklick auf die EXE, während das Programm schon läuft, öffnet einfach wieder das Fenster.
+- Lieber als Tab im normalen Browser? *Einstellungen → Programm & Updates → Programmfenster*.
+- Meldungen des Programms stehen in `Daten\programm.log`.
 
 ### Updates – automatisch
 
@@ -48,10 +51,9 @@ mit einer Prüfsumme kontrolliert.
 
 ### Umstieg von der bisherigen Installation (start.bat)
 
-1. Altes Programm beenden (schwarzes Fenster schließen).
+1. Altes Programm beenden (bei start.bat: schwarzes Fenster schließen).
 2. Den Ordner **`Daten`** aus dem alten Programmordner neben die neue `RSB-Buchhaltung.exe` kopieren.
-3. EXE starten und mit dem bisherigen Passwort anmelden. Das E-Mail-Passwort muss nicht neu eingegeben
-   werden, weil `Daten\geheim` mitkopiert wurde.
+3. EXE starten. Das E-Mail-Passwort muss nicht neu eingegeben werden, weil `Daten\geheim` mitkopiert wurde.
 
 Die alte Variante mit `installieren.bat` / `start.bat` funktioniert weiterhin, bekommt aber keine automatischen
 Updates.

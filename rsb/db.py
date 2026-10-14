@@ -100,7 +100,10 @@ STANDARD_EINSTELLUNGEN = {
     "update_hinweise": "",
     "update_fehler": "",
     # Sicherheit
+    "login_aktiv": False,        # Passwortabfrage beim Öffnen (in den Einstellungen einschaltbar)
     "passwort_hash": "",
+    # Programmfenster
+    "fenster_modus": "app",      # app = eigenes Fenster (Edge-App-Modus) / browser = normaler Browser-Tab
 }
 
 

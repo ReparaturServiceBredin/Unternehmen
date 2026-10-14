@@ -79,7 +79,7 @@ und eine Verfahrensdokumentation.
 
 **Umgesetzt:**
 - Alle Daten liegen **nur lokal** im Ordner `Daten`. Es gibt keine Cloud, und das Tool sendet nichts nach außen, außer den E-Mails, die Sie selbst verschicken.
-- Das Programm ist nur am eigenen PC erreichbar (`127.0.0.1`) und durch ein Passwort geschützt. Gespeichert wird nur ein sicherer Hash, nicht das Passwort selbst.
+- Das Programm ist nur am eigenen PC erreichbar (`127.0.0.1`), nicht von anderen Geräten. Ein Passwortschutz ist auf Wunsch abgeschaltet und kann unter *Einstellungen → Passwortschutz* eingeschaltet werden (gespeichert wird dann nur ein sicherer Hash). Ohne Passwort ist die Windows-Anmeldung mit PIN/Passwort und Bildschirmsperre der Schutz – bitte unbedingt nutzen.
 - Das E-Mail-Passwort wird verschlüsselt gespeichert (AES über die Bibliothek *cryptography*). Der Schlüssel liegt in `Daten\geheim` und ist **nicht** im Backup. Wer allerdings vollen Zugriff auf Ihren PC hat, kann ihn verwenden.
   → Empfehlung: Windows-Anmeldung mit Passwort/PIN und **Geräteverschlüsselung bzw. BitLocker** aktivieren (*Einstellungen → Datenschutz und Sicherheit → Geräteverschlüsselung*).
 - Backups enthalten Kundendaten. Der NAS-Ordner sollte deshalb nur für Sie zugänglich sein.

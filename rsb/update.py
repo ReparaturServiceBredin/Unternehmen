@@ -164,13 +164,12 @@ def neu_starten(verzoegerung=1.0):
         umgebung.pop("_MEIPASS2", None)
         umgebung.pop("_PYI_APPLICATION_HOME_DIR", None)
         umgebung["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-        optionen = {}
-        if os.name == "nt":
-            optionen["creationflags"] = subprocess.CREATE_NEW_CONSOLE  # neues Fenster für die neue Version
         try:
-            subprocess.Popen([str(exe_pfad())], env=umgebung, cwd=str(exe_pfad().parent), close_fds=True, **optionen)
+            subprocess.Popen([str(exe_pfad())], env=umgebung, cwd=str(exe_pfad().parent), close_fds=True)
         except OSError as e:
             print(f"Neustart fehlgeschlagen ({e}). Bitte RSB-Buchhaltung.exe von Hand neu starten.")
+        from .fenster import symbol_entfernen
+        symbol_entfernen()  # altes Symbol neben der Uhr ausblenden
         os._exit(0)
 
     threading.Thread(target=_los, daemon=True).start()

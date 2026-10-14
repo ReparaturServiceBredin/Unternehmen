@@ -4,14 +4,13 @@ import socket
 import sys
 import threading
 import time
-import webbrowser
 from datetime import datetime, timedelta
 
 from waitress import serve
 
-from . import VERSION, VERSION_NUMMER, create_app
+from . import PROJEKT, VERSION, VERSION_NUMMER, create_app
 from . import db as dbm
-from . import update
+from . import fenster, update
 from .backup import auto_backup, backup_erstellen
 
 UPDATE_INTERVALL_STUNDEN = 6
@@ -120,17 +119,18 @@ def port_belegt(host, port):
         return s.connect_ex((host if host != "0.0.0.0" else "127.0.0.1", port)) == 0
 
 
-def fenster_titel(text):
-    if os.name == "nt":
+def fenster_modus(db_pfad):
+    try:
+        con = dbm.verbinden(db_pfad)
         try:
-            import ctypes
-            ctypes.windll.kernel32.SetConsoleTitleW(text)
-        except Exception:
-            pass
+            return dbm.einstellungen(con).get("fenster_modus") or "app"
+        finally:
+            con.close()
+    except Exception:
+        return "app"
 
 
 def main():
-    fenster_titel(f"Reparatur Service Bredin – Buchhaltung {VERSION_NUMMER} (Fenster offen lassen)")
     host = os.environ.get("RSB_HOST", "127.0.0.1")
     port = int(os.environ.get("RSB_PORT", "5000"))
     adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
@@ -142,9 +142,10 @@ def main():
                 break
             time.sleep(0.5)
     elif port_belegt(host, port):
-        print("Das Programm läuft bereits – öffne den Browser.")
-        webbrowser.open(adresse)
-        time.sleep(2)
+        print("Das Programm läuft bereits – öffne das Fenster.")
+        daten = os.environ.get("RSB_DATEN") or str(PROJEKT / "Daten")
+        fenster.oeffnen(adresse, fenster_modus(os.path.join(daten, "buchhaltung.db")))
+        time.sleep(1)
         return
 
     update.alte_versionen_aufraeumen()
@@ -160,14 +161,27 @@ def main():
     print(f" Reparatur Service Bredin – Buchhaltung, Version {VERSION}")
     print(f" Läuft unter: {adresse}")
     print(f" Daten-Ordner: {app.config['DATEN']}")
-    print(" Zum Beenden dieses Fenster schließen (oder Strg+C).")
     print("=" * 60)
     threading.Thread(target=anfragen_hintergrund, args=(app,), daemon=True).start()
     if update.ist_exe() and not os.environ.get("RSB_KEIN_UPDATE"):
         threading.Thread(target=update_hintergrund, args=(app,), daemon=True).start()
+
+    server = threading.Thread(target=serve, args=(app,), kwargs={"host": host, "port": port, "threads": 4},
+                              daemon=True)
+    server.start()
     if not os.environ.get("RSB_KEIN_BROWSER"):
-        threading.Timer(1.5, lambda: webbrowser.open(adresse)).start()
-    serve(app, host=host, port=port, threads=4)
+        threading.Timer(1.5, lambda: fenster.oeffnen(adresse, fenster_modus(app.config["DB_PFAD"]))).start()
+
+    # Symbol neben der Uhr (blockiert bis „Beenden“). Ohne Symbol läuft der Server einfach weiter.
+    if not os.environ.get("RSB_KEIN_SYMBOL") and fenster.symbol_anzeigen(
+            f"Reparatur Service Bredin – Buchhaltung {VERSION_NUMMER}", adresse, app.config["DATEN"],
+            lambda: fenster_modus(app.config["DB_PFAD"]), lambda: os._exit(0)):
+        os._exit(0)
+    try:
+        while server.is_alive():
+            server.join(1)
+    except KeyboardInterrupt:
+        pass
 
 
 if __name__ == "__main__":

@@ -58,17 +58,27 @@ def test_protokoll_kette_erkennt_manipulation(app, con):
     assert dbm.protokoll_pruefen(con)
 
 
-def test_login_erforderlich(app):
+def test_ohne_passwort_direkt_offen(app):
     c = app.test_client()
-    r = c.get("/kunden")
-    assert r.status_code == 302 and "/einrichten" in r.headers["Location"]
-    c.post("/einrichten", data={"passwort": "geheim123", "passwort2": "geheim123"})
+    assert c.get("/kunden").status_code == 200          # Standard: kein Passwort
+    assert c.get("/login").status_code == 302           # Anmeldeseite leitet weiter
+    assert c.get("/einrichten").status_code == 302
+
+
+def test_passwortschutz_einschalten(client, app):
+    r = client.post("/einstellungen/passwort", data={"csrf": "test-token", "aktion": "an",
+                                                    "neu": "geheim123", "neu2": "geheim123"})
+    assert r.status_code == 302
     c2 = app.test_client()
     assert "/login" in c2.get("/kunden").headers["Location"]
     assert c2.post("/login", data={"passwort": "falsch"}).status_code == 200
-    r = c2.post("/login", data={"passwort": "geheim123"})
-    assert r.status_code == 302
+    assert c2.post("/login", data={"passwort": "geheim123"}).status_code == 302
     assert c2.get("/kunden").status_code == 200
+    # wieder ausschalten
+    with c2.session_transaction() as s:
+        s["csrf"] = "t2"
+    c2.post("/einstellungen/passwort", data={"csrf": "t2", "aktion": "aus"})
+    assert app.test_client().get("/kunden").status_code == 200
 
 
 def test_csrf_schutz(client):

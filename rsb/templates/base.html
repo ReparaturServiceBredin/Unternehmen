@@ -27,10 +27,10 @@
   </nav>
   <div class="fuss">
     Version {{ version }}
-    <form method="post" action="{{ url_for('main.abmelden') }}">
+    {% if einst.login_aktiv %}<form method="post" action="{{ url_for('main.abmelden') }}">
       <input type="hidden" name="csrf" value="{{ csrf_token() }}">
       <button class="zweit klein">Abmelden</button>
-    </form>
+    </form>{% endif %}
   </div>
 </aside>
 <main>

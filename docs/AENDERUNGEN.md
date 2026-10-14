@@ -4,6 +4,10 @@ Neue Versionen werden automatisch als EXE veröffentlicht, sobald sich die Versi
 `rsb/__init__.py` (`VERSION_NUMMER`) ändert. Der Abschnitt zur jeweiligen Version erscheint im Programm
 als Hinweis beim Update.
 
+## 0.5.0
+- Kein schwarzes Fenster mehr: Die Buchhaltung öffnet sich als eigenes Programmfenster, das Programm läuft im Hintergrund mit Symbol neben der Uhr (Rechtsklick: Öffnen, Daten-Ordner, Beenden)
+- Kein Passwort mehr beim Öffnen (kann unter Einstellungen → Passwortschutz wieder eingeschaltet werden)
+
 ## 0.4.0
 - Neu: Programm als **RSB-Buchhaltung.exe** – keine Python-Installation mehr nötig
 - Neu: **Automatische Updates** – neue Versionen werden beim Start installiert (vorher Backup), oder per Knopf unter Einstellungen → Programm & Updates
