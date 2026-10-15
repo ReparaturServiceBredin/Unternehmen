@@ -112,3 +112,12 @@ def test_offline(client, monkeypatch):
     monkeypatch.setattr(update, "API_URL", "http://127.0.0.1:9/gibtsnicht")
     post(client, "/update/pruefen")
     assert "nicht erreichbar" in client.get("/einstellungen?bereich=programm").get_data(as_text=True)
+
+
+def test_versionsprotokoll(client):
+    from rsb import VERSION_NUMMER
+    from rsb.versionen import protokoll_datei
+    text = protokoll_datei().read_text(encoding="utf-8")
+    assert f"## {VERSION_NUMMER} " in text, "Für die aktuelle Version fehlt ein Eintrag im Versionsprotokoll"
+    seite = client.get("/versionen").get_data(as_text=True)
+    assert f'id="v{VERSION_NUMMER}"' in seite and "<table" in seite and "<ul>" in seite

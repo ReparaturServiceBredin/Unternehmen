@@ -9,6 +9,7 @@ E-Mail-Versand mit Protokoll, Storno, unveränderbare fortlaufende Nummern, Pass
 
 | Dokument | Inhalt |
 |---|---|
+| [docs/AENDERUNGEN.md](docs/AENDERUNGEN.md) | **Versionsprotokoll**: alle Versionen mit Neuerungen, Änderungen und Fehlerbehebungen (auch im Programm: Klick auf die Versionsnummer) |
 | [docs/ANLEITUNG.md](docs/ANLEITUNG.md) | Bedienung: Rechnung schreiben, Layout & Textbausteine ändern, Backup & Wiederherstellung |
 | [docs/RECHT_UND_GOBD.md](docs/RECHT_UND_GOBD.md) | Pflichtangaben, E-Rechnung, Aufbewahrung, GoBD – und ehrlich: wo die Grenzen liegen |
 | [docs/ETAPPEN.md](docs/ETAPPEN.md) | Ihre Vorgaben, Technik-Entscheidung und Fahrplan der Etappen |

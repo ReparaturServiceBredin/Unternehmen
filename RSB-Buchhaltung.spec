@@ -6,6 +6,7 @@ datas = [
     ("rsb/templates", "rsb/templates"),
     ("rsb/static", "rsb/static"),
     ("rsb/schema.sql", "rsb"),
+    ("docs/AENDERUNGEN.md", "docs"),
 ]
 binaries = []
 hiddenimports = ["waitress", "pystray._win32"]

@@ -172,7 +172,10 @@
     <p>Sie verwenden die aktuelle Version.</p>
   {% endif %}
   <p class="klein">Zuletzt geprüft: {{ einst.update_letzte_pruefung|zeit if einst.update_letzte_pruefung else 'noch nie' }}{% if einst.update_fehler %} – <span style="color:var(--rot)">{{ einst.update_fehler }}</span>{% endif %}</p>
-  <form method="post" action="{{ url_for('main.update_pruefen') }}">{{ csrf() }}<button class="zweit">Jetzt nach Updates suchen</button></form>
+  <div class="leiste">
+    <form method="post" action="{{ url_for('main.update_pruefen') }}">{{ csrf() }}<button class="zweit">Jetzt nach Updates suchen</button></form>
+    <a class="knopf zweit" href="{{ url_for('main.versionen') }}">Versionsprotokoll anzeigen</a>
+  </div>
 </div>
 <form method="post" class="karte">{{ csrf() }}
   <h2>Programmfenster</h2>

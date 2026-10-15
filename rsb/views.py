@@ -1105,3 +1105,9 @@ def update_installieren():
         return redirect(url_for("main.einstellungen", bereich="programm"))
     upd.neu_starten(verzoegerung=1.5)
     return render_template("update_laeuft.html", alt=VERSION_NUMMER, neu=info["version"])
+
+
+@bp.route("/versionen")
+def versionen():
+    from .versionen import protokoll_html
+    return render_template("versionen.html", inhalt=protokoll_html())

@@ -176,3 +176,13 @@ span.marke-status.s-offen, span.marke-status.s-in_arbeit, span.marke-status.s-er
 .s-rand-in_arbeit { border-left-color: #d98a00; }
 .s-rand-erledigt { border-left-color: var(--gruen); }
 @media (max-width: 900px) { .tafel { grid-template-columns: 1fr; } }
+
+/* Versionsprotokoll */
+.versionsprotokoll h2 { display: none; }
+.versionsprotokoll h3 { color: var(--blau); margin: 22px 0 6px; font-size: 18px; }
+.versionsprotokoll h4 { margin: 14px 0 4px; font-size: 14px; color: var(--grau); text-transform: uppercase; letter-spacing: .05em; }
+.versionsprotokoll ul { margin: 4px 0 10px; padding-left: 20px; }
+.versionsprotokoll li { margin: 3px 0; }
+.versionsprotokoll li.unter { margin-left: 22px; list-style: circle; }
+.versionsprotokoll hr { border: 0; border-top: 1px solid var(--rand); margin: 22px 0; }
+.versionsprotokoll table { margin: 10px 0; }
