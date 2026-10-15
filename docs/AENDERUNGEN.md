@@ -16,12 +16,49 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.6.0 | 15.10.2026 | Verträge & Lizenzen (Wertgarantie, ESET, MSP) mit wiederkehrenden Rechnungen |
 | 0.5.1 | 15.10.2026 | Versionsprotokoll im Programm |
 | 0.5.0 | 14.10.2026 | Kein Konsolenfenster, kein Passwortzwang |
 | 0.4.0 | 14.10.2026 | EXE-Datei mit automatischen Updates |
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.6.0 – 15.10.2026
+Verträge, Lizenzen und Garantien beim Kunden – mit automatischen wiederkehrenden Rechnungen.
+
+### Neu
+- **Verträge & Lizenzen** (*Verkauf → Verträge & Lizenzen*) und beim Kunden unter „Verträge, Lizenzen & Garantien“:
+  - Bezeichnung, Kategorie (Garantie/Versicherung, Lizenz, MSP, Wartung, Sonstiges), Vertrags-/Policen-/Lizenznummer,
+    Gerät/Seriennummer, Beginn, Laufzeit, Mindestlaufzeit, Preis, Einkauf (Marge), Anzahl (z. B. Geräte), Notizen
+- **Abrechnungsarten:**
+  - *nur Dokumentation* – z. B. Wertgarantie (Kunde zahlt direkt an den Versicherer)
+  - *monatlich, vierteljährlich, halbjährlich, jährlich* – z. B. MSP-Pakete, im Voraus bis zur Kündigung
+  - *einmal je Laufzeit* – z. B. ESET 1, 2 oder 3 Jahre; optional „verlängert sich automatisch“
+- **Vertragsarten** als Vorlagen, jederzeit erweiterbar (*Verträge & Lizenzen → Vertragsarten*). Mitgeliefert:
+  Wertgarantie, ESET 1/2/3 Jahre, MSP Basis (Preise bitte eintragen).
+- **Wiederkehrende Rechnungen:** täglich automatisch (und per Knopf „Jetzt abrechnen“) eine Rechnung je Kunde mit
+  allen fälligen Verträgen, Zeitraum und Lizenznummer stehen auf der Rechnung. Wahlweise als **Entwurf** oder
+  **automatisch festschreiben und per E-Mail senden** (*Einstellungen → Verträge*).
+- **Kündigen:** Vertrag als gekündigt hinterlegen (Eingang, Ende zum, Grund). Bis zum Kündigungsdatum wird noch
+  berechnet, danach **keine Rechnung mehr**. Kündigung kann zurückgenommen werden. Vorschlag für das Enddatum:
+  Ende der laufenden Periode bzw. Mindestlaufzeit.
+- **Lizenz verlängern** per Knopf: neue Laufzeit + Rechnungsentwurf.
+- **Erinnerung:** Lizenzen/Garantien, die in den nächsten 60 Tagen (einstellbar) ablaufen, erscheinen unter
+  „Laufen bald ab“ und auf der Übersicht.
+- **Kennzahlen:** aktive Verträge, regelmäßige Einnahmen pro Monat, fällige Abrechnungen.
+- **Bestehende Verträge übernehmen:** Feld „Bereits berechnet bis“ – frühere Zeiträume (z. B. aus Lexware)
+  werden nicht noch einmal berechnet.
+
+### Behoben
+- In leeren Feldern der Kunden-, Artikel- und Textbaustein-Formulare stand „None“.
+
+### Hinweise
+- Keine doppelten Rechnungen: Jeder berechnete Zeitraum wird gespeichert. Wird ein Rechnungsentwurf gelöscht,
+  gilt der Zeitraum wieder als offen.
+- Verträge mit festgeschriebenen Rechnungen können nicht gelöscht, nur gekündigt werden.
 
 ---
 
@@ -178,6 +215,7 @@ Grundversion (Etappe 1). *(Nur als Quellcode, Start über `installieren.bat` / `
 ---
 
 ## Geplant
+- SEPA-Lastschrift für Vertragsrechnungen (Mandatsverwaltung)
 - Bankabgleich: N26-Umsätze (CSV) importieren und Zahlungen per Rechnungsnummer zuordnen (wartet auf
   Beispieldatei)
 - Anzahlungsrechnung (50 %) und Schlussrechnung mit Abzug, Auftragsbestätigung, Gutschrift

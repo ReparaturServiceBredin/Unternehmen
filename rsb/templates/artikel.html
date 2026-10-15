@@ -6,9 +6,9 @@
 <form method="post" class="karte">
   {{ csrf() }}
   <div class="felder">
-    <div class="s8"><label>Bezeichnung (erscheint auf der Rechnung)</label><input type="text" name="name" required value="{{ a.name if a }}"></div>
-    <div class="s4"><label>Artikelnummer (optional)</label><input type="text" name="artikelnr" value="{{ a.artikelnr if a }}"></div>
-    <div class="s12"><label>Beschreibung (zweite Zeile auf der Rechnung)</label><textarea name="beschreibung">{{ a.beschreibung if a }}</textarea></div>
+    <div class="s8"><label>Bezeichnung (erscheint auf der Rechnung)</label><input type="text" name="name" required value="{{ (a.name or '') if a }}"></div>
+    <div class="s4"><label>Artikelnummer (optional)</label><input type="text" name="artikelnr" value="{{ (a.artikelnr or '') if a }}"></div>
+    <div class="s12"><label>Beschreibung (zweite Zeile auf der Rechnung)</label><textarea name="beschreibung">{{ (a.beschreibung or '') if a }}</textarea></div>
     <div class="s4"><label>Leistungsart (für Auswertungen)</label>
       <select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if a and a.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
     <div class="s4"><label>Typ</label><select name="typ">

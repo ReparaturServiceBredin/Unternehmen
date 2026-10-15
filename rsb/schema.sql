@@ -290,3 +290,59 @@ CREATE TABLE IF NOT EXISTS auftraege (
     geaendert_am    TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_auftraege_status ON auftraege(status);
+
+-- Vertragsarten (frei erweiterbar): z. B. Wertgarantie, ESET-Lizenz, MSP-Paket
+CREATE TABLE IF NOT EXISTS vertragsarten (
+    id                    INTEGER PRIMARY KEY,
+    name                  TEXT NOT NULL,
+    kategorie             TEXT NOT NULL DEFAULT 'Sonstiges',
+    beschreibung          TEXT,
+    abrechnung            TEXT NOT NULL DEFAULT 'monatlich',   -- keine / monatlich / vierteljaehrlich / halbjaehrlich / jaehrlich / laufzeit
+    laufzeit_monate       INTEGER,                             -- leer = unbefristet
+    mindestlaufzeit_monate INTEGER,
+    preis                 INTEGER NOT NULL DEFAULT 0,          -- Cent je Abrechnung (bei "laufzeit": für die ganze Laufzeit)
+    einkauf               INTEGER NOT NULL DEFAULT 0,          -- Cent Einkauf je Abrechnung (für die Marge)
+    auto_verlaengern      INTEGER NOT NULL DEFAULT 0,
+    aktiv                 INTEGER NOT NULL DEFAULT 1,
+    erstellt_am           TEXT NOT NULL
+);
+
+-- Verträge / Lizenzen / Garantien beim Kunden
+CREATE TABLE IF NOT EXISTS vertraege (
+    id                    INTEGER PRIMARY KEY,
+    kunde_id              INTEGER NOT NULL REFERENCES kunden(id),
+    vertragsart_id        INTEGER REFERENCES vertragsarten(id) ON DELETE SET NULL,
+    bezeichnung           TEXT NOT NULL,
+    kategorie             TEXT NOT NULL DEFAULT 'Sonstiges',
+    abrechnung            TEXT NOT NULL DEFAULT 'monatlich',
+    beginn                TEXT NOT NULL,
+    laufzeit_monate       INTEGER,
+    mindestlaufzeit_monate INTEGER,
+    ende                  TEXT,                                -- Ende der aktuellen Laufzeit (bei befristeten Lizenzen)
+    auto_verlaengern      INTEGER NOT NULL DEFAULT 0,
+    preis                 INTEGER NOT NULL DEFAULT 0,
+    einkauf               INTEGER NOT NULL DEFAULT 0,
+    anzahl                REAL NOT NULL DEFAULT 1,
+    vertragsnummer        TEXT,                                -- Vertrags-/Policen-/Lizenznummer, Lizenzschlüssel
+    geraet                TEXT,                                -- Gerät / Seriennummer (z. B. bei Wertgarantie)
+    notizen               TEXT,
+    status                TEXT NOT NULL DEFAULT 'aktiv' CHECK (status IN ('aktiv', 'gekuendigt')),
+    gekuendigt_am         TEXT,
+    kuendigung_zum        TEXT,
+    kuendigungsgrund      TEXT,
+    abgerechnet_bis       TEXT,                                -- bis hier schon anderweitig berechnet (z. B. Lexware)
+    erstellt_am           TEXT NOT NULL,
+    geaendert_am          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_vertraege_kunde ON vertraege(kunde_id);
+
+-- Welche Zeiträume eines Vertrags schon abgerechnet sind (verhindert doppelte Rechnungen)
+CREATE TABLE IF NOT EXISTS vertrag_abrechnungen (
+    id           INTEGER PRIMARY KEY,
+    vertrag_id   INTEGER NOT NULL REFERENCES vertraege(id) ON DELETE CASCADE,
+    dokument_id  INTEGER NOT NULL REFERENCES dokumente(id) ON DELETE CASCADE,
+    von          TEXT NOT NULL,
+    bis          TEXT NOT NULL,
+    betrag       INTEGER NOT NULL,
+    UNIQUE (vertrag_id, von)
+);

@@ -107,6 +107,13 @@ def start():
     zahlen["auftraege"] = {r[0]: r[1] for r in con.execute(
         "SELECT status, COUNT(*) FROM auftraege WHERE status<>'erledigt' OR erledigt_am >= date('now','-30 day') "
         "GROUP BY status")}
+    from . import vertraege as _v
+    _vs = con.execute("SELECT * FROM vertraege").fetchall()
+    _einst = dbm.einstellungen(con)
+    _zust = [(v, _v.zustand(v, erinnerung_tage=int(_einst.get("vertrag_erinnerung_tage") or 60))[0]) for v in _vs]
+    zahlen["vertraege_monatlich"] = sum(_v.monatswert(v) for v, z in _zust if z in ("aktiv", "laeuft_ab", "gekuendigt"))
+    zahlen["vertraege_aktiv"] = len([1 for _, z in _zust if z in ("aktiv", "laeuft_ab")])
+    zahlen["vertraege_laeuft_ab"] = len([1 for _, z in _zust if z == "laeuft_ab"])
     zahlen["anfragen"] = con.execute("SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'"
                                      ).fetchone()[0]
     letzte = con.execute(
@@ -171,10 +178,12 @@ def kunde(kid=None):
                             (kid,)).fetchall() if kid else []
     kunden_anfragen = con.execute("SELECT * FROM anfragen WHERE kunde_id=? ORDER BY eingang_am DESC",
                                   (kid,)).fetchall() if kid else []
+    kunden_vertraege = [_vertrag_zusatz(v, dbm.einstellungen(con)) for v in con.execute(
+        "SELECT * FROM vertraege WHERE kunde_id=? ORDER BY status, beginn DESC", (kid,)).fetchall()] if kid else []
     kunden_auftraege = con.execute("SELECT * FROM auftraege WHERE kunde_id=? ORDER BY eingang_am DESC",
                                    (kid,)).fetchall() if kid else []
     return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen,
-                           auftraege=kunden_auftraege)
+                           auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG)
 
 
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
@@ -196,6 +205,7 @@ def kunde_loeschen(kid):
                             "erhalten bleiben. Sie können ihn stattdessen archivieren.")
     with dbm.Transaktion(con):
         con.execute("DELETE FROM auftraege WHERE kunde_id=?", (kid,))
+        con.execute("DELETE FROM vertraege WHERE kunde_id=?", (kid,))
         for d in con.execute("SELECT id FROM dokumente WHERE kunde_id=?", (kid,)).fetchall():
             con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
             con.execute("DELETE FROM dokumente WHERE id=?", (d["id"],))
@@ -517,6 +527,7 @@ EINSTELLUNGS_BEREICHE = {
               "bcc_an_mich"],
     "backup": ["backup_auto", "backup_ziel", "backup_behalten"],
     "programm": ["update_auto", "fenster_modus"],
+    "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
     "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_benutzer",
                  "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
@@ -524,7 +535,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {"update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
+GANZZAHL = {"vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
@@ -533,7 +544,7 @@ KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
 @bp.route("/einstellungen", methods=["GET", "POST"])
 def einstellungen():
     bereich = request.args.get("bereich", "firma")
-    if bereich not in EINSTELLUNGS_BEREICHE and bereich not in ("sicherheit", "programm"):
+    if bereich not in EINSTELLUNGS_BEREICHE and bereich not in ("sicherheit",):
         bereich = "firma"
     con = dbm.get_db()
     if request.method == "POST" and bereich in EINSTELLUNGS_BEREICHE:
@@ -555,6 +566,8 @@ def einstellungen():
             neu["smtp_passwort_enc"] = verschluesseln(request.form["smtp_passwort"])
         if bereich == "anfragen" and request.form.get("imap_passwort"):
             neu["imap_passwort_enc"] = verschluesseln(request.form["imap_passwort"])
+        if bereich == "vertraege" and neu["abo_modus"] not in ("entwurf", "automatisch"):
+            neu["abo_modus"] = "entwurf"
         if bereich == "anfragen" and neu["anfrage_schwelle_spam"] <= neu["anfrage_schwelle_unsicher"]:
             raise EingabeFehler("Die Spam-Schwelle muss größer sein als die Schwelle für „unsicher“.")
         if bereich == "rechnung":
@@ -1111,3 +1124,234 @@ def update_installieren():
 def versionen():
     from .versionen import protokoll_html
     return render_template("versionen.html", inhalt=protokoll_html())
+
+
+# ====================================================================== Verträge & Lizenzen
+
+from . import vertraege as vtr  # noqa: E402
+
+VERTRAG_FELDER = ("bezeichnung", "kategorie", "abrechnung", "beginn", "laufzeit_monate", "mindestlaufzeit_monate",
+                  "preis", "einkauf", "anzahl", "auto_verlaengern", "vertragsnummer", "geraet", "notizen",
+                  "abgerechnet_bis")
+
+
+def _vertrag_zusatz(v, einst):
+    stufe, text = vtr.zustand(v, erinnerung_tage=int(einst.get("vertrag_erinnerung_tage") or 60))
+    return {**dict(v), "zustand": stufe, "zustand_text": text, "monatswert": vtr.monatswert(v)}
+
+
+@bp.route("/vertraege")
+def vertraege_liste():
+    con = dbm.get_db()
+    einst = dbm.einstellungen(con)
+    filt = request.args.get("filter", "aktiv")
+    kategorie = request.args.get("kategorie", "")
+    zeilen = con.execute("SELECT v.*, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM vertraege v "
+                         "JOIN kunden k ON k.id=v.kunde_id ORDER BY COALESCE(v.ende, '9999'), v.beginn").fetchall()
+    alle = [_vertrag_zusatz(v, einst) for v in zeilen]
+    if kategorie:
+        alle = [v for v in alle if v["kategorie"] == kategorie]
+    gruppen = {
+        "aktiv": [v for v in alle if v["zustand"] in ("aktiv", "laeuft_ab", "gekuendigt")],
+        "laeuft_ab": [v for v in alle if v["zustand"] == "laeuft_ab"],
+        "gekuendigt": [v for v in alle if v["zustand"] in ("gekuendigt", "beendet", "abgelaufen")],
+        "alle": alle,
+    }
+    faellig = sum(len(vtr.faellige_zeitraeume(con, v)) for v in zeilen)
+    kennzahlen = {
+        "aktiv": len([v for v in alle if v["zustand"] in ("aktiv", "laeuft_ab")]),
+        "monatlich": sum(v["monatswert"] for v in alle if v["zustand"] in ("aktiv", "laeuft_ab", "gekuendigt")),
+        "laeuft_ab": len(gruppen["laeuft_ab"]),
+        "faellig": faellig,
+    }
+    return render_template("vertraege.html", liste=gruppen.get(filt, gruppen["aktiv"]), filt=filt,
+                           anzahl={k: len(v) for k, v in gruppen.items()}, kennzahlen=kennzahlen,
+                           kategorien=vtr.KATEGORIEN, kategorie=kategorie, abrechnung=vtr.ABRECHNUNG)
+
+
+def _vertrag_formular():
+    f = {k: _f(k) for k in VERTRAG_FELDER}
+    if not f["bezeichnung"]:
+        raise EingabeFehler("Bitte eine Bezeichnung angeben.")
+    if f["abrechnung"] not in vtr.ABRECHNUNG:
+        raise EingabeFehler("Bitte eine Abrechnungsart wählen.")
+    try:
+        date.fromisoformat(f["beginn"])
+    except ValueError:
+        raise EingabeFehler("Bitte ein gültiges Beginndatum angeben.")
+    for k in ("laufzeit_monate", "mindestlaufzeit_monate"):
+        f[k] = int(f[k]) if f[k].isdigit() and int(f[k]) > 0 else None
+    if f["abrechnung"] == "laufzeit" and not f["laufzeit_monate"]:
+        raise EingabeFehler("Bei Abrechnung „je Laufzeit“ bitte die Laufzeit in Monaten angeben (12, 24, 36 …).")
+    f["preis"] = cent_aus_text(f["preis"])
+    f["einkauf"] = cent_aus_text(f["einkauf"])
+    f["anzahl"] = zahl_aus_text(f["anzahl"], 1) or 1
+    f["auto_verlaengern"] = 1 if request.form.get("auto_verlaengern") else 0
+    f["kategorie"] = f["kategorie"] or "Sonstiges"
+    if f["abgerechnet_bis"]:
+        try:
+            date.fromisoformat(f["abgerechnet_bis"])
+        except ValueError:
+            raise EingabeFehler("„Bereits berechnet bis“ ist kein gültiges Datum.")
+    else:
+        f["abgerechnet_bis"] = None
+    ende = vtr.laufzeit_ende(date.fromisoformat(f["beginn"]), f["laufzeit_monate"])
+    return f, ende.isoformat() if ende else None
+
+
+@bp.route("/vertraege/neu", methods=["GET", "POST"])
+@bp.route("/vertraege/<int:vid>", methods=["GET", "POST"])
+def vertrag(vid=None):
+    con = dbm.get_db()
+    einst = dbm.einstellungen(con)
+    v = con.execute("SELECT * FROM vertraege WHERE id=?", (vid,)).fetchone() if vid else None
+    if vid and not v:
+        abort(404)
+    if request.method == "POST":
+        felder, ende = _vertrag_formular()
+        with dbm.Transaktion(con):
+            if v:
+                bereits = con.execute("SELECT MAX(bis) FROM vertrag_abrechnungen WHERE vertrag_id=?", (vid,)).fetchone()[0]
+                if bereits and felder["beginn"] != v["beginn"]:
+                    raise EingabeFehler("Der Beginn kann nicht mehr geändert werden, weil schon abgerechnet wurde.")
+                if v["abrechnung"] == "laufzeit" and v["ende"] and bereits:
+                    ende = max(ende or "", v["ende"])  # bereits verlängerte Laufzeit behalten
+                con.execute(f"UPDATE vertraege SET {', '.join(f'{k}=?' for k in felder)}, ende=?, geaendert_am=? "
+                            "WHERE id=?", (*felder.values(), ende, dbm.jetzt(), vid))
+                dbm.protokollieren("vertrag_geaendert", "vertrag", vid, con=con)
+            else:
+                kid = request.form.get("kunde_id", type=int)
+                if not kid or not con.execute("SELECT 1 FROM kunden WHERE id=?", (kid,)).fetchone():
+                    raise EingabeFehler("Bitte einen Kunden auswählen.")
+                art = request.form.get("vertragsart_id", type=int)
+                cur = con.execute(
+                    f"INSERT INTO vertraege (kunde_id, vertragsart_id, {', '.join(felder)}, ende, erstellt_am, "
+                    f"geaendert_am) VALUES (?, ?, {', '.join('?' * len(felder))}, ?, ?, ?)",
+                    (kid, art, *felder.values(), ende, dbm.jetzt(), dbm.jetzt()))
+                vid = cur.lastrowid
+                dbm.protokollieren("vertrag_angelegt", "vertrag", vid, {"kunde": kid, "bezeichnung": felder["bezeichnung"]},
+                                   con=con)
+        flash("Vertrag gespeichert.", "ok")
+        if request.form.get("danach") == "kunde":
+            return redirect(url_for("main.kunde", kid=request.form.get("kunde_id", type=int) or v["kunde_id"]))
+        return redirect(url_for("main.vertrag", vid=vid))
+    kunde = con.execute("SELECT * FROM kunden WHERE id=?",
+                        (v["kunde_id"] if v else request.args.get("kunde_id", type=int),)).fetchone()
+    abrechnungen = con.execute(
+        "SELECT a.*, d.nummer, d.status AS dstatus FROM vertrag_abrechnungen a JOIN dokumente d ON d.id=a.dokument_id "
+        "WHERE a.vertrag_id=? ORDER BY a.von DESC", (vid,)).fetchall() if vid else []
+    return render_template(
+        "vertrag.html", v=_vertrag_zusatz(v, einst) if v else None, kunde=kunde,
+        kunden=con.execute("SELECT * FROM kunden WHERE archiviert=0 ORDER BY COALESCE(NULLIF(firma,''), nachname), "
+                           "vorname").fetchall(),
+        arten=[dict(a) for a in con.execute("SELECT * FROM vertragsarten WHERE aktiv=1 ORDER BY kategorie, name")],
+        kategorien=vtr.KATEGORIEN, abrechnung=vtr.ABRECHNUNG, abrechnungen=abrechnungen, heute=heute(),
+        kuendigung_vorschlag=vtr.fruehestes_kuendigungsdatum(v).isoformat() if v else "",
+        faellig=vtr.faellige_zeitraeume(con, v) if v else [])
+
+
+@bp.route("/vertraege/<int:vid>/kuendigen", methods=["POST"])
+def vertrag_kuendigen(vid):
+    con = dbm.get_db()
+    v = con.execute("SELECT * FROM vertraege WHERE id=?", (vid,)).fetchone() or abort(404)
+    if request.form.get("zuruecknehmen"):
+        with dbm.Transaktion(con):
+            con.execute("UPDATE vertraege SET status='aktiv', gekuendigt_am=NULL, kuendigung_zum=NULL, "
+                        "kuendigungsgrund=NULL, geaendert_am=? WHERE id=?", (dbm.jetzt(), vid))
+            dbm.protokollieren("vertrag_kuendigung_zurueck", "vertrag", vid, con=con)
+        flash("Kündigung zurückgenommen – der Vertrag läuft weiter.", "ok")
+        return redirect(url_for("main.vertrag", vid=vid))
+    zum = _f("kuendigung_zum")
+    try:
+        date.fromisoformat(zum)
+    except ValueError:
+        raise EingabeFehler("Bitte das Datum angeben, zu dem der Vertrag endet.")
+    with dbm.Transaktion(con):
+        con.execute("UPDATE vertraege SET status='gekuendigt', gekuendigt_am=?, kuendigung_zum=?, kuendigungsgrund=?, "
+                    "geaendert_am=? WHERE id=?", (_f("gekuendigt_am") or heute(), zum, _f("kuendigungsgrund"),
+                                                  dbm.jetzt(), vid))
+        dbm.protokollieren("vertrag_gekuendigt", "vertrag", vid, {"zum": zum, "grund": _f("kuendigungsgrund")}, con=con)
+    flash(f"Vertrag gekündigt zum {datum_de_kurz(zum)}. Danach werden keine Rechnungen mehr erstellt.", "ok")
+    return redirect(url_for("main.vertrag", vid=vid))
+
+
+def datum_de_kurz(iso):
+    from .hilfen import datum_de
+    return datum_de(iso)
+
+
+@bp.route("/vertraege/<int:vid>/verlaengern", methods=["POST"])
+def vertrag_verlaengern(vid):
+    did = vtr.verlaengern(dbm.get_db(), vid)
+    flash("Lizenz verlängert – Rechnungsentwurf für die neue Laufzeit wurde erstellt.", "ok")
+    return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/vertraege/<int:vid>/loeschen", methods=["POST"])
+def vertrag_loeschen(vid):
+    con = dbm.get_db()
+    if con.execute("SELECT 1 FROM vertrag_abrechnungen a JOIN dokumente d ON d.id=a.dokument_id "
+                   "WHERE a.vertrag_id=? AND d.status<>'entwurf'", (vid,)).fetchone():
+        raise EingabeFehler("Zu diesem Vertrag gibt es festgeschriebene Rechnungen. Bitte kündigen statt löschen.")
+    kid = con.execute("SELECT kunde_id FROM vertraege WHERE id=?", (vid,)).fetchone()
+    with dbm.Transaktion(con):
+        for r in con.execute("SELECT DISTINCT dokument_id FROM vertrag_abrechnungen WHERE vertrag_id=?", (vid,)).fetchall():
+            con.execute("DELETE FROM positionen WHERE dokument_id=?", (r[0],))
+            con.execute("DELETE FROM dokumente WHERE id=? AND status='entwurf'", (r[0],))
+        con.execute("DELETE FROM vertraege WHERE id=?", (vid,))
+        dbm.protokollieren("vertrag_geloescht", "vertrag", vid, con=con)
+    flash("Vertrag gelöscht.", "ok")
+    return redirect(url_for("main.kunde", kid=kid[0]) if kid else url_for("main.vertraege_liste"))
+
+
+@bp.route("/vertraege/abrechnen", methods=["POST"])
+def vertraege_abrechnen():
+    e = vtr.abrechnungslauf(dbm.get_db(), daten_dir())
+    if not e["rechnungen"]:
+        flash("Es ist nichts zur Abrechnung fällig.", "info")
+    else:
+        text = f"{e['rechnungen']} Rechnung(en) erstellt"
+        if e["festgeschrieben"]:
+            text += f", {e['festgeschrieben']} festgeschrieben, {e['versendet']} per E-Mail versendet"
+        else:
+            text += " (Entwürfe – bitte prüfen und festschreiben)"
+        flash(text + ".", "ok")
+    for f in e["fehler"]:
+        flash(f, "fehler")
+    return redirect(url_for("main.dokumente", status="entwurf") if e["rechnungen"] and not e["festgeschrieben"]
+                    else url_for("main.vertraege_liste"))
+
+
+@bp.route("/vertragsarten", methods=["GET", "POST"])
+@bp.route("/vertragsarten/<int:aid>", methods=["GET", "POST"])
+def vertragsarten(aid=None):
+    con = dbm.get_db()
+    art = con.execute("SELECT * FROM vertragsarten WHERE id=?", (aid,)).fetchone() if aid else None
+    if request.method == "POST":
+        if request.form.get("loeschen") and art:
+            with dbm.Transaktion(con):
+                con.execute("DELETE FROM vertragsarten WHERE id=?", (aid,))
+                dbm.protokollieren("vertragsart_geloescht", "vertragsart", aid, con=con)
+            flash("Vertragsart gelöscht (bestehende Verträge bleiben erhalten).", "ok")
+            return redirect(url_for("main.vertragsarten"))
+        if not _f("name") or _f("abrechnung") not in vtr.ABRECHNUNG:
+            raise EingabeFehler("Bitte Name und Abrechnungsart angeben.")
+        zahl = lambda k: int(_f(k)) if _f(k).isdigit() and int(_f(k)) > 0 else None  # noqa: E731
+        werte = (_f("name"), _f("kategorie") or "Sonstiges", _f("beschreibung"), _f("abrechnung"), zahl("laufzeit_monate"),
+                 zahl("mindestlaufzeit_monate"), cent_aus_text(_f("preis")), cent_aus_text(_f("einkauf")),
+                 1 if request.form.get("auto_verlaengern") else 0, 1 if request.form.get("aktiv") else 0)
+        with dbm.Transaktion(con):
+            if art:
+                con.execute("UPDATE vertragsarten SET name=?, kategorie=?, beschreibung=?, abrechnung=?, laufzeit_monate=?, "
+                            "mindestlaufzeit_monate=?, preis=?, einkauf=?, auto_verlaengern=?, aktiv=? WHERE id=?",
+                            (*werte, aid))
+            else:
+                con.execute("INSERT INTO vertragsarten (name, kategorie, beschreibung, abrechnung, laufzeit_monate, "
+                            "mindestlaufzeit_monate, preis, einkauf, auto_verlaengern, aktiv, erstellt_am) "
+                            "VALUES (?,?,?,?,?,?,?,?,?,?,?)", (*werte, dbm.jetzt()))
+            dbm.protokollieren("vertragsart_gespeichert", "vertragsart", aid, {"name": werte[0]}, con=con)
+        flash("Vertragsart gespeichert.", "ok")
+        return redirect(url_for("main.vertragsarten"))
+    liste = con.execute("SELECT * FROM vertragsarten ORDER BY aktiv DESC, kategorie, name").fetchall()
+    return render_template("vertragsarten.html", liste=liste, art=art, kategorien=vtr.KATEGORIEN,
+                           abrechnung=vtr.ABRECHNUNG, neu=request.args.get("neu") or aid)

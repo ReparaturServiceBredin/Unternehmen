@@ -45,6 +45,30 @@ def anfragen_hintergrund(app):
             print(f"{datetime.now():%H:%M} Anfragen-Abruf unerwarteter Fehler: {e}")
 
 
+def vertraege_hintergrund(app):
+    """Einmal täglich fällige Verträge abrechnen (beim Start und danach stündlich prüfen)."""
+    from .vertraege import abrechnungslauf
+
+    while True:
+        try:
+            con = dbm.verbinden(app.config["DB_PFAD"])
+            try:
+                letzter = dbm.einstellungen(con).get("abo_letzter_lauf") or ""
+                if letzter[:10] != datetime.now().date().isoformat():
+                    with app.app_context():
+                        e = abrechnungslauf(con, app.config["DATEN"])
+                    if e["rechnungen"]:
+                        print(f"{datetime.now():%H:%M} Verträge abgerechnet: {e['rechnungen']} Rechnung(en), "
+                              f"{e['versendet']} versendet")
+                    for f in e["fehler"]:
+                        print(f"{datetime.now():%H:%M} Vertragsabrechnung: {f}")
+            finally:
+                con.close()
+        except Exception as e:  # Hintergrund darf nie abstürzen
+            print(f"{datetime.now():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
+        time.sleep(3600)
+
+
 def update_pruefen(app):
     """Fragt die neueste Version ab und merkt sie sich (für den Hinweis in der Oberfläche)."""
     con = dbm.verbinden(app.config["DB_PFAD"])
@@ -163,6 +187,7 @@ def main():
     print(f" Daten-Ordner: {app.config['DATEN']}")
     print("=" * 60)
     threading.Thread(target=anfragen_hintergrund, args=(app,), daemon=True).start()
+    threading.Thread(target=vertraege_hintergrund, args=(app,), daemon=True).start()
     if update.ist_exe() and not os.environ.get("RSB_KEIN_UPDATE"):
         threading.Thread(target=update_hintergrund, args=(app,), daemon=True).start()
 

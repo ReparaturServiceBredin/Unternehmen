@@ -218,3 +218,33 @@ stornieren. Ein versehentlicher Zug auf „Erledigt“ soll keine Rechnungsnumme
 Wird ein Auftrag zurück- und wieder auf „Erledigt“ gezogen, entsteht **keine** zweite Rechnung.
 
 Die Spalte „Erledigt“ zeigt die letzten 30 Tage, ältere Aufträge über „alle anzeigen“.
+
+## 12. Verträge, Lizenzen & Garantien (MSP, ESET, Wertgarantie)
+
+Unter **Verkauf → Verträge & Lizenzen** und beim jeweiligen **Kunden** (Abschnitt „Verträge, Lizenzen & Garantien“).
+
+**Neuer Vertrag:** Beim Kunden auf „+ Vertrag / Lizenz“ klicken, eine **Vorlage** wählen (füllt alles vor),
+Lizenzschlüssel bzw. Policennummer und ggf. Gerät eintragen, speichern.
+
+| Beispiel | Abrechnung | Ergebnis |
+|---|---|---|
+| Wertgarantie | nur Dokumentation | keine Rechnung; Ablauf wird überwacht |
+| ESET 1/2/3 Jahre | einmal je Laufzeit (12/24/36 Monate) | eine Rechnung zum Beginn; vor Ablauf Erinnerung, Verlängern per Knopf (oder automatisch) |
+| MSP-Paket | monatlich | jeden Monat im Voraus, bis zur Kündigung |
+
+**Vertragsarten erweitern:** *Verträge & Lizenzen → Vertragsarten → + Neue Vertragsart* – z. B.
+„ESET Internet Security 3 Geräte, 1 Jahr“ mit Preis und Einkauf. Steht danach sofort als Vorlage bereit.
+
+**Abrechnung:** Das Programm prüft täglich, was fällig ist, und erstellt **je Kunde eine Rechnung** mit allen
+fälligen Positionen (inkl. Zeitraum und Lizenznummer). Unter *Einstellungen → Verträge* wählen Sie:
+- **Entwurf** (Standard): Sie prüfen unter *Rechnungen & KVA → Entwürfe* und schreiben fest.
+- **Automatisch:** festschreiben und per E-Mail an den Kunden (E-Mail-Zugang und Kunden-E-Mail nötig).
+
+Empfehlung: zuerst ein paar Monate mit „Entwurf“ arbeiten, dann auf „Automatisch“ umstellen.
+
+**Kündigen:** Vertrag öffnen → „Kündigen“: Eingangsdatum, **Vertrag endet zum** (Vorschlag: Ende der laufenden
+Periode bzw. Mindestlaufzeit), Grund. Bis zu diesem Datum wird noch berechnet, danach nicht mehr.
+„Kündigung zurücknehmen“ macht das rückgängig.
+
+**Bestehende Verträge übernehmen:** Beginn wie im Original eintragen und **„Bereits berechnet bis“** setzen
+(z. B. Ende des letzten in Lexware berechneten Monats) – sonst würden vergangene Monate nachberechnet.

@@ -40,6 +40,10 @@ STANDARD_EINSTELLUNGEN = {
     "mahngebuehr_cent": 395,
     "mahnstufen": 2,
     "kva_gueltig_tage": 30,
+    # Verträge & Lizenzen
+    "abo_modus": "entwurf",          # entwurf = Rechnungsentwürfe anlegen / automatisch = festschreiben + per E-Mail senden
+    "abo_letzter_lauf": "",
+    "vertrag_erinnerung_tage": 60,   # so viele Tage vor Ablauf einer Lizenz/Garantie erinnern
     # Layout
     "farbe_primaer": "#1C54A3",
     "farbe_sekundaer": "#5D6670",
@@ -107,6 +111,18 @@ STANDARD_EINSTELLUNGEN = {
 }
 
 
+# Mitgelieferte Vertragsarten (Preise bitte anpassen; alles unter Verträge & Lizenzen → Vertragsarten änderbar)
+# (name, kategorie, beschreibung, abrechnung, laufzeit, mindestlaufzeit, preis_cent, einkauf_cent, auto_verlaengern)
+STANDARD_VERTRAGSARTEN = [
+    ("Wertgarantie Geräteschutz", "Garantie/Versicherung",
+     "Nur zur Dokumentation – der Kunde zahlt direkt an Wertgarantie.", "keine", None, None, 0, 0, 0),
+    ("ESET Antivirus – 1 Jahr", "Lizenz", "Lizenz für 1 Gerät, Laufzeit 1 Jahr", "laufzeit", 12, None, 0, 0, 0),
+    ("ESET Antivirus – 2 Jahre", "Lizenz", "Lizenz für 1 Gerät, Laufzeit 2 Jahre", "laufzeit", 24, None, 0, 0, 0),
+    ("ESET Antivirus – 3 Jahre", "Lizenz", "Lizenz für 1 Gerät, Laufzeit 3 Jahre", "laufzeit", 36, None, 0, 0, 0),
+    ("MSP Basis (monatlich)", "MSP", "IT-Betreuung: Überwachung, Updates, Virenschutz", "monatlich", None, 12, 0, 0, 0),
+]
+
+
 def jetzt():
     return datetime.now().isoformat(timespec="seconds")
 
@@ -139,6 +155,11 @@ def initialisieren(pfad):
     for k, v in STANDARD_EINSTELLUNGEN.items():
         if k not in vorhanden:
             con.execute("INSERT INTO einstellungen VALUES (?, ?)", (k, json.dumps(v)))
+    if not con.execute("SELECT 1 FROM vertragsarten LIMIT 1").fetchone():
+        for va in STANDARD_VERTRAGSARTEN:
+            con.execute("INSERT INTO vertragsarten (name, kategorie, beschreibung, abrechnung, laufzeit_monate, "
+                        "mindestlaufzeit_monate, preis, einkauf, auto_verlaengern, erstellt_am) "
+                        "VALUES (?,?,?,?,?,?,?,?,?,?)", (*va, jetzt()))
     from .textbausteine_standard import STANDARD_TEXTBAUSTEINE
     vorhandene_typen = {r[0] for r in con.execute("SELECT DISTINCT dokumenttyp FROM textbausteine")}
     leer = not vorhandene_typen
@@ -159,6 +180,9 @@ def _migrieren(con):
         con.execute("ALTER TABLE kunden ADD COLUMN interessent INTEGER NOT NULL DEFAULT 0")
     if "quelle" not in spalten:
         con.execute("ALTER TABLE kunden ADD COLUMN quelle TEXT")
+    vspalten = {r["name"] for r in con.execute("PRAGMA table_info(vertraege)")}
+    if vspalten and "abgerechnet_bis" not in vspalten:
+        con.execute("ALTER TABLE vertraege ADD COLUMN abgerechnet_bis TEXT")
 
 
 # ---------------------------------------------------------------- Einstellungen

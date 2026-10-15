@@ -19,22 +19,22 @@
         <option value="privat" {{ 'selected' if not k or k.typ == 'privat' }}>Privatkunde</option>
         <option value="firma" {{ 'selected' if k and k.typ == 'firma' }}>Firmenkunde</option>
       </select></div>
-    <div class="s9" style="grid-column: span 9"><label>Firma</label><input type="text" name="firma" value="{{ k.firma if k }}"></div>
+    <div class="s9" style="grid-column: span 9"><label>Firma</label><input type="text" name="firma" value="{{ (k.firma or '') if k }}"></div>
     <div class="s2"><label>Anrede</label>
       <select name="anrede">{% for a in ['', 'Frau', 'Herr', 'Divers'] %}<option {{ 'selected' if k and k.anrede == a }}>{{ a }}</option>{% endfor %}</select></div>
-    <div class="s4"><label>Vorname</label><input type="text" name="vorname" value="{{ k.vorname if k }}"></div>
-    <div><label>Nachname</label><input type="text" name="nachname" value="{{ k.nachname if k }}"></div>
-    <div class="s12"><label>Straße und Hausnummer</label><input type="text" name="strasse" value="{{ k.strasse if k }}"></div>
-    <div class="s2"><label>PLZ</label><input type="text" name="plz" value="{{ k.plz if k }}"></div>
-    <div class="s4"><label>Ort</label><input type="text" name="ort" value="{{ k.ort if k }}"></div>
+    <div class="s4"><label>Vorname</label><input type="text" name="vorname" value="{{ (k.vorname or '') if k }}"></div>
+    <div><label>Nachname</label><input type="text" name="nachname" value="{{ (k.nachname or '') if k }}"></div>
+    <div class="s12"><label>Straße und Hausnummer</label><input type="text" name="strasse" value="{{ (k.strasse or '') if k }}"></div>
+    <div class="s2"><label>PLZ</label><input type="text" name="plz" value="{{ (k.plz or '') if k }}"></div>
+    <div class="s4"><label>Ort</label><input type="text" name="ort" value="{{ (k.ort or '') if k }}"></div>
     <div><label>Land</label><input type="text" name="land" value="{{ k.land if k else 'Deutschland' }}"></div>
-    <div><label>E-Mail</label><input type="email" name="email" value="{{ k.email if k }}"></div>
-    <div><label>Telefon</label><input type="tel" name="telefon" value="{{ k.telefon if k }}"></div>
-    <div><label>USt-IdNr. (nur Firmenkunden, optional)</label><input type="text" name="ust_idnr" value="{{ k.ust_idnr if k }}"></div>
+    <div><label>E-Mail</label><input type="email" name="email" value="{{ (k.email or '') if k }}"></div>
+    <div><label>Telefon</label><input type="tel" name="telefon" value="{{ (k.telefon or '') if k }}"></div>
+    <div><label>USt-IdNr. (nur Firmenkunden, optional)</label><input type="text" name="ust_idnr" value="{{ (k.ust_idnr or '') if k }}"></div>
     <div><label>Abweichendes Zahlungsziel (Tage)</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ k.zahlungsziel_tage if k and k.zahlungsziel_tage is not none }}">
       <div class="hilfe">Leer lassen = Standard ({{ einst.zahlungsziel_privat }} Tage privat / {{ einst.zahlungsziel_firma }} Tage Firma)</div></div>
     <div class="s12"><label class="check"><input type="checkbox" name="interessent" {{ 'checked' if k and k.interessent }}> Interessent (hat angefragt, noch keine Rechnung){% if k and k.quelle %} – Quelle: {{ k.quelle }}{% endif %}</label></div>
-    <div class="s12"><label>Notizen (intern, erscheinen nicht auf Dokumenten)</label><textarea name="notizen">{{ k.notizen if k }}</textarea></div>
+    <div class="s12"><label>Notizen (intern, erscheinen nicht auf Dokumenten)</label><textarea name="notizen">{{ (k.notizen or '') if k }}</textarea></div>
   </div>
   <br>
   <div class="leiste">
@@ -55,6 +55,21 @@
     {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
   </table>
 </div>
+{% if k %}
+{% from "_vertrag.html" import zustand, abrechnung_text %}
+<div class="karte">
+  <div class="kopf" style="margin-bottom:8px"><h2 style="margin:0">Verträge, Lizenzen &amp; Garantien</h2>
+    <a class="knopf klein" href="{{ url_for('main.vertrag', kunde_id=k.id) }}">+ Vertrag / Lizenz</a></div>
+  <table class="liste">
+    <tr><th>Bezeichnung</th><th>Nummer / Gerät</th><th>Abrechnung</th><th>Ende</th><th>Status</th></tr>
+    {% for v in vertraege %}<tr><td><a href="{{ url_for('main.vertrag', vid=v.id) }}"><b>{{ v.bezeichnung }}</b></a><div class="klein">{{ v.kategorie }}</div></td>
+      <td class="klein">{{ v.vertragsnummer or '' }}{% if v.geraet %}<br>{{ v.geraet }}{% endif %}</td>
+      <td>{{ abrechnung_text(v, abrechnung) }}</td>
+      <td>{{ v.ende|datum if v.ende else 'unbefristet' }}</td><td>{{ zustand(v) }}</td></tr>
+    {% else %}<tr><td colspan="5" class="klein">Keine Verträge oder Lizenzen hinterlegt.</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
 {% if auftraege %}
 <div class="karte">
   <h2>Reparaturaufträge</h2>

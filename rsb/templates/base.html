@@ -17,6 +17,7 @@
     <a href="{{ url_for('main.anfragen_liste') }}" class="{{ 'aktiv' if ep.startswith('main.anfrage') }}">Anfragen{% if offene_anfragen %} <span class="zaehler">{{ offene_anfragen }}</span>{% endif %}</a>
     <a href="{{ url_for('main.auftraege') }}" class="{{ 'aktiv' if ep.startswith('main.auftr') }}">Reparaturaufträge</a>
     <a href="{{ url_for('main.kunden') }}" class="{{ 'aktiv' if ep.startswith('main.kunde') }}">Kunden</a>
+    <a href="{{ url_for('main.vertraege_liste') }}" class="{{ 'aktiv' if ep.startswith('main.vertr') }}">Verträge &amp; Lizenzen</a>
     <a href="{{ url_for('main.artikel_liste') }}" class="{{ 'aktiv' if ep.startswith('main.artikel') }}">Leistungen &amp; Artikel</a>
     <a href="{{ url_for('main.dokumente') }}" class="{{ 'aktiv' if ep.startswith('main.dokument') }}">Rechnungen &amp; KVA</a>
     <div class="gruppe">Verwaltung</div>

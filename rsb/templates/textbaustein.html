@@ -7,10 +7,10 @@
 <form method="post" class="karte">
   {{ csrf() }}
   <div class="felder">
-    <div class="s12"><label>Name</label><input type="text" name="name" value="{{ t.name if t }}" required></div>
+    <div class="s12"><label>Name</label><input type="text" name="name" value="{{ (t.name or '') if t }}" required></div>
     <div><label>Kategorie</label><select name="kategorie">{% for k, n in kategorien.items() %}<option value="{{ k }}" {{ 'selected' if t and t.kategorie == k }}>{{ n }}</option>{% endfor %}</select></div>
     <div><label>Für Dokument</label><select name="dokumenttyp">{% for k, n in typen.items() %}<option value="{{ k }}" {{ 'selected' if t and t.dokumenttyp == k }}>{{ n }}</option>{% endfor %}</select></div>
-    <div class="s12"><label>Text</label><textarea name="text" style="min-height:220px">{{ t.text if t }}</textarea></div>
+    <div class="s12"><label>Text</label><textarea name="text" style="min-height:220px">{{ (t.text or '') if t }}</textarea></div>
     <div class="s12"><label class="check"><input type="checkbox" name="standard" {{ 'checked' if t and t.standard }}> Standard (automatisch verwenden)</label></div>
   </div>
   <br>

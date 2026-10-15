@@ -21,6 +21,10 @@
   {% endfor %}
 </div>
 <div class="raster">
+  <a class="kachel kachel-link" href="{{ url_for('main.vertraege_liste') }}"><div class="label">Verträge &amp; Lizenzen</div><div class="wert">{{ zahlen.vertraege_aktiv }}</div><div class="klein">{{ zahlen.vertraege_monatlich|euro }} regelmäßig pro Monat</div></a>
+  <a class="kachel kachel-link {{ 's-rand-in_arbeit' if zahlen.vertraege_laeuft_ab }}" href="{{ url_for('main.vertraege_liste', filter='laeuft_ab') }}"><div class="label">Laufen bald ab</div><div class="wert">{{ zahlen.vertraege_laeuft_ab }}</div><div class="klein">Lizenzen/Garantien</div></a>
+</div>
+<div class="raster">
   <div class="kachel"><div class="label">Umsatz {{ jahr }}</div><div class="wert">{{ zahlen.umsatz_jahr|euro }}</div></div>
   <div class="kachel"><div class="label">Umsatz {{ jahr - 1 }}</div><div class="wert">{{ zahlen.umsatz_vorjahr|euro }}</div></div>
   <div class="kachel"><div class="label">Noch nicht bezahlt</div><div class="wert">{{ zahlen.offen|euro }}</div><div class="klein">Zahlungseingänge erfassen folgt in Etappe 3</div></div>
