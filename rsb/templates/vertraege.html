@@ -11,6 +11,9 @@
     <a class="knopf" href="{{ url_for('main.vertrag') }}">+ Neuer Vertrag</a>
   </div>
 </div>
+{% if einst.abo_modus == 'automatisch' and not einst.smtp_host %}
+<div class="meldung warnung"><b>E-Mail-Zugang fehlt:</b> Vertragsrechnungen werden automatisch festgeschrieben, können aber nicht per E-Mail versendet werden. Bitte unter <a href="{{ url_for('main.einstellungen', bereich='email') }}">Einstellungen → E-Mail</a> einrichten.</div>
+{% endif %}
 <div class="raster">
   <div class="kachel"><div class="label">Aktive Verträge</div><div class="wert">{{ kennzahlen.aktiv }}</div></div>
   <div class="kachel"><div class="label">Regelmäßige Einnahmen</div><div class="wert">{{ kennzahlen.monatlich|euro }}</div><div class="klein">pro Monat (umgerechnet)</div></div>

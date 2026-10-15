@@ -121,6 +121,8 @@ def test_seiten(client, con):
     post(client, "/vertragsarten", name="ESET Internet Security 3 Geräte", kategorie="Lizenz", abrechnung="laufzeit",
          laufzeit_monate="12", preis="59,90", einkauf="35,00", aktiv="on", beschreibung="")
     assert con.execute("SELECT preis FROM vertragsarten WHERE name LIKE 'ESET Internet%'").fetchone()[0] == 5990
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({"abo_modus": "entwurf"}, con)
     r = post(client, "/vertraege/abrechnen")
     assert r.status_code == 302
     # Vertrag mit festgeschriebener Rechnung lässt sich nicht löschen
@@ -140,3 +142,15 @@ def test_bestehenden_vertrag_uebernehmen(client, con):
     lz = vertrag_anlegen(client, kid, abrechnung="laufzeit", laufzeit_monate="36", beginn="2025-03-01",
                          abgerechnet_bis="2028-02-29", mindestlaufzeit_monate="")
     assert vtr.faellige_zeitraeume(con, zeile(con, lz), date(2026, 10, 15)) == []
+
+
+def test_standard_vollautomatisch(app, con):
+    assert dbm.einstellungen(con)["abo_modus"] == "automatisch"
+    # bestehende Installation mit "entwurf" wird einmalig umgestellt, danach bleibt die eigene Wahl erhalten
+    con.execute("UPDATE einstellungen SET wert='\"entwurf\"' WHERE schluessel='abo_modus'")
+    con.execute("DELETE FROM einstellungen WHERE schluessel='umstellung_abo_automatisch'")
+    dbm.initialisieren(app.config["DB_PFAD"])
+    assert dbm.einstellungen(con)["abo_modus"] == "automatisch"
+    con.execute("UPDATE einstellungen SET wert='\"entwurf\"' WHERE schluessel='abo_modus'")
+    dbm.initialisieren(app.config["DB_PFAD"])
+    assert dbm.einstellungen(con)["abo_modus"] == "entwurf"

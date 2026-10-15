@@ -237,10 +237,9 @@ Lizenzschlüssel bzw. Policennummer und ggf. Gerät eintragen, speichern.
 
 **Abrechnung:** Das Programm prüft täglich, was fällig ist, und erstellt **je Kunde eine Rechnung** mit allen
 fälligen Positionen (inkl. Zeitraum und Lizenznummer). Unter *Einstellungen → Verträge* wählen Sie:
-- **Entwurf** (Standard): Sie prüfen unter *Rechnungen & KVA → Entwürfe* und schreiben fest.
-- **Automatisch:** festschreiben und per E-Mail an den Kunden (E-Mail-Zugang und Kunden-E-Mail nötig).
-
-Empfehlung: zuerst ein paar Monate mit „Entwurf“ arbeiten, dann auf „Automatisch“ umstellen.
+- **Automatisch** (eingestellt): festschreiben und per E-Mail an den Kunden (E-Mail-Zugang und Kunden-E-Mail
+  nötig; fehlt die Kunden-E-Mail, wird die Rechnung nur festgeschrieben und im Protokoll vermerkt).
+- **Entwurf:** Sie prüfen unter *Rechnungen & KVA → Entwürfe* und schreiben selbst fest.
 
 **Kündigen:** Vertrag öffnen → „Kündigen“: Eingangsdatum, **Vertrag endet zum** (Vorschlag: Ende der laufenden
 Periode bzw. Mindestlaufzeit), Grund. Bis zu diesem Datum wird noch berechnet, danach nicht mehr.

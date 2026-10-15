@@ -41,7 +41,7 @@ STANDARD_EINSTELLUNGEN = {
     "mahnstufen": 2,
     "kva_gueltig_tage": 30,
     # Verträge & Lizenzen
-    "abo_modus": "entwurf",          # entwurf = Rechnungsentwürfe anlegen / automatisch = festschreiben + per E-Mail senden
+    "abo_modus": "automatisch",      # automatisch = festschreiben + per E-Mail senden / entwurf = nur Entwürfe anlegen
     "abo_letzter_lauf": "",
     "vertrag_erinnerung_tage": 60,   # so viele Tage vor Ablauf einer Lizenz/Garantie erinnern
     # Layout
@@ -155,6 +155,10 @@ def initialisieren(pfad):
     for k, v in STANDARD_EINSTELLUNGEN.items():
         if k not in vorhanden:
             con.execute("INSERT INTO einstellungen VALUES (?, ?)", (k, json.dumps(v)))
+    # Einmalige Umstellung (Version 0.6.1, Wunsch des Inhabers): Vertragsrechnungen vollautomatisch
+    if not con.execute("SELECT 1 FROM einstellungen WHERE schluessel='umstellung_abo_automatisch'").fetchone():
+        con.execute("UPDATE einstellungen SET wert=? WHERE schluessel='abo_modus'", (json.dumps("automatisch"),))
+        con.execute("INSERT INTO einstellungen VALUES ('umstellung_abo_automatisch', ?)", (json.dumps(jetzt()),))
     if not con.execute("SELECT 1 FROM vertragsarten LIMIT 1").fetchone():
         for va in STANDARD_VERTRAGSARTEN:
             con.execute("INSERT INTO vertragsarten (name, kategorie, beschreibung, abrechnung, laufzeit_monate, "

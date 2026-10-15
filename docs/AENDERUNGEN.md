@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.6.1 | 15.10.2026 | Vertragsrechnungen vollautomatisch |
 | 0.6.0 | 15.10.2026 | Verträge & Lizenzen (Wertgarantie, ESET, MSP) mit wiederkehrenden Rechnungen |
 | 0.5.1 | 15.10.2026 | Versionsprotokoll im Programm |
 | 0.5.0 | 14.10.2026 | Kein Konsolenfenster, kein Passwortzwang |
@@ -23,6 +24,18 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.6.1 – 15.10.2026
+Vertragsrechnungen gehen ab jetzt vollautomatisch raus.
+
+### Geändert
+- **Wiederkehrende Rechnungen vollautomatisch:** Fällige Vertragsrechnungen werden automatisch festgeschrieben und
+  per E-Mail an den Kunden gesendet. Die Umstellung erfolgt bei diesem Update einmalig. Wer lieber erst prüfen will,
+  stellt unter *Einstellungen → Verträge* auf „als Entwurf anlegen“ zurück – diese Wahl bleibt dann erhalten.
+- Warnhinweis auf der Übersicht und bei den Verträgen, solange der E-Mail-Zugang fehlt (dann werden Rechnungen nur
+  festgeschrieben, aber nicht versendet).
 
 ---
 

@@ -13,6 +13,7 @@
 {% if not einst.strasse or not einst.iban or not einst.steuernummer %}
 <div class="meldung warnung">Bitte vervollständigen Sie Ihre <a href="{{ url_for('main.einstellungen') }}">Firmendaten</a> (Anschrift, Steuernummer, Bankverbindung). Diese erscheinen auf jeder Rechnung.</div>
 {% endif %}
+{% if einst.abo_modus == 'automatisch' and not einst.smtp_host and zahlen.vertraege_aktiv %}<div class="meldung warnung">Vertragsrechnungen gehen automatisch raus, aber der <a href="{{ url_for('main.einstellungen', bereich='email') }}">E-Mail-Zugang</a> ist noch nicht eingerichtet – sie werden nur festgeschrieben, nicht versendet.</div>{% endif %}
 {% if zahlen.anfragen %}<div class="meldung info"><b>{{ zahlen.anfragen }} neue Anfrage(n)</b> aus dem Kontaktformular – <a href="{{ url_for('main.anfragen_liste') }}">jetzt ansehen</a></div>{% endif %}
 {% if einst.anfragen_letzter_fehler %}<div class="meldung fehler">Abruf der Anfragen fehlgeschlagen: {{ einst.anfragen_letzter_fehler }}</div>{% endif %}
 <div class="raster">
