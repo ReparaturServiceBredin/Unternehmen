@@ -112,10 +112,11 @@
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
 const ARTIKEL = {{ artikel|tojson }};
+const MIT_GARANTIE = {{ 'true' if d.typ in ('rechnung', 'kva') else 'false' }};
 const BAUSTEINE = {{ bausteine|tojson }};
 const LEISTUNGSARTEN = {{ leistungsarten|tojson }};
 const MIT_UST = {{ 'true' if einst.steuer_modus == 'regel' else 'false' }};
-const POS = [{% for p in positionen %}{{ {'bezeichnung': p.bezeichnung, 'beschreibung': p.beschreibung or '', 'menge': p.menge, 'einheit': p.einheit or '', 'einzelpreis': p.einzelpreis, 'teilekosten': p.teilekosten, 'steuersatz': p.steuersatz, 'leistungsart': p.leistungsart or '', 'artikel_id': p.artikel_id or ''}|tojson }},{% endfor %}];
+const POS = [{% for p in positionen %}{{ {'bezeichnung': p.bezeichnung, 'beschreibung': p.beschreibung or '', 'menge': p.menge, 'einheit': p.einheit or '', 'einzelpreis': p.einzelpreis, 'teilekosten': p.teilekosten, 'steuersatz': p.steuersatz, 'leistungsart': p.leistungsart or '', 'artikel_id': p.artikel_id or '', 'garantie_monate': p.garantie_monate}|tojson }},{% endfor %}];
 
 const tbody = document.getElementById('positionen');
 function esc(s) { return String(s ?? '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;'); }
@@ -126,6 +127,7 @@ function zeile(p) {
     <td><input type="text" name="p_bezeichnung" value="${esc(p.bezeichnung)}" placeholder="Bezeichnung">
         <textarea name="p_beschreibung" class="beschreibung" placeholder="Beschreibung (optional, mehrzeilig – erscheint unter der Bezeichnung)">${esc(p.beschreibung)}</textarea>
         <input type="hidden" name="p_artikel_id" value="${esc(p.artikel_id)}">
+        ${MIT_GARANTIE ? `<div class="klein garantie-zeile">Garantie <input type="text" name="p_garantie" value="${p.garantie_monate ?? ''}" placeholder="Std." style="width:52px;padding:2px 6px;display:inline-block"> Monate</div>` : `<input type="hidden" name="p_garantie" value="">`}
         <input type="hidden" name="p_katalog" value="${p.artikel_id ? '0' : (p.katalog === false ? '0' : '1')}">
         ${p.artikel_id
           ? `<input type="hidden" name="p_typ" value=""><div class="klein katalog-info">aus „Leistungen und Artikel“ – Änderungen gelten nur für dieses Dokument</div>`
@@ -186,7 +188,8 @@ document.getElementById('leerzeile').onclick = () => zeile({ menge: 1, einheit: 
 document.getElementById('artikelwahl').onchange = e => {
   const a = ARTIKEL.find(x => String(x.id) === e.target.value);
   if (a) zeile({ bezeichnung: a.name, beschreibung: a.beschreibung, menge: 1, einheit: a.einheit, einzelpreis: a.preis,
-                 teilekosten: a.teilekosten, steuersatz: a.steuersatz, leistungsart: a.leistungsart, artikel_id: a.id });
+                 teilekosten: a.teilekosten, steuersatz: a.steuersatz, leistungsart: a.leistungsart, artikel_id: a.id,
+                 garantie_monate: a.garantie_monate });
   e.target.value = '';
 };
 document.querySelectorAll('select.baustein').forEach(sel => sel.onchange = () => {

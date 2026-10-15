@@ -8,7 +8,7 @@
 {% set gueltige_fotos = fotos|rejectattr('geloescht_am')|list %}
 <div class="kopf">
   <div>
-    <h1>Auftrag {{ a.auftragsnr }} <span class="marke-status s-{{ tafel_status }}">{{ status_namen[tafel_status] }}</span></h1>
+    <h1>Auftrag {{ a.auftragsnr }} <span class="marke-status s-{{ tafel_status }}">{{ status_namen[tafel_status] }}</span>{% if a.auftragsart == 'garantie' %} <span class="marke-status st-warnung">Garantiefall{% if garantie_bezug %} zu {{ garantie_bezug.auftragsnr }}{% endif %}</span>{% endif %}</h1>
     <div class="auftrag-kopf" style="margin-top:6px">
       <span>Eingang: <b>{{ a.eingang_am|zeit }}</b></span>
       <span>Kunde: <a href="{{ url_for('main.kunde', kid=a.kunde_id) }}"><b>{{ a.kundennr }} · {{ a.firma if a.ktyp == 'firma' and a.firma else (a.vorname or '') ~ ' ' ~ (a.nachname or '') }}</b></a>{% if a.ktelefon %} · <a href="tel:{{ a.ktelefon }}">{{ a.ktelefon }}</a>{% endif %}</span>
@@ -23,6 +23,16 @@
 {% if kva_kunde %}<div class="meldung warnung">Achtung: Der verknüpfte Kostenvoranschlag gehört zu einem anderen Kunden ({{ kva_kunde.kundennr }} · {{ kva_kunde|kname }}) als der Auftrag.</div>{% endif %}
 
 {% for b in benachrichtigungen %}{{ vorschau(b, anlaesse, url_for('main.auftrag', aid=a.id), True) }}{% endfor %}
+{% if vorbesuche %}
+<div class="meldung {{ 'warnung' if vorbesuche|selectattr('garantie.laeuft')|list else 'info' }}">
+  <b>Dieses Gerät (SN/IMEI {{ a.seriennummer }}) war schon {{ vorbesuche|length }}× hier.</b>
+  {% for v in vorbesuche %}<div style="margin-top:4px">· <a href="{{ url_for('main.auftrag', aid=v.a.id) }}">{{ v.a.auftragsnr }}</a> vom {{ v.a.eingang_am|datum }} – {{ v.a.fehler|truncate(60) if v.a.fehler else (v.a.geraet or '') }}
+    · Garantie: <b>{{ v.garantie.text }}</b>
+    {% if v.a.foto_anzahl %} · <a href="{{ url_for('main.auftrag', aid=v.a.id) }}#fotos">{{ v.a.foto_anzahl }} Foto(s)</a>{% endif %}
+    {% if v.a.rechnung_id %} · <a href="{{ url_for('main.dokument', did=v.a.rechnung_id) }}">Rechnung {{ v.a.re_nummer or 'Entwurf' }}</a>{% endif %}</div>{% endfor %}
+  {% if a.auftragsart != 'garantie' and vorbesuche|selectattr('garantie.laeuft')|list %}<div class="klein" style="margin-top:6px">Läuft die Garantie, unter „Auftragsdaten“ die Auftragsart „Garantiefall“ wählen.</div>{% endif %}
+</div>
+{% endif %}
 
 <nav class="reiter">
   <a href="#auftragsdaten" data-reiter="auftragsdaten">Auftragsdaten</a>
@@ -51,6 +61,13 @@
           <p class="klein">Wird automatisch erstellt, wenn der Auftrag auf „Erledigt“ gesetzt wird{{ ' (mit den Positionen aus dem KVA)' if a.kva_id }}.</p>
           <form method="post" action="{{ url_for('main.auftrag_rechnung', aid=a.id) }}">{{ csrf() }}<button class="zweit">Rechnung jetzt erstellen</button></form>
         {% endif %}
+      </div>
+      <div class="karte">
+        <h2>Garantie</h2>
+        <p>{{ garantie.text }}{% if garantie.beginn and a.auftragsart != 'garantie' %} <span class="klein">(ab {{ garantie.beginn.isoformat()|datum }})</span>{% endif %}</p>
+        {% if a.auftragsart == 'garantie' %}<p class="klein">Bezug: {% if garantie_bezug %}<a href="{{ url_for('main.auftrag', aid=garantie_bezug.id) }}">{{ garantie_bezug.auftragsnr }}</a>{% else %}–{% endif %} · Interne Kosten: <b>{{ interne_kosten|euro }}</b>{% if a.interne_kosten_notiz %} ({{ a.interne_kosten_notiz }}){% endif %}</p>{% endif %}
+        {% if garantiefaelle %}<p class="klein">Garantiefälle zu diesem Auftrag: {% for g in garantiefaelle %}<a href="{{ url_for('main.auftrag', aid=g.id) }}">{{ g.auftragsnr }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
+        <p class="klein">Freiwillige Garantie der Werkstatt; die gesetzlichen Mängelrechte bleiben unberührt.</p>
       </div>
       <div class="karte">
         <h2>Kunde benachrichtigen</h2>
@@ -225,7 +242,7 @@
 <script>
 reiterInit('auftragsdaten');
 const formular = document.getElementById('auftragsformular');
-const hatKva = {{ 'true' if a.kva_id or a.intern else 'false' }}, warErledigt = {{ 'true' if a.status == 'erledigt' else 'false' }};
+const hatKva = {{ 'true' if a.kva_id or a.intern or a.auftragsart == 'garantie' else 'false' }}, warErledigt = {{ 'true' if a.status == 'erledigt' else 'false' }};
 const leiheDraussen = {{ 'true' if a.leihen_offen else 'false' }};
 formular.addEventListener('submit', async e => {
   if (warErledigt || formular.status.value !== 'erledigt') return;

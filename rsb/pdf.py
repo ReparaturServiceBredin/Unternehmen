@@ -290,6 +290,8 @@ def pdf_erzeugen(snap, daten_dir=None, entwurf=False):
         inhalt += [Paragraph(_absatz(snap["kleinunternehmer_hinweis"]), st["hinweis"]), Spacer(1, 4 * mm)]
     if snap.get("hinweise"):
         inhalt += [Paragraph(_absatz(snap["hinweise"]), st["klein"]), Spacer(1, 4 * mm)]
+    if snap.get("garantie_text"):
+        inhalt += [Paragraph(_absatz(snap["garantie_text"]), st["klein"]), Spacer(1, 4 * mm)]
     zahlblock = _zahlungsblock(snap, st, primaer)
     if zahlblock:
         inhalt += [zahlblock, Spacer(1, 5 * mm)]
@@ -356,6 +358,9 @@ def _positionstabelle(snap, st, primaer, sekundaer):
                 teile.append(Spacer(1, st["beschreibung"].leading * 0.6))
         while teile and isinstance(teile[-1], Spacer):
             teile.pop()
+        if p.get("garantie_monate") is not None:
+            teile.append(Paragraph(f"Garantie: {p['garantie_monate']} Monate" if p["garantie_monate"]
+                                   else "ohne Garantie", st["beschreibung"]))
         erste = [Paragraph(f"<b>{escape(p['bezeichnung'])}</b>", st["zelle"])] + teile[:4]
         zeile = [Paragraph(str(p["pos"]), st["zelle"]), erste,
                  Paragraph(menge_text(p["menge"]), st["zelle_r"]), Paragraph(escape(p["einheit"]), st["zelle"])]

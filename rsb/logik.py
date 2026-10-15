@@ -57,9 +57,10 @@ def neuer_entwurf(con, einst, typ, kunde_id=None, betreff="", positionen=(), lei
     for i, p in enumerate(positionen, 1):
         con.execute(
             "INSERT INTO positionen (dokument_id, pos, artikel_id, bezeichnung, beschreibung, menge, einheit, "
-            "einzelpreis, teilekosten, steuersatz, leistungsart) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+            "einzelpreis, teilekosten, steuersatz, leistungsart, garantie_monate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
             (did, i, p["artikel_id"], p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"],
-             abs(p["einzelpreis"]), abs(p["teilekosten"]), p["steuersatz"], p["leistungsart"]))
+             abs(p["einzelpreis"]), abs(p["teilekosten"]), p["steuersatz"], p["leistungsart"],
+             p["garantie_monate"] if "garantie_monate" in p.keys() else None))
     summen_speichern(con, did)
     dbm.protokollieren("entwurf_angelegt", "dokument", did, {"typ": typ}, con=con)
     return did
@@ -203,11 +204,20 @@ def snapshot_bauen(con, dok_id, nummer=None):
                 "pos": p["pos"], "bezeichnung": p["bezeichnung"], "beschreibung": p["beschreibung"] or "",
                 "menge": p["menge"], "einheit": p["einheit"] or "", "einzelpreis": p["einzelpreis"],
                 "steuersatz": p["steuersatz"], "betrag": positions_betrag(p["menge"], p["einzelpreis"]),
+                "garantie_monate": p["garantie_monate"],
             }
             for p in pos
         ],
         "summen": s,
+        "garantie_text": _garantie_text(con, dok),
     }
+
+
+def _garantie_text(con, dok):
+    if dok["typ"] != "rechnung":
+        return ""
+    from .garantie import rechnungstext
+    return rechnungstext(con, dok)
 
 
 # ---------------------------------------------------------------- Festschreiben

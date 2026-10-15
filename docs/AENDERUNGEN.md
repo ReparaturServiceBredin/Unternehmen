@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.15.0 | 15.10.2026 | Garantie, Geräte-Wiedererkennung per SN/IMEI, Garantiefälle |
 | 0.14.0 | 15.10.2026 | Kundenbenachrichtigung, Spalte „Wartet auf Teil“, Abhol-Erinnerungen |
 | 0.13.0 | 15.10.2026 | Annahme- und Abholschein mit digitaler Unterschrift, Handy per QR-Code |
 | 0.12.0 | 15.10.2026 | Zahlungen, offene Posten, Bankabgleich, Mahnwesen |
@@ -35,6 +36,42 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.15.0 – 15.10.2026
+Garantie und Gewährleistung (Ausbaustufe 5 von 10).
+
+### Neu
+
+**Garantie je Reparatur:** Den Standard (z. B. 6 oder 12 Monate) stellen Sie unter
+*Einstellungen → Annahme & Abholung* ein. Abweichen können Sie an drei Stellen:
+- im Auftrag
+- je Rechnungsposition (kleines Feld „Garantie … Monate“)
+- als Vorschlag beim Artikel in *Leistungen & Artikel*
+
+Die Garantie steht auf der Rechnung und auf dem Abholschein, jeweils mit dem Satz: „Ihre gesetzlichen
+Gewährleistungsrechte bleiben davon unberührt.“ Sie beginnt mit der Abholung.
+
+**Gerät schon einmal hier?** Bei der Seriennummer/IMEI prüft das Programm sofort frühere Aufträge, auch wenn die
+Schreibweise mit Leerzeichen oder Bindestrichen abweicht. Es zeigt:
+- Datum, Fehler und Garantiestand (läuft / abgelaufen)
+- Links zu Auftrag, Fotos und Rechnung
+
+Läuft die Garantie noch, ist der Hinweis gelb.
+
+**Garantiefall:** Im Hinweis auf „als Garantiefall zu RA-…“ klicken. Der neue Auftrag wird dann so behandelt:
+- Er ist mit dem ursprünglichen Auftrag verknüpft und standardmäßig kostenlos.
+- Beim Erledigen entsteht keine Rechnung, und es gibt keine KVA-Rückfrage.
+- Interne Kosten (Teile, Zeit) erfassen Sie am Auftrag.
+
+Bei Bedarf erstellt „Rechnung jetzt erstellen“ trotzdem eine Rechnung.
+
+### Hinweis
+Lieferantengarantie auf eingekaufte Teile folgt mit Lieferanten und Bestellungen (Ausbaustufe 7).
+
+### Technisch
+- Neue Spalten in `auftraege` (`auftragsart`, `garantie_bezug_id`, `garantie_monate`, `interne_kosten`,
+  `interne_kosten_notiz`), `positionen.garantie_monate`, `artikel.garantie_monate`. Vor der Umstellung wird
+  automatisch gesichert.
 
 ## 0.14.0 – 15.10.2026
 Kundenbenachrichtigung (Ausbaustufe 4 von 10).

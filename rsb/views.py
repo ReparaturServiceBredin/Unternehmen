@@ -323,6 +323,7 @@ def artikel(aid=None):
             "einheit": _f("einheit", "Stk."), "preis": preis, "teilekosten": teile, "aufschlag_prozent": aufschlag,
             "steuersatz": zahl_aus_text(_f("steuersatz"), 19), "aktiv": 1 if request.form.get("aktiv") else 0,
             "ek_unbekannt": ek_unbekannt,
+            "garantie_monate": int(_f("garantie_monate")) if _f("garantie_monate").isdigit() else None,
         }
         with dbm.Transaktion(con):
             if a:
@@ -347,7 +348,8 @@ def artikel(aid=None):
 ARTIKEL_FELDNAMEN = {"artikelnr": "Artikelnummer", "name": "Bezeichnung", "beschreibung": "Beschreibung",
                      "leistungsart": "Leistungsart", "typ": "Typ", "einheit": "Einheit", "preis": "Preis (Cent)",
                      "teilekosten": "Einkauf (Cent)", "aufschlag_prozent": "Aufschlag %", "steuersatz": "Steuersatz",
-                     "aktiv": "aktiv", "ek_unbekannt": "Einkauf unbekannt"}
+                     "aktiv": "aktiv", "ek_unbekannt": "Einkauf unbekannt",
+                     "garantie_monate": "Garantie (Monate)"}
 
 
 @bp.route("/artikel/<int:aid>/loeschen", methods=["POST"])
@@ -525,9 +527,9 @@ def _entwurf_speichern(con, d, einst):
 
     zeilen = zip(f.getlist("p_bezeichnung"), liste("p_beschreibung"), liste("p_menge", "1"), liste("p_einheit"),
                  liste("p_preis", "0"), liste("p_teilekosten"), liste("p_steuersatz", "19"), liste("p_leistungsart"),
-                 liste("p_artikel_id"), liste("p_katalog", "0"), liste("p_typ"))
+                 liste("p_artikel_id"), liste("p_katalog", "0"), liste("p_typ"), liste("p_garantie"))
     positionen = []
-    for bez, beschr, menge, einheit, preis, teile, satz, art, aid, katalog_flag, typ in zeilen:
+    for bez, beschr, menge, einheit, preis, teile, satz, art, aid, katalog_flag, typ, garantie in zeilen:
         if not bez.strip():
             continue
         positionen.append({
@@ -536,6 +538,7 @@ def _entwurf_speichern(con, d, einst):
             "teilekosten": cent_aus_text(teile, leer=None), "steuersatz": zahl_aus_text(satz, 19),
             "leistungsart": art.strip(), "artikel_id": int(aid) if aid.isdigit() else None,
             "katalog": katalog_flag == "1", "typ": typ,
+            "garantie_monate": int(garantie) if garantie.strip().isdigit() else None,
         })
     if d["typ"] == "gutschrift":  # Gutschrift: Eingabe positiv, gespeichert als Minderung (negativ)
         for p in positionen:
@@ -561,9 +564,9 @@ def _entwurf_speichern(con, d, einst):
                     konflikte.append(konflikt)
             con.execute(
                 "INSERT INTO positionen (dokument_id, pos, bezeichnung, beschreibung, menge, einheit, einzelpreis, "
-                "teilekosten, steuersatz, leistungsart, artikel_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                "teilekosten, steuersatz, leistungsart, artikel_id, garantie_monate) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
                 (d["id"], i, p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"], p["preis"],
-                 p["teilekosten"] or 0, p["steuersatz"], p["leistungsart"], p["artikel_id"]))
+                 p["teilekosten"] or 0, p["steuersatz"], p["leistungsart"], p["artikel_id"], p["garantie_monate"]))
         logik.summen_speichern(con, d["id"])
         neu_kopf = dict(con.execute("SELECT * FROM dokumente WHERE id=?", (d["id"],)).fetchone())
         neu_pos = _positionen_text(con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos",
@@ -745,7 +748,7 @@ EINSTELLUNGS_BEREICHE = {
     "leihgeraete": ["leihbedingungen"],
     "benachrichtigung": ["benachrichtigung_vorschau", "benachrichtigung_kanal", "erinnerung_tage", "oeffnungszeiten"]
     + [f"ben_{a}_{t}" for a in ben.ANLAESSE for t in ("aktiv", "betreff", "text")],
-    "annahme": ["annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
+    "annahme": ["garantie_monate", "annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
                 "abholschein_text", "handy_im_netz", "handy_adresse"],
     "mahnwesen": ["mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage", "mahngebuehr_cent",
                   "mahngebuehr_2_cent", "mahn_text_0", "mahn_text_1", "mahn_text_2", "mahn_email_betreff",
@@ -760,7 +763,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
@@ -1216,6 +1219,7 @@ def interessenten_loeschen():
 # ====================================================================== Reparaturaufträge (Tafel)
 
 from . import annahme as ann  # noqa: E402
+from . import garantie as gar  # noqa: E402
 from . import annahme_pdf as ann_pdf  # noqa: E402
 from . import auftraege as auf  # noqa: E402
 from . import fotos as fot  # noqa: E402
@@ -1282,6 +1286,12 @@ def _auftrag_felder():
     felder["fertig_bis"] = fertig or None
     felder["teil_info"] = _f("teil_info")
     felder["teil_erwartet"] = _f("teil_erwartet") or None
+    felder["auftragsart"] = _f("auftragsart") if _f("auftragsart") in gar.AUFTRAGSARTEN else "reparatur"
+    felder["garantie_bezug_id"] = request.form.get("garantie_bezug_id", type=int) \
+        if felder["auftragsart"] == "garantie" else None
+    felder["garantie_monate"] = int(_f("garantie_monate")) if _f("garantie_monate").isdigit() else None
+    felder["interne_kosten"] = cent_aus_text(_f("interne_kosten"), None) or None
+    felder["interne_kosten_notiz"] = _f("interne_kosten_notiz")
     return felder
 
 
@@ -1300,7 +1310,9 @@ FELD_NAMEN = {"geraet": "Gerät", "leistungsart": "Leistungsart", "seriennummer"
               "zustand_eingang": "Zustand bei Eingang", "kosten_obergrenze": "Kosten-Obergrenze",
               "kva_gewuenscht": "KVA gewünscht", "kva_gebuehr": "Gebühr bei abgelehntem KVA",
               "fertig_bis": "voraussichtliche Fertigstellung", "teil_info": "Ersatzteil",
-              "teil_erwartet": "Ersatzteil erwartet am"}
+              "teil_erwartet": "Ersatzteil erwartet am", "auftragsart": "Auftragsart",
+              "garantie_bezug_id": "Garantie-Bezug", "garantie_monate": "Garantie (Monate)",
+              "interne_kosten": "interne Kosten", "interne_kosten_notiz": "Notiz interne Kosten"}
 
 
 UPLOAD_SCHLUESSEL = ("auftrag_upload_token", "leihe_ausgabe_token", "leihe_rueckgabe_token")
@@ -1412,7 +1424,7 @@ def auftrag(aid):
                 and request.form.get("leihe_spaeter") != "1":
             flash(LEIHE_OFFEN_TEXT + " Die Änderungen wurden noch nicht gespeichert.", "warnung")
             return redirect(url_for("main.auftrag", aid=aid) + "#leihgeraet")
-        if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not a["intern"] \
+        if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not a["intern"] and a["auftragsart"] != "garantie" \
                 and not _ohne_kva_bestaetigt():
             flash(KEIN_KVA_TEXT + " Die Änderungen wurden noch nicht gespeichert.", "warnung")
             return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
@@ -1444,6 +1456,10 @@ def auftrag(aid):
         if a["kva_id"] and a["kva_kunde_id"] != a["kunde_id"] else None
     return render_template("auftrag.html", a=a, status_namen=auf.TAFEL, tafel_status=auf.tafel_status(a),
                            benachrichtigungen=ben.offene(con, aid), ben_liste=ben.liste(con, aid),
+                           vorbesuche=gar.vorbesuche(con, a["seriennummer"], aid), garantie=gar.status(a, dbm.einstellungen(con)),
+                           garantie_bezug=con.execute("SELECT id, auftragsnr FROM auftraege WHERE id=?",
+                                                      (a["garantie_bezug_id"],)).fetchone() if a["garantie_bezug_id"] else None,
+                           garantiefaelle=gar.garantiefaelle_zu(con, aid), interne_kosten=gar.interne_kosten(con, a),
                            anlaesse=ben.ANLAESSE, leistungsarten=_leistungsarten(),
                            anfrage=anfrage_row, kunden=_kunden_liste(con, a["kunde_id"]), kva_kunde=kva_kunde,
                            fotos=fot.liste(con, aid), kategorien=fot.KATEGORIEN,
@@ -1469,7 +1485,7 @@ def auftrag_status(aid):
                                auftrag_url=url_for("main.auftrag", aid=aid) + "#leihgeraet")
             flash(LEIHE_OFFEN_TEXT, "warnung")
             return redirect(url_for("main.auftrag", aid=aid) + "#leihgeraet")
-    if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not a["intern"] \
+    if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not a["intern"] and a["auftragsart"] != "garantie" \
             and not _ohne_kva_bestaetigt():
         if per_fetch:
             return jsonify(ok=False, kein_kva=True, meldung=KEIN_KVA_TEXT,
@@ -1586,6 +1602,24 @@ def auftrag_loeschen(aid):
         dbm.protokollieren("auftrag_geloescht", "auftrag", aid, {"auftragsnr": a["auftragsnr"]}, con=con)
     flash("Auftrag gelöscht. Ein verknüpfter Kostenvoranschlag bleibt erhalten.", "ok")
     return redirect(url_for("main.auftraege"))
+
+
+@bp.route("/auftraege/geraet-pruefen")
+def geraet_pruefen():
+    """Frühere Aufträge mit derselben Seriennummer/IMEI (für den Hinweis beim Anlegen)."""
+    con = dbm.get_db()
+    ergebnis = []
+    for v in gar.vorbesuche(con, request.args.get("sn", ""), request.args.get("ohne", type=int)):
+        a = v["a"]
+        ergebnis.append({
+            "id": a["id"], "auftragsnr": a["auftragsnr"], "eingang": datum_de(a["eingang_am"][:10]),
+            "kunde": _kname(a), "geraet": a["geraet"] or "", "fehler": a["fehler"] or "",
+            "art": gar.AUFTRAGSARTEN.get(a["auftragsart"], ""), "garantie": v["garantie"]["text"],
+            "laeuft": v["garantie"]["laeuft"], "fotos": a["foto_anzahl"],
+            "url": url_for("main.auftrag", aid=a["id"]),
+            "rechnung": a["re_nummer"] or "", "rechnung_url": url_for("main.dokument", did=a["rechnung_id"])
+            if a["rechnung_id"] else ""})
+    return jsonify(ergebnis)
 
 
 # ---------------------------------------------------------------------- Kundenbenachrichtigung

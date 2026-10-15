@@ -1,6 +1,6 @@
 {% macro karte(a, heute) -%}
 {% set ts = 'wartet_teil' if a.status == 'in_arbeit' and a.wartet_teil_seit else a.status %}
-<div class="auftrag" draggable="true" data-id="{{ a.id }}" data-status="{{ ts }}" data-kva="{{ 1 if a.kva_id or a.intern else 0 }}" data-leihe="{{ 1 if a.leihen_offen else 0 }}" data-url="{{ url_for('main.auftrag', aid=a.id) }}" title="Klicken zum Öffnen">
+<div class="auftrag" draggable="true" data-id="{{ a.id }}" data-status="{{ ts }}" data-kva="{{ 1 if a.kva_id or a.intern or a.auftragsart == 'garantie' else 0 }}" data-leihe="{{ 1 if a.leihen_offen else 0 }}" data-url="{{ url_for('main.auftrag', aid=a.id) }}" title="Klicken zum Öffnen">
   <div class="a-kopf"><a href="{{ url_for('main.auftrag', aid=a.id) }}">{{ a.auftragsnr }}</a>
     <span class="klein">{{ 'seit ' ~ a.eingang_am|tage_seit ~ ' Tg.' if a.status != 'erledigt' else (a.erledigt_am|datum) }}</span></div>
   <div class="a-name">{{ a.firma if a.ktyp == 'firma' and a.firma else ((a.vorname or '') ~ ' ' ~ (a.nachname or '')).strip() }}</div>
@@ -10,7 +10,7 @@
   {% if a.status == 'erledigt' and not a.abgeholt_am %}<div class="a-teil" style="color:var(--gruen)">abholbereit</div>{% elif a.abgeholt_am %}<div class="klein">abgeholt {{ a.abgeholt_am|datum }}</div>{% endif %}
   <div class="a-icons">
     <span class="a-icon {{ 'ok' if a.foto_anzahl else 'fehlt' }}" title="Fotos">📷 {{ a.foto_anzahl }}</span>
-    {% if a.intern %}<span class="a-icon">intern</span>{% else %}<span class="a-icon {{ 'ok' if a.kva_id else 'fehlt' }}">{{ 'KVA ✓' if a.kva_id else 'kein KVA' }}</span>{% endif %}
+    {% if a.auftragsart == 'garantie' %}<span class="a-icon garantie">Garantiefall</span>{% elif a.intern %}<span class="a-icon">intern</span>{% else %}<span class="a-icon {{ 'ok' if a.kva_id else 'fehlt' }}">{{ 'KVA ✓' if a.kva_id else 'kein KVA' }}</span>{% endif %}
     {% if a.leihen_offen %}{% set ueber = a.leihe_bis and a.leihe_bis < heute %}<a class="a-icon {{ 'rot' if ueber else 'leihe' }}" href="{{ url_for('main.auftrag', aid=a.id) }}#leihgeraet" title="{{ 'Rückgabe überfällig seit ' ~ (a.leihe_bis|datum) if ueber else ('Rückgabe bis ' ~ (a.leihe_bis|datum) if a.leihe_bis else 'Leihgerät beim Kunden') }}">🔁 Leihgerät{{ ' überfällig' if ueber }}</a>{% endif %}
   </div>
   <div class="a-docs">

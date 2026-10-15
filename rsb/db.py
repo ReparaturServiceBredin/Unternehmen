@@ -176,6 +176,7 @@ STANDARD_EINSTELLUNGEN = {
         "Vorschriften vor. Die Herausgabe erfolgt gegen Vorlage dieses Annahmescheins oder eines Ausweises."),
     "abholschein_text": "Ich habe mein Gerät mit dem oben aufgeführten Zubehör vollständig und funktionsfähig "
                         "zurückerhalten.",
+    "garantie_monate": 12,                  # freiwillige Garantie auf Reparaturen (6 / 12 Monate …), 0 = keine
     "handy_im_netz": False,                 # Server im WLAN erreichbar machen (für QR-Code am Handy), Neustart nötig
     "handy_adresse": "",                    # optional: feste Adresse, z. B. 192.168.178.20:5000
     # Kundenbenachrichtigung: siehe benachrichtigung.einstellungs_standard() (unten ergänzt)
@@ -316,6 +317,13 @@ MIGRATIONEN = [
     ("auftraege", "wartet_teil_seit", "TEXT"),
     ("auftraege", "teil_info", "TEXT"),
     ("auftraege", "teil_erwartet", "TEXT"),
+    ("auftraege", "auftragsart", "TEXT NOT NULL DEFAULT 'reparatur'"),
+    ("auftraege", "garantie_bezug_id", "INTEGER"),
+    ("auftraege", "garantie_monate", "INTEGER"),
+    ("auftraege", "interne_kosten", "INTEGER"),
+    ("auftraege", "interne_kosten_notiz", "TEXT"),
+    ("positionen", "garantie_monate", "INTEGER"),
+    ("artikel", "garantie_monate", "INTEGER"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert

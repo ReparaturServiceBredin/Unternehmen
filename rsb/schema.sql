@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS artikel (
     aufschlag_prozent REAL,
     steuersatz        REAL NOT NULL DEFAULT 19,
     ek_unbekannt      INTEGER NOT NULL DEFAULT 0,   -- 1 = Einkaufspreis nicht bekannt -> keine Marge anzeigen
+    garantie_monate   INTEGER,                      -- Garantie-Vorschlag für Rechnungspositionen
     aktiv             INTEGER NOT NULL DEFAULT 1,
     erstellt_am       TEXT NOT NULL,
     geaendert_am      TEXT NOT NULL
@@ -115,7 +116,8 @@ CREATE TABLE IF NOT EXISTS positionen (
     einzelpreis   INTEGER NOT NULL DEFAULT 0,   -- Cent, netto
     teilekosten   INTEGER NOT NULL DEFAULT 0,   -- Cent je Einheit (für Margenauswertung)
     steuersatz    REAL NOT NULL DEFAULT 0,
-    leistungsart  TEXT
+    leistungsart  TEXT,
+    garantie_monate INTEGER                      -- abweichende Garantie für diese Position (leer = Standard)
 );
 
 -- Versandprotokoll für E-Mails
@@ -312,7 +314,13 @@ CREATE TABLE IF NOT EXISTS auftraege (
     -- Warten auf Ersatzteil (Spalte „Wartet auf Teil“ auf der Tafel; Status bleibt in_arbeit)
     wartet_teil_seit TEXT,
     teil_info       TEXT,
-    teil_erwartet   TEXT
+    teil_erwartet   TEXT,
+    -- Garantie (0.15.0)
+    auftragsart     TEXT NOT NULL DEFAULT 'reparatur',   -- reparatur / garantie
+    garantie_bezug_id INTEGER REFERENCES auftraege(id),  -- Garantiefall: ursprünglicher Auftrag
+    garantie_monate INTEGER,                             -- leer = Standard aus den Einstellungen
+    interne_kosten  INTEGER,                             -- Cent, z. B. Teile/Arbeitszeit eines Garantiefalls
+    interne_kosten_notiz TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_auftraege_status ON auftraege(status);
 

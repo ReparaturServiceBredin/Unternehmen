@@ -30,7 +30,8 @@ def naechste_auftragsnr(con):
     return f"{praefix}{nr + 1:04d}"
 
 
-ANNAHME_FELDER = ("zustand_eingang", "kosten_obergrenze", "kva_gewuenscht", "kva_gebuehr", "fertig_bis", "zugang_art")
+ANNAHME_FELDER = ("zustand_eingang", "kosten_obergrenze", "kva_gewuenscht", "kva_gebuehr", "fertig_bis", "zugang_art",
+                  "auftragsart", "garantie_bezug_id", "garantie_monate", "interne_kosten", "interne_kosten_notiz")
 
 
 def anlegen(con, kunde_id, geraet="", fehler="", leistungsart="", seriennummer="", zubehoer="", notizen="",
@@ -273,6 +274,9 @@ def status_setzen(con, auftrag_id, status, vor_id=None):
             zugang_loeschen(con, auftrag_id, "Auftrag abgeschlossen (automatisch)")
         if status == "erledigt" and ist_intern(con, a["kunde_id"]):
             interner_auftrag_erledigt(con, auftrag_id)  # interne Reparatur eines Leihgeräts: keine Rechnung
+        elif status == "erledigt" and a["auftragsart"] == "garantie":
+            verlauf(con, auftrag_id, "Garantiefall erledigt – keine Rechnung",
+                    "kostenlos; interne Kosten werden am Auftrag erfasst")
         elif status == "erledigt":
             did, neu = rechnung_erstellen(con, auftrag_id)
             if neu:

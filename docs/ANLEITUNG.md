@@ -458,3 +458,15 @@ wählen. Ersatzteil und erwartetes Datum stehen dann auf der Karte.
 
 **Texte und Öffnungszeiten:** Unter *Einstellungen → Benachrichtigungen*. Wollen Sie ohne Vorschau senden, nehmen Sie
 den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das nicht.
+
+## 20. Garantie und Garantiefälle
+
+- **Standard-Garantie:** *Einstellungen → Annahme & Abholung → Garantie auf Reparaturen*.
+- **Abweichende Garantie:**
+  - im Auftrag: „Garantie auf diese Reparatur (Monate)“
+  - in der Rechnung je Position: Feld „Garantie … Monate“ (leer = Standard, 0 = ohne Garantie)
+- **Gerät wiedererkennen:** Beim Eintippen der Seriennummer/IMEI erscheint ein Hinweis, wenn das Gerät schon einmal
+  da war. Er zeigt den Garantiestand und Links zu Auftrag, Fotos und Rechnung.
+- **Garantiefall anlegen:** Im Hinweis auf „als Garantiefall zu …“ klicken. Interne Kosten eintragen und speichern.
+  Beim Erledigen entsteht keine Rechnung. Im ursprünglichen Auftrag steht unter „Garantie“ die Liste seiner
+  Garantiefälle.

@@ -183,3 +183,35 @@ document.querySelectorAll('.unterschrift').forEach(box => {
     form.querySelectorAll('button[type=submit], button:not([type])').forEach(b => { b.disabled = true; b.textContent = 'Wird gespeichert …'; });
   });
 });
+
+// ---------------------------------------------------------------- Gerät schon bekannt? (SN/IMEI) + Garantiefall
+(function () {
+  const sn = document.getElementById('f_sn'), box = document.getElementById('sn-hinweis');
+  const art = document.getElementById('f_auftragsart'), bezug = document.getElementById('f_garantie_bezug');
+  if (!sn || !box) return;
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  function artAnpassen() {
+    document.querySelectorAll('.nur-garantie').forEach(e => e.hidden = art.value !== 'garantie');
+  }
+  if (art) { art.addEventListener('change', artAnpassen); artAnpassen(); }
+  let timer = null;
+  async function pruefen() {
+    const wert = sn.value.trim();
+    if (wert.replace(/[\s\-\/.]/g, '').length < 4) { box.hidden = true; return; }
+    const r = await fetch('/auftraege/geraet-pruefen?' + new URLSearchParams({ sn: wert, ohne: sn.dataset.ohne || '' }));
+    const liste = r.ok ? await r.json() : [];
+    if (!liste.length) { box.hidden = true; return; }
+    const garantie = liste.some(v => v.laeuft);
+    box.innerHTML = `<div class="meldung ${garantie ? 'warnung' : 'info'}" style="margin:0"><b>Dieses Gerät war schon ${liste.length}× hier${garantie ? ' – Garantie läuft noch!' : ''}</b>` +
+      liste.map(v => `<div style="margin-top:4px">· <a href="${v.url}" target="_blank">${esc(v.auftragsnr)}</a> vom ${esc(v.eingang)} · ${esc(v.kunde)} · ${esc(v.fehler || v.geraet)}
+        · Garantie: <b>${esc(v.garantie)}</b>${v.fotos ? ` · <a href="${v.url}#fotos" target="_blank">${v.fotos} Foto(s)</a>` : ''}${v.rechnung_url ? ` · <a href="${v.rechnung_url}" target="_blank">Rechnung ${esc(v.rechnung)}</a>` : ''}
+        ${art ? `<button type="button" class="zweit klein als-garantie" data-id="${v.id}" data-nr="${esc(v.auftragsnr)}">als Garantiefall zu ${esc(v.auftragsnr)}</button>` : ''}</div>`).join('') + '</div>';
+    box.hidden = false;
+    box.querySelectorAll('.als-garantie').forEach(b => b.addEventListener('click', () => {
+      art.value = 'garantie'; bezug.value = b.dataset.id; artAnpassen();
+      document.getElementById('garantie-bezug-text').textContent = `Garantiefall zum Auftrag ${b.dataset.nr} – keine Rechnung beim Erledigen.`;
+    }));
+  }
+  sn.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(pruefen, 400); });
+  pruefen();
+})();

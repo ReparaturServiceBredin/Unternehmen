@@ -26,6 +26,8 @@
     <div class="s3"><label>Verkaufspreis (€)</label><input type="text" name="preis" id="preis" value="{{ (a.preis|euro(false)) if a }}"></div>
     <div class="s3"><label>Steuersatz bei Regelbesteuerung (%)</label><input type="text" name="steuersatz" value="{{ (a.steuersatz|menge) if a else '19' }}">
       <div class="hilfe">Wird nur verwendet, wenn Sie später auf Umsatzsteuer umstellen.</div></div>
+    <div class="s3"><label>Garantie (Monate)</label><input type="text" name="garantie_monate" value="{{ a.garantie_monate if a and a.garantie_monate is not none else '' }}" placeholder="Standard ({{ einst.garantie_monate }})">
+      <div class="hilfe">Leer = Standard aus den Einstellungen; 0 = ohne Garantie.</div></div>
     <div class="s12"><div class="meldung info" id="margeanzeige" style="margin:0">Marge: –</div></div>
     <div class="s12"><label class="check"><input type="checkbox" name="aktiv" {{ 'checked' if not a or a.aktiv }}> aktiv (in der Auswahl beim Rechnung schreiben anzeigen)</label></div>
   </div>

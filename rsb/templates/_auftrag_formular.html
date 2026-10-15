@@ -9,7 +9,8 @@
   <div class="s3"><label>Status</label><select name="status" id="f_status">{% for s, n in status_namen.items() %}<option value="{{ s }}" {{ 'selected' if ts == s }}>{{ n }}</option>{% endfor %}</select></div>
   <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if w.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
   <div><label>Gerät (Marke, Modell)</label><input type="text" name="geraet" value="{{ w.geraet or '' }}" placeholder="z. B. Xiaomi 14T Pro"></div>
-  <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer" value="{{ w.seriennummer or '' }}"></div>
+  <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer" id="f_sn" value="{{ w.seriennummer or '' }}" data-ohne="{{ w.id or '' }}" autocomplete="off"></div>
+  <div class="s12" id="sn-hinweis" hidden></div>
   <div class="s3"><label>Voraussichtlich fertig am</label><input type="date" name="fertig_bis" value="{{ w.fertig_bis or '' }}"></div>
   <div class="s12"><label>Fehler laut Kunde</label><textarea name="fehler">{{ w.fehler or '' }}</textarea></div>
   <div class="s12"><label>Zustand bei Eingang (sichtbare Schäden, Kratzer, Wasserschaden …)</label><textarea name="zustand_eingang" style="min-height:60px">{{ w.zustand_eingang or '' }}</textarea>
@@ -35,6 +36,12 @@
       <span class="klein">Punkte in der Reihenfolge des Musters antippen (1 = oben links, 9 = unten rechts).</span></div>
     <div class="hilfe">Wird verschlüsselt gespeichert, nie auf dem Annahmeschein gedruckt und nach Abschluss des Auftrags automatisch gelöscht. Jede Anzeige wird im Verlauf vermerkt.{% if w.zugang_geloescht_am %} Zuletzt gelöscht am {{ w.zugang_geloescht_am|zeit_sek }}.{% endif %}</div>
   </div>
+  <div class="s3"><label>Auftragsart</label><select name="auftragsart" id="f_auftragsart">{% for k, n in [('reparatur', 'Reparatur'), ('garantie', 'Garantiefall (kostenlos)')] %}<option value="{{ k }}" {{ 'selected' if (w.auftragsart or 'reparatur') == k }}>{{ n }}</option>{% endfor %}</select>
+    <input type="hidden" name="garantie_bezug_id" id="f_garantie_bezug" value="{{ w.garantie_bezug_id or '' }}"></div>
+  <div class="s3"><label>Garantie auf diese Reparatur (Monate)</label><input type="text" name="garantie_monate" value="{{ w.garantie_monate if w.garantie_monate is not none else '' }}" placeholder="Standard: {{ einst_garantie() }}"></div>
+  <div class="s3 nur-garantie"><label>Interne Kosten (€)</label><input type="text" name="interne_kosten" value="{{ betrag_feld(w.interne_kosten) }}" placeholder="Teile, Zeit"></div>
+  <div class="s3 nur-garantie"><label>Notiz interne Kosten</label><input type="text" name="interne_kosten_notiz" value="{{ w.interne_kosten_notiz or '' }}"></div>
+  <div class="s12 klein nur-garantie" id="garantie-bezug-text">{% if w.garantie_bezug_id %}Garantiefall zum Auftrag #{{ w.garantie_bezug_id }} – keine Rechnung beim Erledigen.{% else %}Garantiefall: Bitte über den Hinweis bei der Seriennummer den ursprünglichen Auftrag zuordnen.{% endif %}</div>
   <div class="s8"><label>Ersatzteil (bei „Wartet auf Teil“)</label><input type="text" name="teil_info" value="{{ w.teil_info or '' }}" placeholder="z. B. Display, bestellt bei …"></div>
   <div class="s4"><label>Ersatzteil erwartet am</label><input type="date" name="teil_erwartet" value="{{ w.teil_erwartet or '' }}"></div>
   <div class="s12"><label>Interne Notizen (z. B. bestellte Teile, Rücksprache)</label><textarea name="notizen">{{ w.notizen or '' }}</textarea></div>
