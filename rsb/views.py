@@ -100,9 +100,8 @@ def start():
         "entwuerfe": con.execute("SELECT COUNT(*) FROM dokumente WHERE status='entwurf'").fetchone()[0],
         "umsatz_jahr": umsatz(jahr),
         "umsatz_vorjahr": umsatz(jahr - 1),
-        "offen": con.execute(
-            "SELECT COALESCE(SUM(summe_brutto - bezahlt_betrag),0) FROM dokumente "
-            "WHERE status='festgeschrieben' AND typ='rechnung'").fetchone()[0],
+        "offen": _zlg().summe_offen(con),
+        "ueberfaellig": len(_zlg().offene_posten(con, nur_ueberfaellig=True)),
     }
     zahlen["auftraege"] = {r[0]: r[1] for r in con.execute(
         "SELECT status, COUNT(*) FROM auftraege WHERE status<>'erledigt' OR erledigt_am >= date('now','-30 day') "
@@ -199,6 +198,11 @@ def kunde(kid=None):
                            auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG,
                            leihen=kunden_leihen, heute=date.today().isoformat(),
                            emails=_kunden_emails(con, kid, request.args.get("mails") == "alle"),
+                           offene=_zlg().offene_posten(con, kunde_id=kid) if kid else [],
+                           zahlungen=con.execute(
+                               "SELECT z.*, d.nummer FROM zahlungen z JOIN dokumente d ON d.id=z.dokument_id "
+                               "WHERE d.kunde_id=? ORDER BY z.datum DESC, z.id DESC", (kid,)).fetchall() if kid else [],
+                           zahlarten=_zlg().ZAHLARTEN,
                            email_anzahl=con.execute("SELECT COUNT(*) FROM email_kunden WHERE kunde_id=?",
                                                     (kid,)).fetchone()[0] if kid else 0)
 
@@ -369,13 +373,20 @@ def dokumente():
     if typ == "kva":
         sql += " AND d.typ='kva'"
     elif typ == "rechnung":
-        sql += " AND d.typ IN ('rechnung','storno')"
+        sql += " AND d.typ IN ('rechnung','storno','gutschrift')"
     if q:
         sql += " AND (d.nummer LIKE ? OR d.betreff LIKE ? OR k.firma LIKE ? OR k.nachname LIKE ?)"
         args += [f"%{q}%"] * 4
     sql += " ORDER BY CASE d.status WHEN 'entwurf' THEN 0 ELSE 1 END, d.datum DESC, d.id DESC"
-    return render_template("dokumente.html", dokumente=dbm.get_db().execute(sql, args).fetchall(),
-                           status=status, q=q, typ=typ)
+    con = dbm.get_db()
+    liste = con.execute(sql, args).fetchall()
+    zahlstatus = {d["id"]: _zlg().stand(con, d) for d in liste if d["typ"] == "rechnung" and d["status"] != "entwurf"}
+    return render_template("dokumente.html", dokumente=liste, status=status, q=q, typ=typ, zahlstatus=zahlstatus)
+
+
+def _zlg():
+    from . import zahlungen
+    return zahlungen
 
 
 def _zahlungsziel(einst, kunde):
@@ -430,7 +441,13 @@ def dokument(did):
         storno = con.execute("SELECT id, nummer FROM dokumente WHERE id=?", (d["storniert_durch"],)).fetchone()
         gutschriften = con.execute("SELECT id, nummer, status FROM dokumente WHERE bezug_id=? AND typ='gutschrift'",
                                    (did,)).fetchall()
-        return render_template("dokument_ansicht.html", d=d, snap=snap, kunde=kunde, versand=versand,
+        zahl = None
+        if d["typ"] == "rechnung":
+            from . import mahnwesen as mw
+            zahl = {"stand": _zlg().stand(con, d), "zahlungen": _zlg().liste(con, did), "zahlarten": _zlg().ZAHLARTEN,
+                    "mahnungen": con.execute("SELECT * FROM mahnungen WHERE dokument_id=? ORDER BY id", (did,)).fetchall(),
+                    "naechste": mw.naechste_stufe(con, d, einst), "titel": mw.TITEL, "heute": heute()}
+        return render_template("dokument_ansicht.html", d=d, snap=snap, kunde=kunde, versand=versand, zahl=zahl,
                                bezug=bezug, storno=storno, gutschriften=gutschriften,
                                aufbewahren_bis=logik.aufbewahren_bis(d, einst),
                                aenderungen=dbm.aenderungen_liste(con, "dokument", did))
@@ -699,7 +716,7 @@ EINSTELLUNGS_BEREICHE = {
     "firma": ["firma_name", "firma_zusatz", "inhaber", "strasse", "plz", "ort", "land", "telefon", "email", "web",
               "steuernummer", "ust_idnr", "bank_name", "kontoinhaber", "iban", "bic"],
     "rechnung": ["steuer_modus", "regel_steuersatz", "kleinunternehmer_hinweis", "zahlungsziel_privat",
-                 "zahlungsziel_firma", "zahlungsarten_text", "kva_gueltig_tage", "anzahlung_prozent", "mahngebuehr_cent", "mahnstufen",
+                 "zahlungsziel_firma", "zahlungsarten_text", "kva_gueltig_tage", "anzahlung_prozent",
                  "nummern_format", "praefix_rechnung", "praefix_gutschrift", "praefix_angebot", "praefix_kunde",
                  "leistungsarten", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre"],
     "layout": ["farbe_primaer", "farbe_sekundaer", "schrift", "schriftgroesse", "logo_breite_mm", "logo_position",
@@ -711,6 +728,10 @@ EINSTELLUNGS_BEREICHE = {
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
     "leihgeraete": ["leihbedingungen"],
+    "mahnwesen": ["mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage", "mahngebuehr_cent",
+                  "mahngebuehr_2_cent", "mahn_text_0", "mahn_text_1", "mahn_text_2", "mahn_email_betreff",
+                  "mahn_email_text", "zinsen_aktiv", "basiszinssatz", "zinsen_aufschlag_privat",
+                  "zinsen_aufschlag_firma", "zinsen_ab"],
     "anfragen": ["historie_aktiv", "historie_ordner_eingang", "historie_ordner_gesendet", "historie_zeitraum_tage",
                  "historie_eigene_adressen",
                  "anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_sicherheit", "imap_benutzer",
@@ -718,9 +739,10 @@ EINSTELLUNGS_BEREICHE = {
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {"historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {"zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
+GANZZAHL = {"mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+            "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
@@ -737,7 +759,7 @@ def einstellungen():
         for feld in EINSTELLUNGS_BEREICHE[bereich]:
             if feld in JA_NEIN:
                 neu[feld] = bool(request.form.get(feld))
-            elif feld == "mahngebuehr_cent":
+            elif feld in ("mahngebuehr_cent", "mahngebuehr_2_cent"):
                 neu[feld] = cent_aus_text(_f(feld))
             elif feld in GANZZAHL:
                 neu[feld] = int(zahl_aus_text(_f(feld), 0))
@@ -770,6 +792,20 @@ def einstellungen():
             neu["historie_eigene_adressen"] = request.form.get("historie_eigene_adressen", "").strip()
         if bereich == "anfragen" and request.form.get("imap_passwort"):
             neu["imap_passwort_enc"] = verschluesseln(request.form["imap_passwort"])
+        if bereich == "mahnwesen":
+            if neu["zinsen_ab"] not in ("mahnung1", "faelligkeit"):
+                neu["zinsen_ab"] = "mahnung1"
+            basis = str(neu["basiszinssatz"]).strip().replace(",", ".")
+            if basis:
+                try:
+                    float(basis)
+                except ValueError:
+                    raise EingabeFehler("Bitte den Basiszinssatz als Zahl angeben, z. B. 2,27.")
+            if neu["zinsen_aktiv"] and not basis:
+                raise EingabeFehler("Für Verzugszinsen bitte den aktuellen Basiszinssatz eintragen.")
+            neu["basiszinssatz"] = basis
+            for k in ("mahn_text_0", "mahn_text_1", "mahn_text_2", "mahn_email_text"):
+                neu[k] = request.form.get(k, "").strip()
         if bereich == "vertraege" and neu["abo_modus"] not in ("entwurf", "automatisch"):
             neu["abo_modus"] = "entwurf"
         if bereich == "anfragen" and neu["anfrage_schwelle_spam"] <= neu["anfrage_schwelle_unsicher"]:
@@ -1557,6 +1593,202 @@ def auftrag_fotos_pdf(aid):
     from io import BytesIO
     return send_file(BytesIO(pdf), mimetype="application/pdf", download_name=f"Fotodokumentation_{a['auftragsnr']}.pdf",
                      as_attachment=request.args.get("download") == "1")
+
+
+# ====================================================================== Zahlungen, offene Posten, Mahnwesen, Bank
+
+@bp.route("/dokumente/<int:did>/zahlung", methods=["POST"])
+def zahlung_erfassen(did):
+    con = dbm.get_db()
+    _dokument_laden(did)
+    betrag = cent_aus_text(_f("betrag"))
+    if request.form.get("erstattung"):
+        betrag = -abs(betrag)
+    with dbm.Transaktion(con):
+        _zlg().erfassen(con, did, _f("datum") or heute(), betrag, _f("zahlart"), _f("notiz"))
+    flash("Zahlung erfasst.", "ok")
+    return redirect(url_for("main.dokument", did=did) + "#zahlungen")
+
+
+@bp.route("/zahlungen/<int:zid>/stornieren", methods=["POST"])
+def zahlung_stornieren(zid):
+    con = dbm.get_db()
+    z = con.execute("SELECT * FROM zahlungen WHERE id=?", (zid,)).fetchone() or abort(404)
+    with dbm.Transaktion(con):
+        _zlg().stornieren(con, zid, _f("grund"))
+    flash("Zahlung storniert (bleibt markiert gespeichert).", "ok")
+    return redirect(request.form.get("zurueck") or url_for("main.dokument", did=z["dokument_id"]) + "#zahlungen")
+
+
+@bp.route("/offene-posten")
+def offene_posten():
+    con = dbm.get_db()
+    kunde_id = request.args.get("kunde_id", type=int)
+    nur = request.args.get("filter") == "ueberfaellig"
+    posten = _zlg().offene_posten(con, kunde_id=kunde_id, nur_ueberfaellig=nur)
+    kunden_ids = {p["d"]["kunde_id"] for p in _zlg().offene_posten(con)}
+    kunden_liste = [k for k in con.execute("SELECT * FROM kunden ORDER BY COALESCE(NULLIF(firma,''), nachname)")
+                    if k["id"] in kunden_ids]
+    return render_template("offene_posten.html", posten=posten, kunden=kunden_liste, kunde_id=kunde_id, nur=nur,
+                           summe=sum(p["s"]["offen"] for p in posten),
+                           summe_gebuehren=sum(p["s"]["gebuehren_offen"] for p in posten),
+                           summe_ueberfaellig=sum(p["s"]["offen"] for p in posten if p["s"]["status"] == "ueberfaellig"))
+
+
+@bp.route("/mahnwesen")
+def mahnwesen():
+    from . import mahnwesen as mw
+    con = dbm.get_db()
+    letzte = con.execute("SELECT m.*, d.nummer AS rechnung_nummer, d.id AS did, k.firma, k.vorname, k.nachname, "
+                         "k.typ AS ktyp FROM mahnungen m JOIN dokumente d ON d.id=m.dokument_id "
+                         "LEFT JOIN kunden k ON k.id=d.kunde_id ORDER BY m.id DESC LIMIT 50").fetchall()
+    return render_template("mahnwesen.html", vorschlaege=mw.vorschlaege(con), ausgeschoepft=mw.ausgeschoepft(con),
+                           letzte=letzte, titel=mw.TITEL)
+
+
+@bp.route("/mahnwesen/erstellen", methods=["POST"])
+def mahnungen_erstellen():
+    from . import mahnwesen as mw
+    con = dbm.get_db()
+    erstellt, fehler = [], []
+    for wert in request.form.getlist("auswahl"):
+        did, stufe = (int(x) for x in wert.split(":"))
+        try:
+            erstellt.append(mw.erstellen(con, did, stufe, daten_dir()))
+        except EingabeFehler as e:
+            fehler.append(str(e))
+    if erstellt:
+        flash(f"{len(erstellt)} Schreiben erstellt und archiviert. Jetzt per E-Mail senden oder ausdrucken.", "ok")
+    for f in fehler:
+        flash(f, "fehler")
+    if len(erstellt) == 1 and request.form.get("einzeln"):
+        return redirect(url_for("main.mahnung", mid=erstellt[0]))
+    return redirect(url_for("main.mahnwesen"))
+
+
+def _mahnung_laden(mid):
+    m = dbm.get_db().execute(
+        "SELECT m.*, d.nummer AS rechnung_nummer, d.kunde_id, k.email AS kemail FROM mahnungen m "
+        "JOIN dokumente d ON d.id=m.dokument_id LEFT JOIN kunden k ON k.id=d.kunde_id WHERE m.id=?", (mid,)).fetchone()
+    if not m:
+        abort(404)
+    return m
+
+
+@bp.route("/mahnungen/<int:mid>")
+def mahnung(mid):
+    from . import mahnwesen as mw
+    m = _mahnung_laden(mid)
+    return render_template("mahnung.html", m=m, titel=mw.TITEL[m["stufe"]])
+
+
+@bp.route("/mahnungen/<int:mid>/pdf")
+def mahnung_pdf(mid):
+    import hashlib
+    m = _mahnung_laden(mid)
+    pfad = Path(daten_dir()) / m["pdf_pfad"]
+    if not pfad.is_file() or hashlib.sha256(pfad.read_bytes()).hexdigest() != m["pdf_sha256"]:
+        return render_template("pdf_fehler.html", d={"nummer": m["nummer"], "pdf_pfad": m["pdf_pfad"],
+                                                     "pdf_sha256": m["pdf_sha256"]}, fehlt=not pfad.is_file()), 409
+    return send_file(pfad, mimetype="application/pdf", download_name=f"{m['nummer']}.pdf",
+                     as_attachment=request.args.get("download") == "1")
+
+
+@bp.route("/mahnungen/<int:mid>/email", methods=["GET", "POST"])
+def mahnung_email(mid):
+    from . import mahnwesen as mw
+    con = dbm.get_db()
+    m = _mahnung_laden(mid)
+    if request.method == "POST":
+        an = _f("an")
+        if "@" not in an:
+            raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
+        pdf = (Path(daten_dir()) / m["pdf_pfad"]).read_bytes()
+        try:
+            hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""), pdf, f"{m['nummer']}.pdf",
+                             m["dokument_id"])
+        except MailFehler as e:
+            flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+            return redirect(url_for("main.mahnung_email", mid=mid))
+        with dbm.Transaktion(con):
+            mw.versand_vermerken(con, mid, "email")
+        flash(f"{mw.TITEL[m['stufe']]} an {an} gesendet.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
+        return redirect(url_for("main.mahnung", mid=mid))
+    betreff, text, an = mw.email_texte(con, m)
+    return render_template("mahnung_email.html", m=m, titel=mw.TITEL[m["stufe"]], an=an, betreff=betreff, text=text,
+                           smtp_ok=bool(dbm.einstellung("smtp_host")))
+
+
+@bp.route("/mahnungen/<int:mid>/versendet", methods=["POST"])
+def mahnung_versendet(mid):
+    from . import mahnwesen as mw
+    con = dbm.get_db()
+    _mahnung_laden(mid)
+    with dbm.Transaktion(con):
+        mw.versand_vermerken(con, mid, "pdf")
+    flash("Als per Post/ausgedruckt versendet vermerkt.", "ok")
+    return redirect(url_for("main.mahnung", mid=mid))
+
+
+@bp.route("/mahnungen/<int:mid>/erlassen", methods=["POST"])
+def mahnung_erlassen(mid):
+    from . import mahnwesen as mw
+    con = dbm.get_db()
+    m = _mahnung_laden(mid)
+    with dbm.Transaktion(con):
+        mw.gebuehren_erlassen(con, mid, _f("grund"))
+    flash("Gebühren/Zinsen dieser Mahnung erlassen.", "ok")
+    return redirect(url_for("main.dokument", did=m["dokument_id"]) + "#zahlungen")
+
+
+@bp.route("/bank", methods=["GET", "POST"])
+def bank():
+    from . import bankabgleich as ba
+    con = dbm.get_db()
+    if request.method == "POST":
+        datei = request.files.get("datei")
+        if not datei or not datei.filename:
+            raise EingabeFehler("Bitte eine Datei auswählen.")
+        with dbm.Transaktion(con):
+            e = ba.importieren(con, datei.filename, datei.read())
+        flash(f"Kontoauszug ({e['format']}) eingelesen: {e['neu']} neue Umsätze"
+              + (f", {e['doppelt']} bereits bekannte übersprungen" if e["doppelt"] else "") + ".", "ok")
+        return redirect(url_for("main.bank"))
+    ansicht = request.args.get("ansicht", "offen")
+    sql = "SELECT * FROM bank_umsaetze WHERE "
+    sql += {"offen": "status='offen'", "zugeordnet": "status='zugeordnet'", "ignoriert": "status='ignoriert'"}.get(
+        ansicht, "status='offen'")
+    umsaetze = con.execute(sql + " ORDER BY buchungstag DESC, id DESC LIMIT 300").fetchall()
+    offene = _zlg().offene_posten(con)
+    vorschlaege = {u["id"]: ba.vorschlag(con, u, offene) for u in umsaetze if u["status"] == "offen"}
+    importe = con.execute("SELECT * FROM bank_importe ORDER BY id DESC LIMIT 10").fetchall()
+    zahl = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM bank_umsaetze GROUP BY status")}
+    return render_template("bank.html", umsaetze=umsaetze, vorschlaege=vorschlaege, offene=offene, importe=importe,
+                           ansicht=ansicht, zahl=zahl)
+
+
+@bp.route("/bank/<int:uid>/zuordnen", methods=["POST"])
+def bank_zuordnen(uid):
+    from . import bankabgleich as ba
+    con = dbm.get_db()
+    did = request.form.get("dokument_id", type=int)
+    if not did:
+        raise EingabeFehler("Bitte eine Rechnung auswählen.")
+    with dbm.Transaktion(con):
+        ba.zuordnen(con, uid, did)
+    flash("Zahlung zugeordnet und bei der Rechnung erfasst.", "ok")
+    return redirect(url_for("main.bank"))
+
+
+@bp.route("/bank/<int:uid>/ignorieren", methods=["POST"])
+def bank_ignorieren(uid):
+    from . import bankabgleich as ba
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        ba.ignorieren(con, uid, wieder_oeffnen=bool(request.form.get("oeffnen")))
+    return redirect(url_for("main.bank", ansicht=request.form.get("ansicht", "offen")))
 
 
 # ====================================================================== Leihgeräte

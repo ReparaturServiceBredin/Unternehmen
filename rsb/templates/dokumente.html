@@ -23,17 +23,18 @@
 </div>
 <div class="karte">
 <table class="liste">
-  <tr><th>Nummer</th><th>Art</th><th>Datum</th><th>Kunde</th><th>Betreff</th><th>Status</th><th>Versand</th><th class="zahl">Betrag</th></tr>
+  <tr><th>Nummer</th><th>Art</th><th>Datum</th><th>Kunde</th><th>Betreff</th><th>Status</th><th>Zahlung</th><th>Versand</th><th class="zahl">Betrag</th></tr>
   {% for d in dokumente %}
   <tr>
     <td><a href="{{ url_for('main.dokument', did=d.id) }}"><b>{{ d.nummer or 'Entwurf' }}</b></a></td>
-    <td>{{ {'rechnung':'Rechnung','storno':'Storno','kva':'KVA'}.get(d.typ, d.typ) }}</td>
+    <td>{{ {'rechnung':'Rechnung','storno':'Storno','kva':'KVA','gutschrift':'Gutschrift'}.get(d.typ, d.typ) }}</td>
     <td>{{ d.datum|datum }}</td><td>{{ dokname(d) }}</td><td>{{ d.betreff or '' }}</td>
     <td>{{ status(d.status) }}</td>
+    <td>{% set zs = zahlstatus.get(d.id) %}{% if zs %}<span class="marke-status zs-{{ zs.status }}">{{ zs.status_text }}</span>{% if zs.mahnstufe is not none %} <span class="klein">M{{ zs.mahnstufe }}</span>{% endif %}{% endif %}</td>
     <td class="klein">{{ d.versendet_am|zeit if d.versendet_am }}</td>
     <td class="zahl">{{ d.summe_brutto|euro }}</td>
   </tr>
-  {% else %}<tr><td colspan="8" class="klein">Keine Dokumente gefunden.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="9" class="klein">Keine Dokumente gefunden.</td></tr>{% endfor %}
 </table>
 </div>
 {% endblock %}

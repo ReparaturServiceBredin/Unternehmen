@@ -301,8 +301,8 @@ def pdf_erzeugen(snap, daten_dir=None, entwurf=False):
 
 
 def _infoblock(snap):
-    nr_label = {"rechnung": "Rechnungsnummer", "storno": "Stornonummer",
-                "kva": "Angebotsnummer"}.get(snap["typ"], "Dokumentnummer")
+    nr_label = {"rechnung": "Rechnungsnummer", "storno": "Stornonummer", "gutschrift": "Gutschriftnummer",
+                "kva": "Angebotsnummer", "mahnung": "Mahnnummer"}.get(snap["typ"], "Dokumentnummer")
     info = [(nr_label, snap.get("nummer") or "(Entwurf)"),
             ("Datum", datum_de(snap["datum"]))]
     if snap.get("kunde", {}).get("kundennr"):
@@ -315,7 +315,7 @@ def _infoblock(snap):
             info.append(("Leistungsdatum", datum_de(snap["leistungsdatum"])))
     if snap.get("bezug"):
         info.append(("Zu Rechnung", snap["bezug"]["nummer"] or ""))
-    if snap["typ"] == "rechnung" and snap.get("faellig_am"):
+    if snap["typ"] in ("rechnung", "mahnung") and snap.get("faellig_am"):
         info.append(("Zahlbar bis", datum_de(snap["faellig_am"])))
     if snap["typ"] == "kva" and snap.get("faellig_am"):
         info.append(("Gültig bis", datum_de(snap["faellig_am"])))
@@ -415,10 +415,11 @@ def _zahlungsblock(snap, st, primaer):
     """Bankverbindung und GiroCode (QR-Code zum Bezahlen)."""
     firma = snap["firma"]
     betrag = snap["summen"]["brutto"]
-    if snap["typ"] != "rechnung" or betrag <= 0 or not firma.get("iban"):
+    if snap["typ"] not in ("rechnung", "mahnung") or betrag <= 0 or not firma.get("iban"):
         return None
+    zweck = snap.get("verwendungszweck") or snap.get("nummer") or ""
     links = (f"<b>Zahlungsinformationen</b><br/>{_absatz(snap.get('zahlungsarten_text'))}<br/>"
-             f"Betrag: <b>{euro(betrag)}</b> · Verwendungszweck: <b>{escape(snap.get('nummer') or '')}</b>")
+             f"Betrag: <b>{euro(betrag)}</b> · Verwendungszweck: <b>{escape(zweck)}</b>")
     rechts = (f"Empfänger: {escape(firma.get('kontoinhaber') or firma.get('firma_name', ''))}<br/>"
               f"IBAN: {escape(iban_format(firma['iban']))}<br/>"
               + (f"BIC: {escape(firma['bic'])}" if firma.get("bic") else "")
@@ -430,7 +431,7 @@ def _zahlungsblock(snap, st, primaer):
     breiten = [rest * 0.52, rest * 0.48]
     if mit_qr:
         daten = girocode_daten(firma.get("kontoinhaber") or firma.get("firma_name"), firma["iban"], firma.get("bic"),
-                               betrag, snap.get("nummer") or "")
+                               betrag, zweck)
         qr = QrCodeWidget(daten, barLevel="M")
         b = qr.getBounds()
         groesse = qr_b - 4 * mm

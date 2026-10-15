@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.12.0 | 15.10.2026 | Zahlungen, offene Posten, Bankabgleich, Mahnwesen |
 | 0.11.0 | 15.10.2026 | GoBD-Grundlagen: Gutschrift, Pflichtangaben, Änderungsprotokoll, Aufbewahrung |
 | 0.10.0 | 15.10.2026 | Automatische E-Mail-Historie je Kunde |
 | 0.9.1 | 15.10.2026 | IMAP-Abruf auch mit STARTTLS (Port 143), Verbindungstest |
@@ -30,6 +31,48 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.12.0 – 15.10.2026
+Zahlungseingänge, offene Posten, Bankabgleich und Mahnwesen (Ausbaustufe 2 von 10).
+
+### Neu
+- **Zahlungsstatus je Rechnung:** offen, teilweise bezahlt, bezahlt, überfällig (dazu storniert, Guthaben).
+  Sichtbar in der Rechnung, in der Rechnungsliste, bei den offenen Posten und beim Kunden. Gutschriften mindern den
+  offenen Betrag.
+- **Zahlung erfassen** in der Rechnung: Datum, Betrag, Zahlungsart (Überweisung, Bar, EC/Karte, PayPal,
+  Verrechnung) und Notiz.
+  - Teilzahlungen und Erstattungen sind möglich.
+  - Zahlungen lassen sich nicht löschen, nur mit Begründung stornieren. Sie bleiben sichtbar und stehen im
+    Änderungsprotokoll.
+- **Offene Posten** (Menü *Verkauf*): Summe offen, davon überfällig, offene Mahngebühren, Filter „nur überfällige“
+  und nach Kunde. Im Menü steht ein Zähler überfälliger Rechnungen.
+- **Bankabgleich:**
+  - Kontoauszug als CSV (Sparkasse, Volksbank, N26, DKB, ING, Postbank, Commerzbank …, Spalten werden automatisch
+    erkannt) oder CAMT.053 (XML/ZIP) einlesen.
+  - Doppelte Umsätze werden erkannt.
+  - Zuordnungsvorschlag über Rechnungs- oder Mahnnummer im Verwendungszweck, sonst über Betrag und Name.
+  - Jede Zuordnung bestätigen Sie selbst. Wird die Zahlung storniert, ist der Umsatz wieder frei.
+- **Mahnwesen:**
+  - Stufen: Zahlungserinnerung (ohne Gebühr), 1. und 2. Mahnung, mit einstellbaren Fristen, Gebühren und Texten
+    (*Einstellungen → Mahnwesen*).
+  - Vorschlagsliste fälliger Schreiben; Stufen können nicht übersprungen werden.
+  - Jedes Schreiben bekommt eine Nummer (MA-…) und wird wie eine Rechnung als PDF und Daten mit Prüfsumme
+    unveränderbar archiviert (Datenprüfung inklusive).
+  - Versand per E-Mail (Versandprotokoll und E-Mail-Historie des Kunden) oder ausdrucken und als „per Post
+    versendet“ vermerken.
+  - Gebühren oder Zinsen einer Mahnung können mit Begründung erlassen werden.
+  - Nach der 2. Mahnung erscheint ein Hinweis auf weitere Schritte.
+- **Verzugszinsen (optional):** Basiszinssatz einstellbar, Aufschlag für Privat- und Geschäftskunden getrennt
+  (5 bzw. 9 Prozentpunkte). Beginn wahlweise ab der 1. Mahnung (Standard) oder ab Fälligkeit.
+- **Startseite:** „Noch nicht bezahlt“ berücksichtigt Zahlungen und Gutschriften und zeigt die Zahl überfälliger
+  Rechnungen.
+
+### Technik
+- Neue Tabellen `zahlungen`, `bank_importe`, `bank_umsaetze` und `mahnungen`, alle mit Datenbank-Schutz gegen
+  Ändern und Löschen. Vorher automatische Sicherung `vor_update_….db`.
+- Neue Module `rsb/zahlungen.py`, `rsb/bankabgleich.py` und `rsb/mahnwesen.py`. 130 automatische Tests.
 
 ---
 

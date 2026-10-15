@@ -10,7 +10,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.11.0"
+VERSION_NUMMER = "0.12.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -88,12 +88,18 @@ def create_app(daten_dir=None, testing=False):
             leihen_ueberfaellig = dbm.get_db().execute(
                 "SELECT COUNT(*) FROM leihen WHERE rueckgabe_am IS NULL AND storniert_am IS NULL "
                 "AND rueckgabe_geplant < date('now', 'localtime')").fetchone()[0]
+            posten_ueberfaellig = dbm.get_db().execute(
+                "SELECT COUNT(*) FROM dokumente d WHERE typ='rechnung' AND status='festgeschrieben' "
+                "AND faellig_am < date('now', 'localtime') AND summe_brutto + COALESCE((SELECT SUM(g.summe_brutto) "
+                "FROM dokumente g WHERE g.bezug_id=d.id AND g.typ='gutschrift' AND g.status<>'entwurf'), 0) "
+                "> bezahlt_betrag").fetchone()[0]
         except Exception:
-            einst, offene_anfragen, leihen_ueberfaellig = {}, 0, 0
+            einst, offene_anfragen, leihen_ueberfaellig, posten_ueberfaellig = {}, 0, 0, 0
         from .update import ist_exe, ist_neuer
         update_da = einst.get("update_verfuegbar") if ist_neuer(einst.get("update_verfuegbar"), VERSION_NUMMER) \
             else None
-        return {"einst": einst, "offene_anfragen": offene_anfragen, "leihen_ueberfaellig": leihen_ueberfaellig, "update_da": update_da, "ist_exe": ist_exe()}
+        return {"einst": einst, "offene_anfragen": offene_anfragen, "leihen_ueberfaellig": leihen_ueberfaellig,
+                "posten_ueberfaellig": posten_ueberfaellig, "update_da": update_da, "ist_exe": ist_exe()}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

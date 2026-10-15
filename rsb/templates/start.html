@@ -28,7 +28,7 @@
 <div class="raster">
   <div class="kachel"><div class="label">Umsatz {{ jahr }}</div><div class="wert">{{ zahlen.umsatz_jahr|euro }}</div></div>
   <div class="kachel"><div class="label">Umsatz {{ jahr - 1 }}</div><div class="wert">{{ zahlen.umsatz_vorjahr|euro }}</div></div>
-  <div class="kachel"><div class="label">Noch nicht bezahlt</div><div class="wert">{{ zahlen.offen|euro }}</div><div class="klein">Zahlungseingänge erfassen folgt in Etappe 3</div></div>
+  <a class="kachel kachel-link" href="{{ url_for('main.offene_posten') }}"><div class="label">Noch nicht bezahlt</div><div class="wert">{{ zahlen.offen|euro }}</div><div class="klein">{{ zahlen.ueberfaellig }} Rechnung(en) überfällig</div></a>
   <div class="kachel"><div class="label">Kunden / Entwürfe</div><div class="wert">{{ zahlen.kunden }} / {{ zahlen.entwuerfe }}</div></div>
 </div>
 {% if einst.steuer_modus == 'kleinunternehmer' %}

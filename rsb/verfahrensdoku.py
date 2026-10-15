@@ -85,7 +85,18 @@ def inhalt(con, daten_dir, version):
                 "Protokollkette.",
             ]),
         ]),
-        ("5. Aufbewahrung und Löschung", [
+        ("5. Zahlungen, offene Posten und Mahnwesen", [
+            ("liste", [
+                "Zahlungseingänge werden je Rechnung mit Datum, Betrag, Zahlungsart und Notiz erfasst (auch "
+                "Teilzahlungen). Zahlungen sind nicht löschbar; Korrekturen nur durch Stornierung mit Begründung.",
+                "Bankabgleich: Kontoauszüge (CSV oder CAMT.053) werden eingelesen, doppelte Umsätze automatisch "
+                "erkannt. Das Programm schlägt Zuordnungen vor (Rechnungsnummer im Verwendungszweck, Betrag, Name); "
+                "jede Zuordnung bestätigt der Inhaber. Importierte Umsätze sind unveränderbar.",
+                "Mahnwesen: Zahlungserinnerung, 1. und 2. Mahnung mit eigenem Nummernkreis; jedes Schreiben wird wie "
+                "eine Rechnung als PDF und Daten mit Prüfsumme archiviert und ist nicht änderbar.",
+            ]),
+        ]),
+        ("6. Aufbewahrung und Löschung", [
             f"Aufbewahrungsfristen: Rechnungen/Buchungsbelege {e.get('aufbewahrung_belege_jahre')} Jahre, Handels- "
             f"und Geschäftsbriefe (z. B. Kostenvoranschläge, Leihverträge, versandte Belege) "
             f"{e.get('aufbewahrung_briefe_jahre')} Jahre; Fristbeginn mit Ende des Kalenderjahres.",
@@ -95,7 +106,7 @@ def inhalt(con, daten_dir, version):
             "wird ohne personenbezogene Daten protokolliert.",
             "Eingehende Belege in Papierform: " + ERGAENZEN + " (Ablage, ggf. Scan-Verfahren).",
         ]),
-        ("6. Datensicherung", [
+        ("7. Datensicherung", [
             ("liste", [
                 "Automatische Sicherung: " + ("eingeschaltet, täglich beim Start" if e.get("backup_auto")
                                               else "ausgeschaltet – bitte einschalten") + "; ZIP-Archiv mit Datenbank, "
@@ -109,11 +120,11 @@ def inhalt(con, daten_dir, version):
                 "im Versionsprotokoll beschrieben.",
             ]),
         ]),
-        ("7. Internes Kontrollsystem", [
+        ("8. Internes Kontrollsystem", [
             ("liste", [
                 "Monatlich „Datenprüfung“ ausführen und Ergebnis kontrollieren. " + ERGAENZEN,
                 "Sicherungen regelmäßig auf Vollständigkeit prüfen. " + ERGAENZEN,
-                "Zahlungseingänge mit offenen Rechnungen abgleichen. " + ERGAENZEN,
+                "Wöchentlich Kontoauszug einlesen und Zahlungen zuordnen, Mahnvorschläge prüfen. " + ERGAENZEN,
             ]),
             f"Stand dieser Dokumentation: {datum_de(datetime.now().date().isoformat())}, erzeugt vom Programm. Bitte "
             "ausdrucken, ergänzen, unterschreiben und bei jeder wesentlichen Änderung neu erzeugen.",

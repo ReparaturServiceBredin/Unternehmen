@@ -389,3 +389,25 @@ wegen Aufbewahrungspflicht bis wann behalten wird. Bei Aufbewahrungspflicht werd
 
 **Verfahrensdokumentation:** Menü *Verwaltung → Verfahrensdoku*. Ausdrucken, die markierten Stellen ergänzen und mit
 dem Steuerberater durchgehen.
+
+## 17. Zahlungen, offene Posten, Bankabgleich und Mahnwesen
+
+**Zahlung erfassen:** In der Rechnung unter „Zahlungen“ auf **„+ Zahlung erfassen“** klicken: Datum, Betrag (der offene
+Betrag ist vorbelegt), Zahlungsart. Teilzahlungen gehen genauso. Eine falsch erfasste Zahlung stornieren Sie mit
+Begründung; gelöscht wird sie nie.
+
+**Offene Posten:** Menü *Verkauf → Offene Posten*. Dort sehen Sie, was offen und was überfällig ist, gefiltert nach
+Kunde. Beim Kunden stehen offene Beträge und alle Zahlungen.
+
+**Bankabgleich:** Im Online-Banking die Umsätze als CSV exportieren (bei der Sparkasse „CSV-CAMT“) oder als CAMT.053.
+Unter *Verkauf → Bankabgleich* einlesen. Zu jedem Eingang schlägt das Programm eine Rechnung vor:
+- grün: Rechnungsnummer im Verwendungszweck gefunden
+- gelb: nur Betrag (und Name) passen
+
+Prüfen und **„Bestätigen“** klicken. Umsätze ohne Rechnung (z. B. private Eingänge) auf „Ignorieren“ setzen.
+Überlappende Auszüge sind kein Problem, nichts wird doppelt übernommen.
+
+**Mahnwesen:** Unter *Verkauf → Mahnwesen* stehen die fälligen Schreiben. Vorher den Kontoauszug einlesen, dann
+auswählen und **„Ausgewählte Schreiben erstellen“**. Jedes Schreiben öffnen und **„Per E-Mail senden“** oder ausdrucken
+und „per Post versendet“ anklicken. Fristen, Gebühren, Texte und optionale Verzugszinsen stellen Sie unter
+*Einstellungen → Mahnwesen* ein. Den aktuellen Basiszinssatz finden Sie bei der Deutschen Bundesbank.

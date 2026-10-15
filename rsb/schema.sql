@@ -645,3 +645,123 @@ BEFORE DELETE ON feldaenderungen
 BEGIN
     SELECT RAISE(ABORT, 'Das Änderungsprotokoll kann nicht gelöscht werden.');
 END;
+
+-- ====================================================================== Zahlungen, Bankabgleich, Mahnwesen
+-- Zahlungseingänge zu Rechnungen. Nicht löschbar, nur mit Begründung stornierbar.
+CREATE TABLE IF NOT EXISTS zahlungen (
+    id             INTEGER PRIMARY KEY,
+    dokument_id    INTEGER NOT NULL REFERENCES dokumente(id),
+    datum          TEXT NOT NULL,                     -- Tag des Zahlungseingangs
+    betrag         INTEGER NOT NULL,                  -- Cent; negativ = Erstattung an den Kunden
+    zahlart        TEXT NOT NULL CHECK (zahlart IN ('ueberweisung', 'bar', 'karte', 'paypal', 'verrechnung')),
+    notiz          TEXT,
+    bank_umsatz_id INTEGER,
+    erfasst_am     TEXT NOT NULL,                     -- Europe/Berlin mit Sekunden
+    benutzer       TEXT,
+    storniert_am   TEXT,
+    storniert_von  TEXT,
+    storno_grund   TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_zahlungen_dok ON zahlungen(dokument_id);
+
+CREATE TRIGGER IF NOT EXISTS zahlung_schutz_update
+BEFORE UPDATE ON zahlungen
+WHEN NEW.dokument_id IS NOT OLD.dokument_id OR NEW.datum IS NOT OLD.datum OR NEW.betrag IS NOT OLD.betrag
+  OR NEW.zahlart IS NOT OLD.zahlart OR NEW.notiz IS NOT OLD.notiz OR NEW.bank_umsatz_id IS NOT OLD.bank_umsatz_id
+  OR NEW.erfasst_am IS NOT OLD.erfasst_am OR NEW.benutzer IS NOT OLD.benutzer
+  OR (OLD.storniert_am IS NOT NULL AND (NEW.storniert_am IS NOT OLD.storniert_am OR NEW.storno_grund IS NOT OLD.storno_grund))
+BEGIN
+    SELECT RAISE(ABORT, 'Zahlungen können nicht geändert werden – bitte mit Begründung stornieren und neu erfassen.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS zahlung_schutz_delete
+BEFORE DELETE ON zahlungen
+BEGIN
+    SELECT RAISE(ABORT, 'Zahlungen können nicht gelöscht werden – bitte mit Begründung stornieren.');
+END;
+
+-- Importierte Kontoauszüge (CSV / CAMT.053)
+CREATE TABLE IF NOT EXISTS bank_importe (
+    id            INTEGER PRIMARY KEY,
+    dateiname     TEXT,
+    format        TEXT,
+    sha256        TEXT NOT NULL,
+    importiert_am TEXT NOT NULL,
+    benutzer      TEXT,
+    anzahl        INTEGER NOT NULL DEFAULT 0,      -- neue Umsätze
+    doppelt       INTEGER NOT NULL DEFAULT 0       -- bereits bekannte Umsätze (übersprungen)
+);
+
+CREATE TABLE IF NOT EXISTS bank_umsaetze (
+    id                 INTEGER PRIMARY KEY,
+    import_id          INTEGER NOT NULL REFERENCES bank_importe(id),
+    kennung            TEXT UNIQUE NOT NULL,      -- verhindert doppelte Umsätze bei überlappenden Auszügen
+    buchungstag        TEXT NOT NULL,
+    valuta             TEXT,
+    betrag             INTEGER NOT NULL,          -- Cent; positiv = Eingang, negativ = Ausgang
+    name               TEXT,
+    iban               TEXT,
+    verwendungszweck   TEXT,
+    status             TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'zugeordnet', 'ignoriert')),
+    zahlung_id         INTEGER REFERENCES zahlungen(id),
+    bearbeitet_am      TEXT,
+    bearbeitet_von     TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_bank_status ON bank_umsaetze(status);
+
+CREATE TRIGGER IF NOT EXISTS bank_umsatz_schutz_update
+BEFORE UPDATE ON bank_umsaetze
+WHEN NEW.kennung IS NOT OLD.kennung OR NEW.buchungstag IS NOT OLD.buchungstag OR NEW.betrag IS NOT OLD.betrag
+  OR NEW.verwendungszweck IS NOT OLD.verwendungszweck OR NEW.name IS NOT OLD.name OR NEW.iban IS NOT OLD.iban
+BEGIN
+    SELECT RAISE(ABORT, 'Importierte Bankumsätze können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS bank_umsatz_schutz_delete
+BEFORE DELETE ON bank_umsaetze
+BEGIN
+    SELECT RAISE(ABORT, 'Importierte Bankumsätze können nicht gelöscht werden.');
+END;
+
+-- Zahlungserinnerungen und Mahnungen (Stufe 0 = Zahlungserinnerung, 1 = 1. Mahnung, 2 = 2. Mahnung)
+CREATE TABLE IF NOT EXISTS mahnungen (
+    id              INTEGER PRIMARY KEY,
+    dokument_id     INTEGER NOT NULL REFERENCES dokumente(id),
+    stufe           INTEGER NOT NULL CHECK (stufe IN (0, 1, 2)),
+    nummer          TEXT UNIQUE NOT NULL,
+    datum           TEXT NOT NULL,
+    frist_bis       TEXT NOT NULL,
+    offen_rechnung  INTEGER NOT NULL,               -- offener Rechnungsbetrag zum Mahnzeitpunkt (Cent)
+    gebuehr         INTEGER NOT NULL DEFAULT 0,     -- Gebühr dieser Mahnung
+    gebuehren_vorher INTEGER NOT NULL DEFAULT 0,    -- noch offene Gebühren früherer Mahnungen
+    zinsen          INTEGER NOT NULL DEFAULT 0,     -- Verzugszinsen bis zum Mahndatum
+    gesamt          INTEGER NOT NULL,
+    snapshot_json   TEXT NOT NULL,
+    pdf_pfad        TEXT NOT NULL,
+    pdf_sha256      TEXT NOT NULL,
+    snapshot_sha256 TEXT NOT NULL,
+    erstellt_am     TEXT NOT NULL,
+    benutzer        TEXT,
+    versendet_am    TEXT,
+    versandart      TEXT,                           -- email / pdf (gedruckt)
+    erledigt_am     TEXT                            -- z. B. Gebühren erlassen
+);
+CREATE INDEX IF NOT EXISTS ix_mahnungen_dok ON mahnungen(dokument_id);
+
+CREATE TRIGGER IF NOT EXISTS mahnung_schutz_update
+BEFORE UPDATE ON mahnungen
+WHEN NEW.dokument_id IS NOT OLD.dokument_id OR NEW.stufe IS NOT OLD.stufe OR NEW.nummer IS NOT OLD.nummer
+  OR NEW.datum IS NOT OLD.datum OR NEW.frist_bis IS NOT OLD.frist_bis OR NEW.offen_rechnung IS NOT OLD.offen_rechnung
+  OR NEW.gebuehr IS NOT OLD.gebuehr OR NEW.gebuehren_vorher IS NOT OLD.gebuehren_vorher OR NEW.zinsen IS NOT OLD.zinsen
+  OR NEW.gesamt IS NOT OLD.gesamt OR NEW.snapshot_json IS NOT OLD.snapshot_json OR NEW.pdf_pfad IS NOT OLD.pdf_pfad
+  OR NEW.pdf_sha256 IS NOT OLD.pdf_sha256 OR NEW.snapshot_sha256 IS NOT OLD.snapshot_sha256
+  OR NEW.erstellt_am IS NOT OLD.erstellt_am
+BEGIN
+    SELECT RAISE(ABORT, 'Mahnungen sind archiviert und können nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS mahnung_schutz_delete
+BEFORE DELETE ON mahnungen
+BEGIN
+    SELECT RAISE(ABORT, 'Mahnungen sind archiviert und können nicht gelöscht werden.');
+END;

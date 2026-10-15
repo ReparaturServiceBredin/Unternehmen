@@ -37,8 +37,35 @@ STANDARD_EINSTELLUNGEN = {
     "zahlungsziel_firma": 30,
     "zahlungsarten_text": "Zahlbar per Überweisung oder in bar bei Abholung.",
     "anzahlung_prozent": 50,
-    "mahngebuehr_cent": 395,
+    "mahngebuehr_cent": 395,                # Gebühr 1. Mahnung (alt: für alle Mahnungen)
     "mahnstufen": 2,
+    # Mahnwesen: Tage nach Fälligkeit bzw. nach Ablauf der vorigen Frist, Zahlungsfrist je Schreiben, Gebühren
+    "mahn_erinnerung_tage": 7,              # Zahlungserinnerung … Tage nach Fälligkeit
+    "mahn_stufe1_tage": 7,                  # 1. Mahnung … Tage nach Ablauf der Frist der Erinnerung
+    "mahn_stufe2_tage": 7,                  # 2. Mahnung … Tage nach Ablauf der Frist der 1. Mahnung
+    "mahn_frist_tage": 10,                  # neue Zahlungsfrist in jedem Schreiben
+    "mahngebuehr_2_cent": 395,              # Gebühr 2. Mahnung (Zahlungserinnerung immer ohne Gebühr)
+    "mahn_text_0": ("{anrede_brief}\n\nsicher haben Sie es im Alltag übersehen: Die Rechnung {rechnung_nummer} vom "
+                    "{rechnung_datum} über {rechnung_betrag} war am {faellig_am} fällig. Offen sind noch "
+                    "{offen_rechnung}.\n\nBitte überweisen Sie den Betrag bis zum {frist_bis}. Sollten Sie inzwischen "
+                    "gezahlt haben, betrachten Sie dieses Schreiben bitte als gegenstandslos.\n\nMit freundlichen "
+                    "Grüßen\n{inhaber}"),
+    "mahn_text_1": ("{anrede_brief}\n\nauf unsere Zahlungserinnerung haben wir leider keinen Zahlungseingang "
+                    "festgestellt. Bitte überweisen Sie den offenen Gesamtbetrag von {gesamt} bis spätestens "
+                    "{frist_bis}.\n\nSollten Sie inzwischen gezahlt haben, betrachten Sie dieses Schreiben bitte als "
+                    "gegenstandslos.\n\nMit freundlichen Grüßen\n{inhaber}"),
+    "mahn_text_2": ("{anrede_brief}\n\ntrotz Erinnerung und Mahnung ist die Rechnung {rechnung_nummer} weiterhin "
+                    "offen. Bitte überweisen Sie den Gesamtbetrag von {gesamt} bis spätestens {frist_bis}. Nach "
+                    "Ablauf dieser Frist behalten wir uns weitere Schritte vor.\n\nMit freundlichen Grüßen\n{inhaber}"),
+    "mahn_email_betreff": "{titel} zu Rechnung {rechnung_nummer} – {firma_name}",
+    "mahn_email_text": ("{anrede_brief}\n\nanbei erhalten Sie unsere {titel} zur Rechnung {rechnung_nummer}. "
+                        "Offen sind {gesamt}, bitte bis {frist_bis}.\n\nMit freundlichen Grüßen\n{inhaber}\n{firma_name}"),
+    # Verzugszinsen (§ 288 BGB): Basiszinssatz + 5 (Verbraucher) bzw. 9 Prozentpunkte (Unternehmen)
+    "zinsen_aktiv": False,
+    "basiszinssatz": "",                    # in % – bitte aktuellen Wert der Bundesbank eintragen
+    "zinsen_aufschlag_privat": 5,
+    "zinsen_aufschlag_firma": 9,
+    "zinsen_ab": "mahnung1",                # ab Datum der 1. Mahnung (vorsichtig) oder „faelligkeit“
     "kva_gueltig_tage": 30,
     # Verträge & Lizenzen
     "abo_modus": "automatisch",      # automatisch = festschreiben + per E-Mail senden / entwurf = nur Entwürfe anlegen
@@ -254,7 +281,8 @@ MIGRATIONEN = [
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
 NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
-                 "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen"]
+                 "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen", "zahlungen",
+                 "bank_importe", "bank_umsaetze", "mahnungen"]
 
 
 def _migrieren(con, pfad=None):

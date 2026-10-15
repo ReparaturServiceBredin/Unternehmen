@@ -100,6 +100,24 @@
   </table>
 </div>
 {% endif %}
+{% if offene or zahlungen %}
+<div class="karte" id="zahlungen">
+  <h2>Offene Beträge &amp; Zahlungen</h2>
+  {% if offene %}
+  <table class="liste"><tr><th>Rechnung</th><th>Fällig</th><th>Status</th><th class="zahl">Offen</th></tr>
+    {% for p in offene %}<tr><td><a href="{{ url_for('main.dokument', did=p.d.id) }}#zahlungen">{{ p.d.nummer }}</a></td><td>{{ p.d.faellig_am|datum }}</td>
+      <td><span class="marke-status zs-{{ p.s.status }}">{{ p.s.status_text }}</span>{% if p.s.mahnstufe is not none %} <span class="klein">Mahnstufe {{ p.s.mahnstufe }}</span>{% endif %}</td>
+      <td class="zahl">{{ p.s.offen|euro }}{% if p.s.gebuehren_offen %}<div class="klein">+ {{ p.s.gebuehren_offen|euro }} Gebühren</div>{% endif %}</td></tr>{% endfor %}
+    <tr><td colspan="3"><b>Summe offen</b></td><td class="zahl"><b>{{ offene|sum(attribute='s.offen')|euro }}</b></td></tr>
+  </table>
+  {% else %}<p class="klein">Keine offenen Beträge.</p>{% endif %}
+  {% if zahlungen %}
+  <h3 style="margin:14px 0 6px">Zahlungshistorie</h3>
+  <table class="liste"><tr><th>Datum</th><th>Rechnung</th><th>Art</th><th class="zahl">Betrag</th></tr>
+    {% for z in zahlungen %}<tr class="{{ 'storniert' if z.storniert_am }}"><td>{{ z.datum|datum }}</td><td><a href="{{ url_for('main.dokument', did=z.dokument_id) }}#zahlungen">{{ z.nummer }}</a></td><td>{{ zahlarten[z.zahlart] }}{% if z.storniert_am %} <span class="klein">(storniert)</span>{% endif %}</td><td class="zahl">{{ z.betrag|euro }}</td></tr>{% endfor %}
+  </table>{% endif %}
+</div>
+{% endif %}
 <div class="karte" id="emails">
   <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">E-Mail-Verlauf <span class="klein">({{ email_anzahl }})</span></h2>
     {% if email_anzahl > emails|length %}<a href="{{ url_for('main.kunde', kid=k.id, mails='alle') }}#emails">alle {{ email_anzahl }} anzeigen</a>{% endif %}</div>

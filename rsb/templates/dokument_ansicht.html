@@ -38,6 +38,48 @@
         {% if gutschriften %}<tr><td>Gutschriften</td><td>{% for gs in gutschriften %}<a href="{{ url_for('main.dokument', did=gs.id) }}">{{ gs.nummer or 'Entwurf' }}</a>{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endif %}
       </table>
     </div>
+    {% if zahl %}{% set st = zahl.stand %}
+    <div class="karte" id="zahlungen">
+      <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Zahlungen</h2><span class="marke-status zs-{{ st.status }}">{{ st.status_text }}</span></div>
+      <table class="liste verrechnung">
+        <tr><td>Rechnungsbetrag</td><td>{{ st.brutto|euro }}</td></tr>
+        {% if st.gutschriften %}<tr><td>Gutschriften</td><td>{{ st.gutschriften|euro }}</td></tr>{% endif %}
+        <tr><td>Bezahlt</td><td>{{ st.bezahlt|euro }}</td></tr>
+        <tr class="summe"><td>Offen</td><td>{{ st.offen|euro }}</td></tr>
+        {% if st.gebuehren_offen %}<tr><td>Mahngebühren/Zinsen offen</td><td>{{ st.gebuehren_offen|euro }}</td></tr>{% endif %}
+        {% if st.ueberzahlt %}<tr><td>Überzahlt (Guthaben des Kunden)</td><td>{{ st.ueberzahlt|euro }}</td></tr>{% endif %}
+        <tr><td>Fällig am</td><td>{{ d.faellig_am|datum }}{% if st.tage_ueberfaellig %} <span class="klein" style="color:var(--rot)">({{ st.tage_ueberfaellig }} Tage überfällig)</span>{% endif %}</td></tr>
+      </table>
+      {% if zahl.zahlungen %}
+      <table class="liste" style="margin-top:10px"><tr><th>Datum</th><th>Art</th><th class="zahl">Betrag</th><th></th></tr>
+        {% for z in zahl.zahlungen %}<tr class="{{ 'storniert' if z.storniert_am }}"><td>{{ z.datum|datum }}<div class="klein">erfasst {{ z.erfasst_am|zeit_sek }} ({{ z.benutzer }})</div></td>
+          <td>{{ zahl.zahlarten[z.zahlart] }}{% if z.notiz %}<div class="klein">{{ z.notiz }}</div>{% endif %}{% if z.storniert_am %}<div class="klein" style="text-decoration:none">storniert {{ z.storniert_am|zeit }}: {{ z.storno_grund }}</div>{% endif %}</td>
+          <td class="zahl">{{ z.betrag|euro }}</td>
+          <td>{% if not z.storniert_am %}<details><summary class="klein" style="cursor:pointer;color:var(--rot)">stornieren</summary>
+            <form method="post" action="{{ url_for('main.zahlung_stornieren', zid=z.id) }}">{{ csrf() }}<input type="text" name="grund" required minlength="3" placeholder="Grund (Pflicht)"><button class="gefahr klein" style="margin-top:4px">Zahlung stornieren</button></form></details>{% endif %}</td></tr>{% endfor %}
+      </table>{% endif %}
+      {% if d.status == 'festgeschrieben' %}
+      <details style="margin-top:12px" {{ 'open' if st.offen and not zahl.zahlungen }}><summary style="cursor:pointer"><b>+ Zahlung erfassen</b></summary>
+        <form method="post" action="{{ url_for('main.zahlung_erfassen', did=d.id) }}" style="margin-top:8px">{{ csrf() }}
+          <div class="felder">
+            <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ zahl.heute }}" max="{{ zahl.heute }}"></div>
+            <div class="s4"><label>Betrag (€)</label><input type="text" name="betrag" value="{{ (st.offen|euro)[:-2] if st.offen else '' }}" required></div>
+            <div class="s4"><label>Zahlungsart</label><select name="zahlart">{% for k, n in zahl.zahlarten.items() if k != 'verrechnung' %}<option value="{{ k }}">{{ n }}</option>{% endfor %}<option value="verrechnung">Verrechnung</option></select></div>
+            <div class="s8"><label>Notiz</label><input type="text" name="notiz" placeholder="z. B. Teilzahlung, Kontoauszug vom …"></div>
+            <div class="s4"><label class="check" style="margin-top:22px"><input type="checkbox" name="erstattung"> Erstattung an Kunden</label></div>
+          </div><br><button>Zahlung speichern</button></form></details>
+      {% endif %}
+      {% if zahl.mahnungen or zahl.naechste[0] is not none %}
+      <h3 style="margin:16px 0 6px">Mahnungen</h3>
+      {% for m in zahl.mahnungen %}<div class="leiste" style="margin-bottom:4px"><a href="{{ url_for('main.mahnung', mid=m.id) }}"><b>{{ m.nummer }}</b></a> {{ zahl.titel[m.stufe] }} vom {{ m.datum|datum }} · {{ m.gesamt|euro }} · Frist {{ m.frist_bis|datum }}{% if m.versendet_am %} · <span class="klein">versendet {{ m.versendet_am|zeit }}</span>{% else %} · <span class="klein" style="color:var(--rot)">noch nicht versendet</span>{% endif %}{% if m.erledigt_am %} · <span class="klein">Gebühren erlassen</span>{% endif %}</div>{% endfor %}
+      {% if zahl.naechste[0] is not none %}
+      <form method="post" action="{{ url_for('main.mahnungen_erstellen') }}" class="leiste" style="margin-top:6px">{{ csrf() }}
+        <input type="hidden" name="auswahl" value="{{ d.id }}:{{ zahl.naechste[0] }}"><input type="hidden" name="einzeln" value="1">
+        <button class="zweit">{{ zahl.titel[zahl.naechste[0]] }} erstellen</button>
+        <span class="klein">{{ 'fällig seit' if zahl.naechste[1] and zahl.naechste[1].isoformat() <= zahl.heute else 'regulär fällig ab' }} {{ zahl.naechste[1].isoformat()|datum if zahl.naechste[1] }}</span></form>
+      {% endif %}{% endif %}
+    </div>
+    {% endif %}
     <div class="karte">
       <h2>Versand</h2>
       <table class="liste">

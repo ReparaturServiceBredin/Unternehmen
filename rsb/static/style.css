@@ -249,3 +249,13 @@ details.mail summary { cursor: pointer; display: flex; gap: 10px; align-items: b
 .mail-inhalt { padding: 8px 0 4px 28px; }
 .mail-text { white-space: pre-wrap; margin-top: 8px; max-height: 420px; overflow: auto; background: var(--grau-hell);
   border-radius: 6px; padding: 10px 12px; font-size: 13px; }
+
+/* Zahlungsstatus */
+.zs-offen { background: var(--blau-hell); color: var(--blau); }
+.zs-teilweise { background: var(--gelb-hell); color: #7a5b00; }
+.zs-bezahlt { background: var(--gruen-hell); color: var(--gruen); }
+.zs-ueberfaellig { background: var(--rot-hell); color: var(--rot); font-weight: 700; }
+.zs-storniert { background: #eef0f3; color: var(--grau); }
+.zs-erstattung { background: var(--gelb-hell); color: #7a5b00; }
+tr.storniert td { color: var(--grau); text-decoration: line-through; }
+button.klein:not(.zweit):not(.gefahr), .knopf.klein:not(.zweit):not(.gefahr) { color: #fff; }

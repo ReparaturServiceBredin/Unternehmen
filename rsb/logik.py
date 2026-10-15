@@ -450,7 +450,17 @@ def integritaet_pruefen(con, daten_dir):
                 ergebnisse["pdf"].append(f"{d['nummer']}: archivierte Rechnungsdaten (JSON) fehlen.")
             elif hashlib.sha256(json_pfad.read_bytes()).hexdigest() != d["snapshot_sha256"]:
                 ergebnisse["pdf"].append(f"{d['nummer']}: archivierte Rechnungsdaten wurden verändert.")
+    for m in con.execute("SELECT nummer, pdf_pfad, pdf_sha256, snapshot_sha256 FROM mahnungen"):
+        pfad = Path(daten_dir) / m["pdf_pfad"]
+        if not pfad.is_file():
+            ergebnisse["pdf"].append(f"{m['nummer']}: PDF der Mahnung fehlt.")
+        elif hashlib.sha256(pfad.read_bytes()).hexdigest() != m["pdf_sha256"]:
+            ergebnisse["pdf"].append(f"{m['nummer']}: PDF der Mahnung wurde verändert.")
+        elif not pfad.with_suffix(".json").is_file() or \
+                hashlib.sha256(pfad.with_suffix(".json").read_bytes()).hexdigest() != m["snapshot_sha256"]:
+            ergebnisse["pdf"].append(f"{m['nummer']}: archivierte Daten der Mahnung fehlen oder wurden verändert.")
     vergeben = {r["nummer"] for r in con.execute("SELECT nummer FROM dokumente WHERE nummer IS NOT NULL")}
+    vergeben |= {r["nummer"] for r in con.execute("SELECT nummer FROM mahnungen")}
     for k in con.execute("SELECT * FROM nummernkreise ORDER BY praefix, jahr"):
         for n in range(1, k["letzte_nummer"] + 1):
             nr = nummer_formatieren(k["format"], k["praefix"], k["jahr"], n)

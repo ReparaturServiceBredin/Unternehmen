@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('leihgeraete','Leihgeräte'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -47,8 +47,7 @@
     {{ feld('zahlungsziel_firma', 'Zahlungsziel Firmenkunden (Tage)', 'number', 's3') }}
     {{ feld('kva_gueltig_tage', 'Kostenvoranschlag gültig (Tage)', 'number', 's3') }}
     {{ feld('anzahlung_prozent', 'Anzahlung Standard (%) – ab Etappe 2', 'number', 's3') }}
-    <div class="s3"><label>Mahngebühr je Mahnung (€) – ab Etappe 3</label><input type="text" name="mahngebuehr_cent" value="{{ einst.mahngebuehr_cent|euro(false) }}"></div>
-    {{ feld('mahnstufen', 'Mahnstufen – ab Etappe 3', 'number', 's3') }}
+    <div class="s6 klein" style="align-self:center">Mahngebühren, Fristen und Verzugszinsen: <a href="{{ url_for('main.einstellungen', bereich='mahnwesen') }}">Einstellungen → Mahnwesen</a></div>
     <div class="s12"><label>Zahlungsarten-Text auf der Rechnung</label><input type="text" name="zahlungsarten_text" value="{{ einst.zahlungsarten_text }}"></div>
   </div>
   <br><h2>Nummern &amp; Listen</h2>
@@ -225,6 +224,40 @@
   </div>
   <p class="klein">Letzter Abrechnungslauf: {{ einst.abo_letzter_lauf|zeit if einst.abo_letzter_lauf else 'noch nie' }}</p>
   <button>Speichern</button>
+</form>
+
+{% elif bereich == 'mahnwesen' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Ablauf</h2>
+  <p class="klein">Zahlungserinnerung (ohne Gebühr) → 1. Mahnung → 2. Mahnung. Unter <a href="{{ url_for('main.mahnwesen') }}">Mahnwesen</a> erscheinen fällige Schreiben als Vorschlag; erstellt und versendet wird erst nach Ihrer Bestätigung.</p>
+  <div class="felder">
+    {{ feld('mahn_erinnerung_tage', 'Zahlungserinnerung … Tage nach Fälligkeit', 'number', 's3') }}
+    {{ feld('mahn_stufe1_tage', '1. Mahnung … Tage nach Fristablauf der Erinnerung', 'number', 's3') }}
+    {{ feld('mahn_stufe2_tage', '2. Mahnung … Tage nach Fristablauf der 1. Mahnung', 'number', 's3') }}
+    {{ feld('mahn_frist_tage', 'Neue Zahlungsfrist in jedem Schreiben (Tage)', 'number', 's3') }}
+    <div class="s3"><label>Gebühr 1. Mahnung (€)</label><input type="text" name="mahngebuehr_cent" value="{{ einst.mahngebuehr_cent|euro(false) }}"></div>
+    <div class="s3"><label>Gebühr 2. Mahnung (€)</label><input type="text" name="mahngebuehr_2_cent" value="{{ einst.mahngebuehr_2_cent|euro(false) }}"></div>
+    <div class="s6 klein" style="align-self:center">Die Zahlungserinnerung ist immer gebührenfrei. Mahngebühren sollten nur die tatsächlichen Kosten (Porto, Material) abdecken.</div>
+  </div>
+  <br><h2>Texte</h2>
+  <p class="klein">Platzhalter: {anrede_brief}, {rechnung_nummer}, {rechnung_datum}, {rechnung_betrag}, {faellig_am}, {offen_rechnung}, {gebuehr}, {zinsen}, {gesamt}, {frist_bis}, {nummer}, {inhaber}, {firma_name}</p>
+  <div class="felder">
+    <div class="s12"><label>Zahlungserinnerung</label><textarea name="mahn_text_0" style="min-height:120px">{{ einst.mahn_text_0 }}</textarea></div>
+    <div class="s12"><label>1. Mahnung</label><textarea name="mahn_text_1" style="min-height:120px">{{ einst.mahn_text_1 }}</textarea></div>
+    <div class="s12"><label>2. Mahnung</label><textarea name="mahn_text_2" style="min-height:120px">{{ einst.mahn_text_2 }}</textarea></div>
+    <div class="s12"><label>E-Mail-Betreff</label><input type="text" name="mahn_email_betreff" value="{{ einst.mahn_email_betreff }}"></div>
+    <div class="s12"><label>E-Mail-Text</label><textarea name="mahn_email_text" style="min-height:100px">{{ einst.mahn_email_text }}</textarea></div>
+  </div>
+  <br><h2>Verzugszinsen (optional)</h2>
+  <div class="felder">
+    {{ haken('zinsen_aktiv', 'Verzugszinsen in Mahnungen berechnen') }}
+    {{ feld('basiszinssatz', 'Basiszinssatz (%)', span='s3', hilfe='aktuellen Wert bei der Deutschen Bundesbank nachsehen – ändert sich zum 1.1. und 1.7.') }}
+    {{ feld('zinsen_aufschlag_privat', 'Aufschlag Privatkunden (Prozentpunkte)', 'number', 's3', hilfe='§ 288 Abs. 1 BGB: 5') }}
+    {{ feld('zinsen_aufschlag_firma', 'Aufschlag Geschäftskunden (Prozentpunkte)', 'number', 's3', hilfe='§ 288 Abs. 2 BGB: 9') }}
+    <div class="s3"><label>Zinsen berechnen ab</label><select name="zinsen_ab">
+      <option value="mahnung1" {{ 'selected' if einst.zinsen_ab != 'faelligkeit' }}>Datum der 1. Mahnung (vorsichtig)</option>
+      <option value="faelligkeit" {{ 'selected' if einst.zinsen_ab == 'faelligkeit' }}>Tag nach Fälligkeit</option></select></div>
+  </div><br><button>Speichern</button>
 </form>
 
 {% elif bereich == 'leihgeraete' %}
