@@ -480,10 +480,18 @@ def integritaet_pruefen(con, daten_dir):
                 ergebnisse["pdf"].append(f"{text} {b['nummer']}: PDF fehlt.")
             elif hashlib.sha256(pfad.read_bytes()).hexdigest() != b["pdf_sha256"]:
                 ergebnisse["pdf"].append(f"{text} {b['nummer']}: PDF wurde verändert.")
+    for e in con.execute("SELECT lfd_nr, datei, datei_sha256 FROM eingangsrechnungen WHERE datei IS NOT NULL"):
+        pfad = Path(daten_dir) / e["datei"]
+        if not pfad.is_file():
+            ergebnisse["pdf"].append(f"Eingangsrechnung {e['lfd_nr']}: Originaldatei fehlt.")
+        elif hashlib.sha256(pfad.read_bytes()).hexdigest() != e["datei_sha256"]:
+            ergebnisse["pdf"].append(f"Eingangsrechnung {e['lfd_nr']}: Originaldatei wurde verändert.")
     from .lager import integritaet as lager_integritaet
     ergebnisse["lager"] = lager_integritaet(con)
     vergeben = {r["nummer"] for r in con.execute("SELECT nummer FROM dokumente WHERE nummer IS NOT NULL")}
     vergeben |= {r["nummer"] for r in con.execute("SELECT nummer FROM mahnungen")}
+    vergeben |= {r["nummer"] for r in con.execute("SELECT nummer FROM bestellungen")}
+    vergeben |= {r["nummer"] for r in con.execute("SELECT lfd_nr AS nummer FROM eingangsrechnungen")}
     for k in con.execute("SELECT * FROM nummernkreise ORDER BY praefix, jahr"):
         for n in range(1, k["letzte_nummer"] + 1):
             nr = nummer_formatieren(k["format"], k["praefix"], k["jahr"], n)

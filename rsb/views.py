@@ -356,7 +356,9 @@ def artikel(aid=None):
     return render_template("artikel.html", a=a, leistungsarten=_leistungsarten(),
                            aenderungen=dbm.aenderungen_liste(con, "artikel", aid) if aid else [],
                            bewegungen=lgr.bewegungen(con, aid, 100) if aid else [], lagerarten=lgr.ARTEN,
-                           reserviert=lgr.reserviert(con, aid) if aid else 0)
+                           reserviert=lgr.reserviert(con, aid) if aid else 0,
+                           quellen=ek.bezugsquellen(con, aid) if aid else [],
+                           alle_lieferanten=ek.lieferanten(con, nur_aktive=True))
 
 
 ARTIKEL_FELDNAMEN = {"artikelnr": "Artikelnummer", "name": "Bezeichnung", "beschreibung": "Beschreibung",
@@ -561,6 +563,328 @@ def material_stornieren(rid):
         lgr.reservierung_stornieren(con, rid, _f("grund"))
     flash("Material storniert." if r["status"] == "reserviert" else "Material wieder ins Lager gebucht.", "ok")
     return redirect(url_for("main.auftrag", aid=r["auftrag_id"]) + "#material")
+
+
+# ====================================================================== Einkauf: Lieferanten, Bestellungen, Eingangsrechnungen
+
+from . import einkauf as ek  # noqa: E402
+
+
+@bp.route("/lieferanten")
+def lieferanten():
+    return render_template("lieferanten.html", liste=ek.lieferanten(dbm.get_db()))
+
+
+@bp.route("/lieferanten/neu", methods=["GET", "POST"])
+@bp.route("/lieferanten/<int:lid>", methods=["GET", "POST"])
+def lieferant(lid=None):
+    con = dbm.get_db()
+    l = con.execute("SELECT * FROM lieferanten WHERE id=?", (lid,)).fetchone() if lid else None
+    if lid and not l:
+        abort(404)
+    if request.method == "POST":
+        daten = {k: _f(k) for k in ek.LIEFERANT_FELDER}
+        daten["aktiv"] = request.form.get("aktiv") if lid else "1"
+        with dbm.Transaktion(con):
+            lid = ek.lieferant_speichern(con, daten, lid)
+        flash("Lieferant gespeichert.", "ok")
+        return redirect(url_for("main.lieferant", lid=lid))
+    artikel = con.execute("SELECT al.*, a.name, a.einheit, a.teilekosten FROM artikel_lieferanten al JOIN artikel a "
+                          "ON a.id=al.artikel_id WHERE al.lieferant_id=? ORDER BY a.name", (lid,)).fetchall() if lid else []
+    return render_template("lieferant.html", l=l, artikel=artikel,
+                           bestellungen=[b for b in ek.bestellungen(con) if b["lieferant_id"] == lid] if lid else [],
+                           rechnungen=con.execute(ek.ER_SQL + "WHERE e.lieferant_id=? ORDER BY e.datum DESC LIMIT 50",
+                                                  (lid,)).fetchall() if lid else [],
+                           aenderungen=dbm.aenderungen_liste(con, "lieferant", lid) if lid else [])
+
+
+@bp.route("/artikel/<int:aid>/bezugsquelle", methods=["POST"])
+def artikel_bezugsquelle(aid):
+    con = dbm.get_db()
+    lid = request.form.get("lieferant_id", type=int)
+    preis = cent_aus_text(_f("ek"), None)
+    garantie = int(_f("garantie_monate")) if _f("garantie_monate").isdigit() else None
+    with dbm.Transaktion(con):
+        if request.form.get("entfernen"):
+            con.execute("DELETE FROM artikel_lieferanten WHERE artikel_id=? AND lieferant_id=?", (aid, lid))
+            dbm.ereignis_erfassen(con, "artikel", aid, "Bezugsquelle entfernt", f"Lieferant #{lid}")
+            warnung = None
+        else:
+            ek.bezugsquelle_speichern(con, aid, lid, preis, _f("lieferanten_artnr"), garantie)
+            warnung = None
+            if request.form.get("als_ek") and preis is not None:
+                warnung = ek.ek_aktualisieren(con, aid, preis, "Bezugsquelle")
+    flash("Bezugsquelle gespeichert.", "ok")
+    if warnung:
+        flash(warnung, "warnung")
+    return redirect(url_for("main.artikel", aid=aid) + "#bezugsquellen")
+
+
+@bp.route("/bestellungen")
+def bestellungen():
+    con = dbm.get_db()
+    status = request.args.get("status", "offen")
+    return render_template("bestellungen.html", liste=ek.bestellungen(con, status if status != "alle" else None),
+                           status=status, status_namen=ek.BESTELL_STATUS)
+
+
+@bp.route("/bestellungen/neu", methods=["GET", "POST"])
+def bestellung_neu():
+    con = dbm.get_db()
+    if request.method == "POST":
+        f = request.form
+        pos = []
+        for artikel_id, bez, artnr, menge, preis in zip(f.getlist("p_artikel_id"), f.getlist("p_bezeichnung"),
+                                                         f.getlist("p_artnr"), f.getlist("p_menge"), f.getlist("p_ek")):
+            pos.append({"artikel_id": int(artikel_id) if artikel_id.isdigit() else None, "bezeichnung": bez,
+                        "lieferanten_artnr": artnr, "menge": zahl_aus_text(menge, 0), "ek": cent_aus_text(preis, None)})
+        with dbm.Transaktion(con):
+            bid = ek.bestellung_anlegen(con, f.get("lieferant_id", type=int), pos, _f("notiz"),
+                                        auftrag_id=f.get("auftrag_id", type=int))
+        flash("Bestellung angelegt. Prüfen, dann senden bzw. „als bestellt markieren“.", "ok")
+        return redirect(url_for("main.bestellung", bid=bid))
+    auftrag_row = _auftrag_laden(request.args.get("auftrag_id", type=int)) if request.args.get("auftrag_id") else None
+    vorauswahl = []
+    lieferant_id = request.args.get("lieferant_id", type=int)
+    if request.args.get("artikel_id"):
+        a = con.execute("SELECT * FROM artikel WHERE id=?", (request.args.get("artikel_id", type=int),)).fetchone()
+        if a:
+            q = ek.guenstigste_quelle(con, a["id"])
+            lieferant_id = lieferant_id or (q["lieferant_id"] if q else None)
+            vorauswahl.append({"artikel_id": a["id"], "bezeichnung": a["name"], "menge": 1,
+                               "ek": q["ek"] if q and q["ek"] is not None else a["teilekosten"],
+                               "lieferanten_artnr": q["lieferanten_artnr"] if q else ""})
+    quellen = {a["id"]: [dict(q) for q in ek.bezugsquellen(con, a["id"])] for a in con.execute(
+        "SELECT DISTINCT artikel_id AS id FROM artikel_lieferanten").fetchall()}
+    return render_template("bestellung_neu.html", lieferanten=ek.lieferanten(con, nur_aktive=True),
+                           artikel=[dict(a) for a in con.execute("SELECT id, name, teilekosten, einheit FROM artikel "
+                                                                 "WHERE aktiv=1 ORDER BY name")],
+                           quellen=quellen, a=auftrag_row, vorauswahl=vorauswahl, lieferant_id=lieferant_id)
+
+
+@bp.route("/bestellungen/aus-vorschlag", methods=["POST"])
+def bestellungen_aus_vorschlag():
+    con = dbm.get_db()
+    auswahl = [(int(a), zahl_aus_text(request.form.get(f"menge_{a}"), 0)) for a in request.form.getlist("artikel_id")
+               if a.isdigit()]
+    auswahl = [(a, m) for a, m in auswahl if m > 0]
+    if not auswahl:
+        raise EingabeFehler("Bitte mindestens einen Artikel auswählen.")
+    with dbm.Transaktion(con):
+        ids, ohne = ek.aus_vorschlag(con, auswahl)
+    if ids:
+        flash(f"{len(ids)} Bestellung(en) angelegt (je Lieferant der günstigste).", "ok")
+    if ohne:
+        flash("Ohne Lieferant (bitte beim Artikel eine Bezugsquelle eintragen): " + ", ".join(ohne), "warnung")
+    return redirect(url_for("main.bestellung", bid=ids[0]) if len(ids) == 1 else url_for("main.bestellungen"))
+
+
+@bp.route("/bestellungen/<int:bid>", methods=["GET", "POST"])
+def bestellung(bid):
+    con = dbm.get_db()
+    b = ek.bestellung(con, bid)
+    if request.method == "POST":
+        aktion = request.form.get("aktion")
+        with dbm.Transaktion(con):
+            if aktion == "bestellt":
+                ek.bestellt_markieren(con, bid, _f("erwartet_am") or None)
+                meldung = "Als bestellt markiert."
+            elif aktion == "stornieren":
+                ek.bestellung_stornieren(con, bid, _f("grund"))
+                meldung = "Bestellung storniert."
+            elif aktion == "wareneingang":
+                mengen = {int(k[6:]): v for k, v in request.form.items() if k.startswith("menge_") and k[6:].isdigit()}
+                eks = {int(k[3:]): cent_aus_text(v, None) for k, v in request.form.items()
+                       if k.startswith("ek_") and k[3:].isdigit() and v.strip()}
+                anzahl, warnungen, auftraege = ek.wareneingang(con, bid, mengen, eks, _f("lieferschein"),
+                                                               bool(request.form.get("auftrag_fortsetzen")))
+                meldung = f"Wareneingang gebucht ({anzahl} Position(en))." + (
+                    f" Betroffene Aufträge wurden benachrichtigt ({len(auftraege)})." if auftraege else "")
+                for w in warnungen:
+                    flash(w, "warnung")
+            else:
+                abort(400)
+        flash(meldung, "ok")
+        _benachrichtigungen_automatisch()
+        return redirect(url_for("main.bestellung", bid=bid))
+    return render_template("bestellung.html", b=b, positionen=ek.positionen(con, bid), status_namen=ek.BESTELL_STATUS,
+                           eingaenge=con.execute("SELECT w.*, p.bezeichnung FROM wareneingaenge w JOIN bestell_positionen p "
+                                                 "ON p.id=w.position_id WHERE w.bestellung_id=? ORDER BY w.id",
+                                                 (bid,)).fetchall(),
+                           rechnungen=con.execute(ek.ER_SQL + "WHERE e.bestellung_id=?", (bid,)).fetchall())
+
+
+@bp.route("/bestellungen/<int:bid>/pdf")
+def bestellung_pdf(bid):
+    con = dbm.get_db()
+    b = ek.bestellung(con, bid)
+    return send_file(io.BytesIO(ek.bestellung_pdf(con, bid, daten_dir())), mimetype="application/pdf",
+                     download_name=f"Bestellung_{b['nummer']}.pdf")
+
+
+@bp.route("/bestellungen/<int:bid>/email", methods=["GET", "POST"])
+def bestellung_email(bid):
+    con = dbm.get_db()
+    b = ek.bestellung(con, bid)
+    einst = dbm.einstellungen(con)
+    if request.method == "POST":
+        an = _f("an")
+        if "@" not in an:
+            raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
+        try:
+            hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""),
+                             ek.bestellung_pdf(con, bid, daten_dir()), f"Bestellung_{b['nummer']}.pdf")
+        except MailFehler as e:
+            flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+            return redirect(url_for("main.bestellung_email", bid=bid))
+        with dbm.Transaktion(con):
+            con.execute("UPDATE bestellungen SET versendet_an=? WHERE id=?", (an, bid))
+            if b["status"] == "entwurf":
+                ek.bestellt_markieren(con, bid)
+        flash(f"Bestellung an {an} gesendet und als bestellt markiert.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
+        _benachrichtigungen_automatisch()
+        return redirect(url_for("main.bestellung", bid=bid))
+    text = (f"Guten Tag,\n\nanbei unsere Bestellung {b['nummer']}"
+            + (f" (Kundennummer {b['kundennr_bei']})" if b["kundennr_bei"] else "")
+            + ". Bitte bestätigen Sie kurz den Liefertermin.\n\nMit freundlichen Grüßen\n"
+            + f"{einst.get('inhaber') or ''}\n{einst.get('firma_name') or ''}")
+    return render_template("bestellung_email.html", b=b, an=b["lemail"] or "", text=text,
+                           betreff=f"Bestellung {b['nummer']} – {einst.get('firma_name') or ''}",
+                           smtp_ok=bool(einst.get("smtp_host")))
+
+
+def _kostenarten():
+    return [k.strip() for k in (dbm.einstellung("kostenarten") or "").splitlines() if k.strip()]
+
+
+@bp.route("/eingangsrechnungen")
+def eingangsrechnungen():
+    con = dbm.get_db()
+    status = request.args.get("status", "offen")
+    q = request.args.get("q", "").strip()
+    return render_template("eingangsrechnungen.html", liste=ek.eingangsrechnungen(con, status, q), status=status, q=q,
+                           summe_offen=ek.summe_offen(con), status_namen=ek.ER_STATUS, heute=date.today().isoformat())
+
+
+@bp.route("/eingangsrechnungen/neu", methods=["GET", "POST"])
+def eingangsrechnung_neu():
+    con = dbm.get_db()
+    vorlage = session.get("er_datei") or {}
+    if request.method == "POST":
+        datei = request.files.get("datei")
+        if datei and datei.filename:
+            rel, sha = ek.datei_ablegen(daten_dir(), datei.read(), datei.filename)
+            vorlage = {"rel": rel, "sha": sha, "name": datei.filename, "quelle": "Upload", "message_id": None}
+            session["er_datei"] = vorlage
+        felder = ek.er_felder(request.form)
+        with dbm.Transaktion(con):
+            eid = ek.er_anlegen(con, felder, vorlage.get("rel"), vorlage.get("sha"), vorlage.get("name"),
+                                vorlage.get("quelle") or "manuell", vorlage.get("message_id"))
+        session.pop("er_datei", None)
+        flash("Eingangsrechnung erfasst.", "ok")
+        return redirect(url_for("main.eingangsrechnung", eid=eid))
+    if request.args.get("neu"):
+        session.pop("er_datei", None)
+        vorlage = {}
+    werte = dict(vorlage.get("werte") or {})
+    if request.args.get("bestellung_id"):
+        b = ek.bestellung(con, request.args.get("bestellung_id", type=int))
+        werte.update(lieferant_id=b["lieferant_id"], bestellung_id=b["id"], kostenart=(_kostenarten() or [""])[0])
+    return render_template("eingangsrechnung.html", e=None, vorlage=vorlage, werte=werte,
+                           lieferanten=ek.lieferanten(con), kostenarten=_kostenarten(),
+                           bestellungen=ek.bestellungen(con), heute=date.today().isoformat())
+
+
+@bp.route("/eingangsrechnungen/<int:eid>", methods=["GET", "POST"])
+def eingangsrechnung(eid):
+    con = dbm.get_db()
+    e = con.execute(ek.ER_SQL + "WHERE e.id=?", (eid,)).fetchone()
+    if not e:
+        abort(404)
+    if request.method == "POST":
+        aktion = request.form.get("aktion")
+        with dbm.Transaktion(con):
+            if aktion == "speichern":
+                ek.er_aendern(con, eid, ek.er_felder(request.form))
+                meldung = "Änderungen gespeichert (im Änderungsprotokoll vermerkt)."
+            elif aktion == "zahlung":
+                ek.er_zahlung(con, eid, _f("datum"), cent_aus_text(_f("betrag"), 0), _f("zahlart"), _f("notiz"))
+                meldung = "Zahlung erfasst."
+            elif aktion == "zahlung_storno":
+                ek.er_zahlung_stornieren(con, request.form.get("zahlung_id", type=int), _f("grund"))
+                meldung = "Zahlung storniert."
+            elif aktion == "stornieren":
+                ek.er_stornieren(con, eid, _f("grund"))
+                meldung = "Eingangsrechnung storniert."
+            else:
+                abort(400)
+        flash(meldung, "ok")
+        return redirect(url_for("main.eingangsrechnung", eid=eid))
+    return render_template("eingangsrechnung.html", e=e, vorlage={}, werte=dict(e), lieferanten=ek.lieferanten(con),
+                           kostenarten=_kostenarten(), bestellungen=ek.bestellungen(con),
+                           zahlungen=con.execute("SELECT * FROM er_zahlungen WHERE eingangsrechnung_id=? ORDER BY datum, id",
+                                                 (eid,)).fetchall(), zahlarten=ek.ZAHLARTEN,
+                           aenderungen=dbm.aenderungen_liste(con, "eingangsrechnung", eid), heute=date.today().isoformat())
+
+
+@bp.route("/eingangsrechnungen/datei/<sha>")
+def eingangsrechnung_datei(sha):
+    con = dbm.get_db()
+    e = con.execute("SELECT datei, datei_name, datei_sha256 FROM eingangsrechnungen WHERE datei_sha256=?",
+                    (sha,)).fetchone()
+    v = session.get("er_datei") or {}
+    rel = e["datei"] if e else (v.get("rel") if v.get("sha") == sha else None)
+    if not rel:
+        abort(404)
+    pfad = Path(daten_dir()) / rel
+    daten = pfad.read_bytes() if pfad.is_file() else None
+    if daten is None or hashlib.sha256(daten).hexdigest() != sha:
+        return render_template("pdf_fehler.html", d={"nummer": "Eingangsrechnung", "pdf_pfad": rel, "pdf_sha256": sha},
+                               fehlt=daten is None), 409
+    endung = rel.rsplit(".", 1)[-1].lower()
+    return send_file(io.BytesIO(daten), mimetype=ek.ER_ENDUNGEN.get(endung, "application/octet-stream"),
+                     download_name=(e["datei_name"] if e else v.get("name")) or f"beleg.{endung}")
+
+
+@bp.route("/eingangsrechnungen/postfach", methods=["GET", "POST"])
+def eingangsrechnungen_postfach():
+    from . import er_postfach
+    from .anfragen import AbrufFehler
+    con = dbm.get_db()
+    einst = dbm.einstellungen(con)
+    if request.method == "POST":
+        try:
+            daten, name, kopf = er_postfach.anhang_holen(einst, _f("uid"), request.form.get("index", type=int))
+        except AbrufFehler as e:
+            raise EingabeFehler(str(e))
+        rel, sha = ek.datei_ablegen(daten_dir(), daten, name)
+        werte = {"datum": kopf["datum"], "lieferant_name": kopf["von"]}
+        l = con.execute("SELECT id FROM lieferanten WHERE lower(email)=lower(?)", (kopf["von_adresse"],)).fetchone()
+        if l:
+            werte["lieferant_id"] = l["id"]
+        session["er_datei"] = {"rel": rel, "sha": sha, "name": name, "quelle": "Postfach",
+                               "message_id": kopf["message_id"], "werte": werte}
+        return redirect(url_for("main.eingangsrechnung_neu"))
+    try:
+        liste = er_postfach.mails(con, einst)
+        fehler = None
+    except AbrufFehler as e:
+        liste, fehler = [], str(e)
+    return render_template("er_postfach.html", liste=liste, fehler=fehler, ordner=einst.get("er_imap_ordner"))
+
+
+@bp.route("/bank/<int:uid>/eingangsrechnung", methods=["POST"])
+def bank_er_zuordnen(uid):
+    con = dbm.get_db()
+    eid = request.form.get("eingangsrechnung_id", type=int)
+    if not eid:
+        raise EingabeFehler("Bitte eine Eingangsrechnung auswählen.")
+    with dbm.Transaktion(con):
+        ek.bank_zuordnen(con, uid, eid)
+    flash("Ausgang der Eingangsrechnung zugeordnet.", "ok")
+    return redirect(url_for("main.bank"))
 
 
 # ====================================================================== Dokumente
@@ -942,6 +1266,8 @@ EINSTELLUNGS_BEREICHE = {
     "leihgeraete": ["leihbedingungen"],
     "benachrichtigung": ["benachrichtigung_vorschau", "benachrichtigung_kanal", "erinnerung_tage", "oeffnungszeiten"]
     + [f"ben_{a}_{t}" for a in ben.ANLAESSE for t in ("aktiv", "betreff", "text")],
+    "einkauf": ["mindest_marge_prozent", "praefix_bestellung", "praefix_eingangsrechnung", "kostenarten",
+                "er_imap_ordner"],
     "annahme": ["garantie_monate", "annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
                 "abholschein_text", "handy_im_netz", "handy_adresse"],
     "mahnwesen": ["mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage", "mahngebuehr_cent",
@@ -957,7 +1283,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
@@ -1646,6 +1972,7 @@ def auftrag(aid):
         return redirect(url_for("main.auftrag", aid=aid))
     anfrage_row = con.execute("SELECT * FROM anfragen WHERE id=?", (a["anfrage_id"],)).fetchone() \
         if a["anfrage_id"] else None
+    material = lgr.auftrag_material(con, aid)
     kva_kunde = con.execute("SELECT * FROM kunden WHERE id=?", (a["kva_kunde_id"],)).fetchone() \
         if a["kva_id"] and a["kva_kunde_id"] != a["kunde_id"] else None
     return render_template("auftrag.html", a=a, status_namen=auf.TAFEL, tafel_status=auf.tafel_status(a),
@@ -1654,7 +1981,10 @@ def auftrag(aid):
                            garantie_bezug=con.execute("SELECT id, auftragsnr FROM auftraege WHERE id=?",
                                                       (a["garantie_bezug_id"],)).fetchone() if a["garantie_bezug_id"] else None,
                            garantiefaelle=gar.garantiefaelle_zu(con, aid), interne_kosten=gar.interne_kosten(con, a),
-                           material=lgr.auftrag_material(con, aid), res_status=lgr.RES_STATUS,
+                           material=material, res_status=lgr.RES_STATUS,
+                           lief_garantie={m["id"]: ek.lieferantengarantie(con, m["artikel_id"], m["erledigt_am"] or m["erstellt_am"])
+                                          for m in material},
+                           bestellungen_auftrag=ek.bestellungen(con, auftrag_id=aid),
                            lager_artikel=con.execute("SELECT id, name, einheit, bestand, lagerort, kompatibilitaet "
                                                      "FROM artikel WHERE lagerfuehrend=1 AND aktiv=1 ORDER BY name").fetchall(),
                            anlaesse=ben.ANLAESSE, leistungsarten=_leistungsarten(),
@@ -2324,9 +2654,14 @@ def bank():
     umsaetze = con.execute(sql + " ORDER BY buchungstag DESC, id DESC LIMIT 300").fetchall()
     offene = _zlg().offene_posten(con)
     vorschlaege = {u["id"]: ba.vorschlag(con, u, offene) for u in umsaetze if u["status"] == "offen"}
+    from . import einkauf
+    offene_er = einkauf.offene_er(con)
+    er_vorschlaege = {u["id"]: einkauf.bank_vorschlag(con, u, offene_er) for u in umsaetze
+                      if u["status"] == "offen" and u["betrag"] < 0}
     importe = con.execute("SELECT * FROM bank_importe ORDER BY id DESC LIMIT 10").fetchall()
     zahl = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM bank_umsaetze GROUP BY status")}
     return render_template("bank.html", umsaetze=umsaetze, vorschlaege=vorschlaege, offene=offene, importe=importe,
+                           offene_er=offene_er, er_vorschlaege=er_vorschlaege,
                            ansicht=ansicht, zahl=zahl)
 
 

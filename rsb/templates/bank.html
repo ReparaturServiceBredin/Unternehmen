@@ -26,8 +26,12 @@
           <button class="klein">Bestätigen</button></form>
         {% if v %}<div class="klein" style="color:{{ 'var(--gruen)' if v.sicher else '#7a5b00' }}">Vorschlag: {{ v.p.d.nummer }} – {{ v.grund }}</div>{% else %}<div class="klein">kein Vorschlag</div>{% endif %}
         <form method="post" action="{{ url_for('main.bank_ignorieren', uid=u.id) }}">{{ csrf() }}<button class="zweit klein" style="margin-top:4px">Ignorieren (keine Rechnung)</button></form>
-      {% elif u.status == 'offen' %}
-        <span class="klein">Ausgang – Zuordnung zu Eingangsrechnungen folgt in Ausbaustufe 7.</span>
+      {% elif u.status == 'offen' %}{% set ve = er_vorschlaege.get(u.id) %}
+        <form method="post" action="{{ url_for('main.bank_er_zuordnen', uid=u.id) }}" class="leiste">{{ csrf() }}
+          <select name="eingangsrechnung_id" style="width:auto;max-width:260px"><option value="">– Eingangsrechnung wählen –</option>
+            {% for e in offene_er %}<option value="{{ e.id }}" {{ 'selected' if ve and ve.e.id == e.id }}>{{ e.lfd_nr }} · {{ e.lieferant or '' }} {{ e.nummer or '' }} · offen {{ (e.brutto - e.bezahlt)|euro }}</option>{% endfor %}</select>
+          <button class="klein">Bestätigen</button></form>
+        {% if ve %}<div class="klein" style="color:{{ 'var(--gruen)' if ve.sicher else '#7a5b00' }}">Vorschlag: {{ ve.e.lfd_nr }} – {{ ve.grund }}</div>{% else %}<div class="klein">kein Vorschlag – ggf. erst die <a href="{{ url_for('main.eingangsrechnung_neu', neu=1) }}">Eingangsrechnung erfassen</a></div>{% endif %}
         <form method="post" action="{{ url_for('main.bank_ignorieren', uid=u.id) }}">{{ csrf() }}<button class="zweit klein" style="margin-top:4px">Ignorieren</button></form>
       {% elif u.status == 'zugeordnet' %}<span class="marke-status zs-bezahlt">zugeordnet</span> <span class="klein">{{ u.bearbeitet_am|zeit }} ({{ u.bearbeitet_von }})</span>
       {% else %}<span class="marke-status zs-storniert">ignoriert</span>

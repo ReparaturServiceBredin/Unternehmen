@@ -60,7 +60,7 @@ def test_reservierung_ausbuchen_storno(client, con, app):
     # verfügbar 1 < Mindestbestand 2 → Warnliste
     assert "unter Mindestbestand" in client.get("/lager?ansicht=mindest").get_data(as_text=True)
     vorschlag = client.get("/lager/bestellvorschlag").get_data(as_text=True)
-    assert "Akku iPhone 13" in vorschlag and "<b>3</b>" in vorschlag  # auf 4 auffüllen: 4 − 1 = 3
+    assert "Akku iPhone 13" in vorschlag and f'name="menge_{art}" value="3"' in vorschlag  # 4 − 1 = 3
     csv = client.get("/lager/bestellvorschlag?format=csv").data.decode("utf-8-sig")
     assert csv.splitlines()[1].startswith("Akku iPhone 13;")
     # Mehr reservieren als verfügbar → Warnung, aber möglich

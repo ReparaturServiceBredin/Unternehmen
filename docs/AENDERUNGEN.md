@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.17.0 | 15.10.2026 | Lieferanten, Bestellungen, Wareneingang, Eingangsrechnungen |
 | 0.16.0 | 15.10.2026 | Lager: Bestand, Reservierung, Mindestbestand, Inventur, Lagerwert |
 | 0.15.0 | 15.10.2026 | Garantie, Geräte-Wiedererkennung per SN/IMEI, Garantiefälle |
 | 0.14.0 | 15.10.2026 | Kundenbenachrichtigung, Spalte „Wartet auf Teil“, Abhol-Erinnerungen |
@@ -37,6 +38,65 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.17.0 – 15.10.2026
+Einkauf: Lieferanten, Bestellungen und Eingangsrechnungen (Ausbaustufe 7 von 10).
+
+### Neu
+
+Im Menü gibt es die neue Gruppe **Einkauf**.
+
+**Lieferanten:** Erfasst werden:
+- Name, Kontakt, Webshop
+- Ihre Kundennummer beim Lieferanten
+- Zahlungsbedingungen, Zahlungsziel, Lieferzeit
+- IBAN, USt-IdNr. und Kreditorennummer (für den späteren DATEV-Export)
+
+**Bezugsquellen je Artikel:** Ein Artikel kann mehrere Lieferanten haben, jeweils mit EK, Lieferanten-Artikelnummer
+und Lieferantengarantie. Der günstigste ist markiert und wird beim Bestellen vorgeschlagen. Wird ein EK als
+Einkaufspreis übernommen, berechnet das Programm die Marge neu. Unter der Mindestmarge (Standard 30 %) erscheint eine
+Warnung.
+
+**Bestellungen:**
+- Aus dem Bestellvorschlag des Lagers (je Lieferant eine Bestellung)
+- Aus dem Auftrag mit „Teil für diesen Auftrag bestellen“
+- Von Hand
+
+Bestellungen gibt es als PDF und per E-Mail an den Lieferanten. Der Status läuft von „Entwurf“ über „bestellt“ und
+„teilweise geliefert“ bis „geliefert“. Ist ein Teil für einen Auftrag bestellt, wandert der Auftrag in die Spalte
+„Wartet auf Teil“. Auf der Karte stehen dann Bestellung und Liefertermin.
+
+**Wareneingang:** In der Bestellung die gelieferten Mengen (und ggf. den neuen EK) eintragen. Das Programm macht dann:
+- bucht lagerführende Artikel ein und aktualisiert den Einkaufspreis
+- reserviert Teile für Aufträge dort und vermerkt sie im Verlauf
+- setzt den Auftrag wieder auf „In Arbeit“, wenn alles da ist
+
+Die Lieferantengarantie wird je Lieferung festgehalten. Im Auftrag sehen Sie beim Material Lieferant und
+Garantie-Ende.
+
+**Eingangsrechnungen:**
+- PDF, Bild oder XML hochladen, oder **aus dem Postfach übernehmen**. Das Postfach wird dabei nur gelesen, nichts
+  wird verschoben.
+- Felder: Lieferant, Rechnungsnummer, Datum, Netto/Steuer/Brutto (das Programm rechnet fehlende Werte aus),
+  Fälligkeit (automatisch aus dem Zahlungsziel), Kostenart, Bestellung.
+- Die Originaldatei wird unverändert mit SHA-256 abgelegt.
+- Löschen geht nicht, nur Stornieren mit Grund. Änderungen stehen im Änderungsprotokoll.
+- Doppelt erfasste Rechnungen (gleiche Nummer oder gleiche Datei) werden abgelehnt.
+
+**Bankabgleich für Ausgänge:** Abbuchungen lassen sich jetzt Eingangsrechnungen zuordnen. Es gibt einen Vorschlag
+über die Rechnungsnummer im Verwendungszweck oder über Betrag und Lieferant. Danach gilt die Rechnung als bezahlt.
+
+**Einstellungen → Einkauf:** Mindestmarge, Nummernpräfixe, Kostenarten und der Postfach-Ordner für Rechnungen.
+
+### Technisch
+- Neue Tabellen:
+  - `lieferanten`, `artikel_lieferanten`
+  - `bestellungen`, `bestell_positionen`
+  - `wareneingaenge` (geschützt)
+  - `eingangsrechnungen` (Datei geschützt, nicht löschbar)
+  - `er_zahlungen`
+- Neue Spalte `bank_umsaetze.er_zahlung_id`. Vor der Umstellung wird automatisch gesichert.
+- Die Datenprüfung prüft auch die Originaldateien der Eingangsrechnungen und die Nummernkreise BE und ER.
 
 ## 0.16.0 – 15.10.2026
 Lagerverwaltung (Ausbaustufe 6 von 10).

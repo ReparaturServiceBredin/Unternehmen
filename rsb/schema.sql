@@ -734,6 +734,7 @@ CREATE TABLE IF NOT EXISTS bank_umsaetze (
     verwendungszweck   TEXT,
     status             TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'zugeordnet', 'ignoriert')),
     zahlung_id         INTEGER REFERENCES zahlungen(id),
+    er_zahlung_id      INTEGER,                   -- Ausgang: Zahlung auf eine Eingangsrechnung
     bearbeitet_am      TEXT,
     bearbeitet_von     TEXT
 );
@@ -938,3 +939,156 @@ CREATE TABLE IF NOT EXISTS inventur_zugaenge (
     gueltig_bis TEXT NOT NULL,
     erstellt_am TEXT NOT NULL
 );
+
+-- Lieferanten (0.17.0)
+CREATE TABLE IF NOT EXISTS lieferanten (
+    id                  INTEGER PRIMARY KEY,
+    name                TEXT NOT NULL,
+    ansprechpartner     TEXT,
+    email               TEXT,
+    telefon             TEXT,
+    strasse             TEXT,
+    plz                 TEXT,
+    ort                 TEXT,
+    land                TEXT,
+    ust_idnr            TEXT,
+    iban                TEXT,
+    kundennr_bei        TEXT,               -- meine Kundennummer beim Lieferanten
+    webshop             TEXT,
+    zahlungsbedingungen TEXT,
+    zahlungsziel_tage   INTEGER,
+    lieferzeit_tage     INTEGER,
+    kreditornr          TEXT,               -- für den DATEV-Export
+    notizen             TEXT,
+    aktiv               INTEGER NOT NULL DEFAULT 1,
+    erstellt_am         TEXT NOT NULL,
+    geaendert_am        TEXT NOT NULL
+);
+
+-- Bezugsquellen je Artikel (mehrere Lieferanten mit eigenem EK)
+CREATE TABLE IF NOT EXISTS artikel_lieferanten (
+    id              INTEGER PRIMARY KEY,
+    artikel_id      INTEGER NOT NULL REFERENCES artikel(id),
+    lieferant_id    INTEGER NOT NULL REFERENCES lieferanten(id),
+    ek              INTEGER,                  -- Cent netto je Einheit
+    lieferanten_artnr TEXT,
+    garantie_monate INTEGER,                  -- Gewährleistung/Garantie des Lieferanten auf das Teil
+    geaendert_am    TEXT NOT NULL,
+    UNIQUE (artikel_id, lieferant_id)
+);
+
+-- Bestellungen bei Lieferanten
+CREATE TABLE IF NOT EXISTS bestellungen (
+    id           INTEGER PRIMARY KEY,
+    nummer       TEXT UNIQUE NOT NULL,       -- BE-2026-0001
+    lieferant_id INTEGER NOT NULL REFERENCES lieferanten(id),
+    status       TEXT NOT NULL DEFAULT 'entwurf'
+                 CHECK (status IN ('entwurf', 'bestellt', 'teilweise', 'geliefert', 'storniert')),
+    bestellt_am  TEXT,
+    erwartet_am  TEXT,
+    notiz        TEXT,
+    versendet_an TEXT,
+    erstellt_am  TEXT NOT NULL,
+    benutzer     TEXT,
+    storno_grund TEXT
+);
+CREATE TABLE IF NOT EXISTS bestell_positionen (
+    id            INTEGER PRIMARY KEY,
+    bestellung_id INTEGER NOT NULL REFERENCES bestellungen(id),
+    artikel_id    INTEGER REFERENCES artikel(id),
+    bezeichnung   TEXT NOT NULL,
+    lieferanten_artnr TEXT,
+    menge         REAL NOT NULL,
+    geliefert     REAL NOT NULL DEFAULT 0,
+    ek            INTEGER,
+    auftrag_id    INTEGER REFERENCES auftraege(id)    -- „Teil für diesen Auftrag bestellen“
+);
+CREATE INDEX IF NOT EXISTS ix_bestell_pos ON bestell_positionen(bestellung_id);
+CREATE INDEX IF NOT EXISTS ix_bestell_pos_auftrag ON bestell_positionen(auftrag_id);
+
+-- Wareneingänge (Historie je Position; der Lagerzugang steht zusätzlich in lagerbewegungen)
+CREATE TABLE IF NOT EXISTS wareneingaenge (
+    id            INTEGER PRIMARY KEY,
+    bestellung_id INTEGER NOT NULL REFERENCES bestellungen(id),
+    position_id   INTEGER NOT NULL REFERENCES bestell_positionen(id),
+    artikel_id    INTEGER REFERENCES artikel(id),
+    lieferant_id  INTEGER REFERENCES lieferanten(id),
+    menge         REAL NOT NULL,
+    ek            INTEGER,
+    lieferschein  TEXT,
+    garantie_bis  TEXT,                     -- Lieferantengarantie für diese Lieferung
+    bewegung_id   INTEGER REFERENCES lagerbewegungen(id),
+    zeitpunkt     TEXT NOT NULL,
+    benutzer      TEXT
+);
+CREATE TRIGGER IF NOT EXISTS wareneingang_schutz_update BEFORE UPDATE ON wareneingaenge
+BEGIN
+    SELECT RAISE(ABORT, 'Wareneingänge dürfen nicht geändert werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS wareneingang_schutz_delete BEFORE DELETE ON wareneingaenge
+BEGIN
+    SELECT RAISE(ABORT, 'Wareneingänge dürfen nicht gelöscht werden.');
+END;
+
+-- Eingangsrechnungen (Belege der Lieferanten); Originaldatei unveränderlich (SHA-256)
+CREATE TABLE IF NOT EXISTS eingangsrechnungen (
+    id            INTEGER PRIMARY KEY,
+    lfd_nr        TEXT UNIQUE NOT NULL,      -- eigene laufende Belegnummer ER-2026-0001
+    lieferant_id  INTEGER REFERENCES lieferanten(id),
+    lieferant_name TEXT,                     -- falls (noch) kein Lieferant angelegt ist
+    nummer        TEXT,                      -- Rechnungsnummer des Lieferanten
+    datum         TEXT NOT NULL,
+    faellig_am    TEXT,
+    netto         INTEGER NOT NULL DEFAULT 0,
+    steuer        INTEGER NOT NULL DEFAULT 0,
+    brutto        INTEGER NOT NULL DEFAULT 0,
+    steuersatz    REAL,
+    kostenart     TEXT,
+    bestellung_id INTEGER REFERENCES bestellungen(id),
+    beschreibung  TEXT,
+    status        TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'bezahlt', 'storniert')),
+    datei         TEXT,
+    datei_name    TEXT,
+    datei_sha256  TEXT,
+    quelle        TEXT,                      -- Upload / Postfach / E-Rechnung
+    message_id    TEXT,                      -- aus dem Postfach übernommen (gegen Doppelte)
+    erfasst_am    TEXT NOT NULL,
+    benutzer      TEXT,
+    storniert_am  TEXT,
+    storno_grund  TEXT,
+    exportiert_am TEXT                       -- DATEV-Export (Ausbaustufe 9)
+);
+CREATE INDEX IF NOT EXISTS ix_er_status ON eingangsrechnungen(status, faellig_am);
+CREATE TRIGGER IF NOT EXISTS er_datei_schutz BEFORE UPDATE ON eingangsrechnungen
+WHEN OLD.datei_sha256 IS NOT NULL AND (NEW.datei_sha256 IS NOT OLD.datei_sha256 OR NEW.datei IS NOT OLD.datei)
+BEGIN
+    SELECT RAISE(ABORT, 'Die Originaldatei einer Eingangsrechnung darf nicht ausgetauscht werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS er_schutz_delete BEFORE DELETE ON eingangsrechnungen
+BEGIN
+    SELECT RAISE(ABORT, 'Eingangsrechnungen dürfen nicht gelöscht werden – bitte stornieren.');
+END;
+
+-- Zahlungen auf Eingangsrechnungen (Ausgänge)
+CREATE TABLE IF NOT EXISTS er_zahlungen (
+    id                INTEGER PRIMARY KEY,
+    eingangsrechnung_id INTEGER NOT NULL REFERENCES eingangsrechnungen(id),
+    datum             TEXT NOT NULL,
+    betrag            INTEGER NOT NULL,
+    zahlart           TEXT NOT NULL,
+    notiz             TEXT,
+    bank_umsatz_id    INTEGER REFERENCES bank_umsaetze(id),
+    erfasst_am        TEXT NOT NULL,
+    benutzer          TEXT,
+    storniert_am      TEXT,
+    storno_grund      TEXT
+);
+CREATE TRIGGER IF NOT EXISTS er_zahlung_schutz BEFORE UPDATE ON er_zahlungen
+WHEN NEW.betrag IS NOT OLD.betrag OR NEW.datum IS NOT OLD.datum OR NEW.eingangsrechnung_id IS NOT OLD.eingangsrechnung_id
+BEGIN
+    SELECT RAISE(ABORT, 'Zahlungen können nicht geändert, nur storniert werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS er_zahlung_schutz_delete BEFORE DELETE ON er_zahlungen
+BEGIN
+    SELECT RAISE(ABORT, 'Zahlungen können nicht gelöscht, nur storniert werden.');
+END;

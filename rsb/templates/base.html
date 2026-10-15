@@ -25,6 +25,10 @@
     <a href="{{ url_for('main.dokumente') }}" class="{{ 'aktiv' if ep.startswith('main.dokument') }}">Rechnungen &amp; KVA</a>
     <a href="{{ url_for('main.offene_posten') }}" class="{{ 'aktiv' if ep == 'main.offene_posten' }}">Offene Posten{% if posten_ueberfaellig %} <span class="zaehler" title="überfällige Rechnungen">{{ posten_ueberfaellig }}</span>{% endif %}</a>
     <a href="{{ url_for('main.mahnwesen') }}" class="{{ 'aktiv' if ep.startswith('main.mahn') }}">Mahnwesen</a>
+    <div class="gruppe">Einkauf</div>
+    <a href="{{ url_for('main.lieferanten') }}" class="{{ 'aktiv' if ep.startswith('main.lieferant') }}">Lieferanten</a>
+    <a href="{{ url_for('main.bestellungen') }}" class="{{ 'aktiv' if ep.startswith('main.bestellung') }}">Bestellungen</a>
+    <a href="{{ url_for('main.eingangsrechnungen') }}" class="{{ 'aktiv' if ep.startswith('main.eingangsrechnung') }}">Eingangsrechnungen</a>
     <a href="{{ url_for('main.bank') }}" class="{{ 'aktiv' if ep.startswith('main.bank') }}">Bankabgleich</a>
     <div class="gruppe">Verwaltung</div>
     <a href="{{ url_for('main.einstellungen') }}" class="{{ 'aktiv' if ep.startswith('main.einstellungen') }}">Einstellungen</a>

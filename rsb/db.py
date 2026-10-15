@@ -176,7 +176,15 @@ STANDARD_EINSTELLUNGEN = {
         "Vorschriften vor. Die Herausgabe erfolgt gegen Vorlage dieses Annahmescheins oder eines Ausweises."),
     "abholschein_text": "Ich habe mein Gerät mit dem oben aufgeführten Zubehör vollständig und funktionsfähig "
                         "zurückerhalten.",
-    "garantie_monate": 12,                  # freiwillige Garantie auf Reparaturen (6 / 12 Monate …), 0 = keine
+    "garantie_monate": 12,
+    # Einkauf
+    "mindest_marge_prozent": 30,            # Warnung, wenn die Marge (vom VK) nach EK-Änderung darunter fällt
+    "praefix_bestellung": "BE",
+    "praefix_eingangsrechnung": "ER",
+    "kostenarten": "Wareneinkauf / Ersatzteile\nWerkzeug & Geräte\nMiete & Nebenkosten\nTelefon & Internet\n"
+                   "Software & Lizenzen\nPorto & Versand\nWerbung\nFahrzeugkosten\nBürobedarf\nFortbildung\n"
+                   "Versicherungen & Beiträge\nBankgebühren\nSonstiges",
+    "er_imap_ordner": "INBOX",              # Postfach-Ordner für Eingangsrechnungen                  # freiwillige Garantie auf Reparaturen (6 / 12 Monate …), 0 = keine
     "handy_im_netz": False,                 # Server im WLAN erreichbar machen (für QR-Code am Handy), Neustart nötig
     "handy_adresse": "",                    # optional: feste Adresse, z. B. 192.168.178.20:5000
     # Kundenbenachrichtigung: siehe benachrichtigung.einstellungs_standard() (unten ergänzt)
@@ -331,13 +339,16 @@ MIGRATIONEN = [
     ("artikel", "ean", "TEXT"),
     ("artikel", "herstellernr", "TEXT"),
     ("artikel", "kompatibilitaet", "TEXT"),
+    ("bank_umsaetze", "er_zahlung_id", "INTEGER"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
 NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
                  "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen", "zahlungen",
                  "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge", "benachrichtigungen", "lagerbewegungen",
-                 "lager_reservierungen", "inventuren", "inventur_positionen", "inventur_zugaenge"]
+                 "lager_reservierungen", "inventuren", "inventur_positionen", "inventur_zugaenge", "lieferanten",
+                 "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
+                 "er_zahlungen"]
 
 
 def _migrieren(con, pfad=None):

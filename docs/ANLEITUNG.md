@@ -485,3 +485,19 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
    2. Zählen: am PC eintragen, Zählliste drucken oder **Am Handy zählen** (QR-Code). Zwischendurch speichern geht.
    3. **Inventur abschließen**. Die Differenzen werden gebucht und das Protokoll-PDF wird archiviert.
 6. **Lagerwert:** *Lager → Lagerwert*, Stichtag wählen.
+
+## 22. Einkauf: Lieferanten, Bestellungen, Eingangsrechnungen
+
+1. **Lieferant anlegen:** *Einkauf → Lieferanten → + Neuer Lieferant*.
+2. **Bezugsquelle beim Artikel:** Artikel öffnen → „Bezugsquellen“ → Lieferant, EK und Artikelnummer eintragen.
+   Bei mehreren Lieferanten ist der günstigste markiert.
+3. **Bestellen:**
+   - *Lager → Bestellvorschlag erstellen*, Mengen prüfen, **Bestellungen anlegen**, oder
+   - im Auftrag (Reiter Material): **Teil für diesen Auftrag bestellen**.
+
+   Die Bestellung per E-Mail senden oder nach der Bestellung im Webshop auf **Als bestellt markieren** klicken.
+4. **Ware ist da:** Bestellung öffnen, Mengen prüfen, **Wareneingang buchen**.
+5. **Eingangsrechnung:** *Einkauf → Eingangsrechnungen → + Erfassen / hochladen* oder **Aus dem Postfach**. Beträge
+   eintragen (Netto oder Brutto genügt) und speichern.
+6. **Bezahlen:** Kontoauszug im *Bankabgleich* einlesen. Bei der Abbuchung die Eingangsrechnung bestätigen. Ohne
+   Kontoauszug erfassen Sie die Zahlung direkt an der Eingangsrechnung.

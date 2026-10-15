@@ -59,6 +59,24 @@
 </div>
 {% endif %}
 {% if a %}
+<div class="karte" id="bezugsquellen">
+  <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Bezugsquellen (Lieferanten)</h2>
+    {% if quellen %}<a class="knopf zweit klein" href="{{ url_for('main.bestellung_neu', artikel_id=a.id) }}">Bestellen</a>{% endif %}</div>
+  <table class="liste"><thead><tr><th>Lieferant</th><th>Lief.-Art.-Nr.</th><th class="zahl">EK netto</th><th class="zahl">Lieferzeit</th><th class="zahl">Garantie</th><th></th></tr></thead><tbody>
+  {% for q in quellen %}<tr><td><a href="{{ url_for('main.lieferant', lid=q.lieferant_id) }}">{{ q.name }}</a>{% if loop.first and q.ek is not none and quellen|length > 1 %} <span class="marke-status st-gesendet">günstigster</span>{% endif %}</td>
+    <td>{{ q.lieferanten_artnr or '' }}</td><td class="zahl">{{ q.ek|euro if q.ek is not none else '–' }}</td><td class="zahl">{{ (q.lieferzeit_tage ~ ' Tg.') if q.lieferzeit_tage else '' }}</td><td class="zahl">{{ (q.garantie_monate ~ ' Mon.') if q.garantie_monate else '' }}</td>
+    <td class="zahl"><form method="post" action="{{ url_for('main.artikel_bezugsquelle', aid=a.id) }}">{{ csrf() }}<input type="hidden" name="lieferant_id" value="{{ q.lieferant_id }}"><input type="hidden" name="entfernen" value="1"><button class="zweit klein" title="entfernen">✕</button></form></td></tr>
+  {% else %}<tr><td colspan="6" class="klein">Noch keine Bezugsquelle.</td></tr>{% endfor %}</tbody></table>
+  {% if alle_lieferanten %}
+  <form method="post" action="{{ url_for('main.artikel_bezugsquelle', aid=a.id) }}" class="felder" style="margin-top:10px">{{ csrf() }}
+    <div class="s3"><label>Lieferant</label><select name="lieferant_id" required>{% for l in alle_lieferanten %}<option value="{{ l.id }}">{{ l.name }}</option>{% endfor %}</select></div>
+    <div class="s2"><label>EK netto (€)</label><input type="text" name="ek"></div>
+    <div class="s2"><label>Lief.-Art.-Nr.</label><input type="text" name="lieferanten_artnr"></div>
+    <div class="s2"><label>Garantie (Mon.)</label><input type="text" name="garantie_monate" placeholder="z. B. 6"></div>
+    <div class="s3"><label>&nbsp;</label><button class="zweit">Speichern</button></div>
+    <div class="s12"><label class="check"><input type="checkbox" name="als_ek" value="1"> diesen Preis als Einkaufspreis des Artikels übernehmen (Marge wird neu berechnet)</label></div>
+  </form>{% else %}<p class="klein">Lieferanten legen Sie unter <a href="{{ url_for('main.lieferanten') }}">Einkauf → Lieferanten</a> an.</p>{% endif %}
+</div>
 <form method="post" action="{{ url_for('main.artikel_loeschen', aid=a.id) }}" onsubmit="return confirm('Wirklich löschen?')">{{ csrf() }}<button class="gefahr">Löschen</button></form>
 {% endif %}
 {% endblock %}

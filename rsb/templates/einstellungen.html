@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('einkauf','Einkauf'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -266,6 +266,21 @@
   <p class="klein">Dieser Text steht im Leihvertrag / Übergabeprotokoll, das der Kunde bei der Ausgabe eines Leihgeräts unterschreibt. <code>{firma}</code> wird durch Ihren Firmennamen ersetzt. Lassen Sie die Bedingungen im Zweifel einmal rechtlich prüfen.</p>
   <textarea name="leihbedingungen" style="min-height:360px">{{ einst.leihbedingungen or '' }}</textarea><br><br>
   <button>Speichern</button>
+</form>
+
+{% elif bereich == 'einkauf' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Einkauf</h2>
+  <div class="felder">
+    <div class="s4"><label>Mindestmarge (% vom Verkaufspreis)</label><input type="number" name="mindest_marge_prozent" value="{{ einst.mindest_marge_prozent }}">
+      <div class="hilfe">Ändert sich der Einkaufspreis (z. B. beim Wareneingang) und die Marge fällt darunter, erscheint eine Warnung.</div></div>
+    <div class="s4"><label>Präfix Bestellungen</label><input type="text" name="praefix_bestellung" value="{{ einst.praefix_bestellung }}"></div>
+    <div class="s4"><label>Präfix Eingangsrechnungen (eigene Belegnummer)</label><input type="text" name="praefix_eingangsrechnung" value="{{ einst.praefix_eingangsrechnung }}"></div>
+    <div class="s6"><label>Kostenarten (eine je Zeile)</label><textarea name="kostenarten" style="min-height:220px">{{ einst.kostenarten }}</textarea>
+      <div class="hilfe">Für die Zuordnung der Eingangsrechnungen und später für die Konten im DATEV-Export.</div></div>
+    <div class="s6"><label>Postfach-Ordner mit Eingangsrechnungen</label><input type="text" name="er_imap_ordner" value="{{ einst.er_imap_ordner }}">
+      <div class="hilfe">Nutzt den IMAP-Zugang unter „Anfragen“. Tipp: im Mailprogramm eine Regel anlegen, die Rechnungen in einen eigenen Ordner (z. B. „Rechnungen“) verschiebt.</div></div>
+  </div><br><button>Speichern</button>
 </form>
 
 {% elif bereich == 'benachrichtigung' %}
