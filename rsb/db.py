@@ -324,12 +324,20 @@ MIGRATIONEN = [
     ("auftraege", "interne_kosten_notiz", "TEXT"),
     ("positionen", "garantie_monate", "INTEGER"),
     ("artikel", "garantie_monate", "INTEGER"),
+    ("artikel", "lagerfuehrend", "INTEGER NOT NULL DEFAULT 0"),
+    ("artikel", "bestand", "REAL NOT NULL DEFAULT 0"),
+    ("artikel", "mindestbestand", "REAL"),
+    ("artikel", "lagerort", "TEXT"),
+    ("artikel", "ean", "TEXT"),
+    ("artikel", "herstellernr", "TEXT"),
+    ("artikel", "kompatibilitaet", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
 NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
                  "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen", "zahlungen",
-                 "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge", "benachrichtigungen"]
+                 "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge", "benachrichtigungen", "lagerbewegungen",
+                 "lager_reservierungen", "inventuren", "inventur_positionen", "inventur_zugaenge"]
 
 
 def _migrieren(con, pfad=None):

@@ -395,6 +395,8 @@ def stornieren(con, dok_id, daten_dir, grund=""):
         dbm.protokollieren("storniert", "dokument", dok_id, {"durch": nummer}, con=con)
         dbm.ereignis_erfassen(con, "dokument", dok_id, "storniert", f"durch Stornorechnung {nummer}"
                               + (f" – Grund: {grund}" if grund else ""))
+        from .lager import rechnung_storniert
+        rechnung_storniert(con, dok_id)  # ausgebuchtes Material des Auftrags wieder einbuchen
     return neu_id, nummer
 
 
@@ -469,6 +471,17 @@ def integritaet_pruefen(con, daten_dir):
         elif not pfad.with_suffix(".json").is_file() or \
                 hashlib.sha256(pfad.with_suffix(".json").read_bytes()).hexdigest() != m["snapshot_sha256"]:
             ergebnisse["pdf"].append(f"{m['nummer']}: archivierte Daten der Mahnung fehlen oder wurden verändert.")
+    for tabelle, spalte, text in (("auftrag_belege", "nummer", "Annahme-/Abholschein"),
+                                  ("inventuren", "stichtag", "Inventurprotokoll")):
+        for b in con.execute(f"SELECT {spalte} AS nummer, pdf_datei, pdf_sha256 FROM {tabelle} "
+                             "WHERE pdf_datei IS NOT NULL"):
+            pfad = Path(daten_dir) / b["pdf_datei"]
+            if not pfad.is_file():
+                ergebnisse["pdf"].append(f"{text} {b['nummer']}: PDF fehlt.")
+            elif hashlib.sha256(pfad.read_bytes()).hexdigest() != b["pdf_sha256"]:
+                ergebnisse["pdf"].append(f"{text} {b['nummer']}: PDF wurde verändert.")
+    from .lager import integritaet as lager_integritaet
+    ergebnisse["lager"] = lager_integritaet(con)
     vergeben = {r["nummer"] for r in con.execute("SELECT nummer FROM dokumente WHERE nummer IS NOT NULL")}
     vergeben |= {r["nummer"] for r in con.execute("SELECT nummer FROM mahnungen")}
     for k in con.execute("SELECT * FROM nummernkreise ORDER BY praefix, jahr"):

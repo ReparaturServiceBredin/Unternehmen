@@ -20,6 +20,7 @@
     <a href="{{ url_for('main.leihgeraete') }}" class="{{ 'aktiv' if ep.startswith('main.leih') }}">Leihgeräte{% if leihen_ueberfaellig %} <span class="zaehler" title="überfällige Rückgaben">{{ leihen_ueberfaellig }}</span>{% endif %}</a>
     <a href="{{ url_for('main.kunden') }}" class="{{ 'aktiv' if ep.startswith('main.kunde') }}">Kunden</a>
     <a href="{{ url_for('main.vertraege_liste') }}" class="{{ 'aktiv' if ep.startswith('main.vertr') }}">Verträge &amp; Lizenzen</a>
+    <a href="{{ url_for('main.lager') }}" class="{{ 'aktiv' if ep.startswith('main.lager') or ep.startswith('main.inventur') }}">Lager{% if lager_unter_min %} <span class="zaehler" title="unter Mindestbestand">{{ lager_unter_min }}</span>{% endif %}</a>
     <a href="{{ url_for('main.artikel_liste') }}" class="{{ 'aktiv' if ep.startswith('main.artikel') }}">Leistungen &amp; Artikel</a>
     <a href="{{ url_for('main.dokumente') }}" class="{{ 'aktiv' if ep.startswith('main.dokument') }}">Rechnungen &amp; KVA</a>
     <a href="{{ url_for('main.offene_posten') }}" class="{{ 'aktiv' if ep == 'main.offene_posten' }}">Offene Posten{% if posten_ueberfaellig %} <span class="zaehler" title="überfällige Rechnungen">{{ posten_ueberfaellig }}</span>{% endif %}</a>

@@ -48,6 +48,14 @@ CREATE TABLE IF NOT EXISTS artikel (
     steuersatz        REAL NOT NULL DEFAULT 19,
     ek_unbekannt      INTEGER NOT NULL DEFAULT 0,   -- 1 = Einkaufspreis nicht bekannt -> keine Marge anzeigen
     garantie_monate   INTEGER,                      -- Garantie-Vorschlag für Rechnungspositionen
+    -- Lager (0.16.0): Bestand nur über lagerbewegungen ändern (bestand = Zwischenspeicher)
+    lagerfuehrend     INTEGER NOT NULL DEFAULT 0,
+    bestand           REAL NOT NULL DEFAULT 0,
+    mindestbestand    REAL,
+    lagerort          TEXT,
+    ean               TEXT,
+    herstellernr      TEXT,
+    kompatibilitaet   TEXT,                         -- z. B. „iPhone 13, iPhone 13 Pro“ (durchsuchbar)
     aktiv             INTEGER NOT NULL DEFAULT 1,
     erstellt_am       TEXT NOT NULL,
     geaendert_am      TEXT NOT NULL
@@ -844,3 +852,89 @@ CREATE TABLE IF NOT EXISTS benachrichtigungen (
     benutzer    TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_benachrichtigungen ON benachrichtigungen(auftrag_id, status);
+
+-- Lagerbewegungen (unveränderlich): Zugang / Abgang / Korrektur / Inventur
+CREATE TABLE IF NOT EXISTS lagerbewegungen (
+    id             INTEGER PRIMARY KEY,
+    artikel_id     INTEGER NOT NULL REFERENCES artikel(id),
+    art            TEXT NOT NULL CHECK (art IN ('zugang', 'abgang', 'korrektur', 'inventur')),
+    menge          REAL NOT NULL,                 -- mit Vorzeichen
+    bestand_danach REAL NOT NULL,
+    grund          TEXT NOT NULL,
+    auftrag_id     INTEGER REFERENCES auftraege(id),
+    dokument_id    INTEGER REFERENCES dokumente(id),
+    inventur_id    INTEGER,
+    ek             INTEGER,                       -- Einkaufspreis je Einheit (Cent) zum Buchungszeitpunkt
+    zeitpunkt      TEXT NOT NULL,
+    benutzer       TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_lagerbewegungen ON lagerbewegungen(artikel_id, zeitpunkt);
+CREATE TRIGGER IF NOT EXISTS lagerbewegung_schutz_update BEFORE UPDATE ON lagerbewegungen
+BEGIN
+    SELECT RAISE(ABORT, 'Lagerbewegungen dürfen nicht geändert werden – bitte eine Korrekturbuchung erfassen.');
+END;
+CREATE TRIGGER IF NOT EXISTS lagerbewegung_schutz_delete BEFORE DELETE ON lagerbewegungen
+BEGIN
+    SELECT RAISE(ABORT, 'Lagerbewegungen dürfen nicht gelöscht werden – bitte eine Korrekturbuchung erfassen.');
+END;
+
+-- Material zum Auftrag (Reservierung → beim Erledigen ausgebucht)
+CREATE TABLE IF NOT EXISTS lager_reservierungen (
+    id          INTEGER PRIMARY KEY,
+    artikel_id  INTEGER NOT NULL REFERENCES artikel(id),
+    auftrag_id  INTEGER NOT NULL REFERENCES auftraege(id),
+    menge       REAL NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'reserviert'
+                CHECK (status IN ('reserviert', 'ausgebucht', 'storniert', 'zurueckgebucht')),
+    quelle      TEXT,
+    bewegung_id INTEGER REFERENCES lagerbewegungen(id),
+    storno_grund TEXT,
+    erstellt_am TEXT NOT NULL,
+    erledigt_am TEXT,
+    benutzer    TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_lager_reservierungen ON lager_reservierungen(auftrag_id);
+CREATE INDEX IF NOT EXISTS ix_lager_reservierungen_art ON lager_reservierungen(artikel_id, status);
+
+-- Inventur
+CREATE TABLE IF NOT EXISTS inventuren (
+    id               INTEGER PRIMARY KEY,
+    stichtag         TEXT NOT NULL,
+    bezeichnung      TEXT,
+    status           TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'abgeschlossen')),
+    erstellt_am      TEXT NOT NULL,
+    benutzer         TEXT,
+    abgeschlossen_am TEXT,
+    abgeschlossen_von TEXT,
+    lagerwert        INTEGER,
+    differenzen      INTEGER,
+    pdf_datei        TEXT,
+    pdf_sha256       TEXT
+);
+CREATE TABLE IF NOT EXISTS inventur_positionen (
+    id           INTEGER PRIMARY KEY,
+    inventur_id  INTEGER NOT NULL REFERENCES inventuren(id),
+    artikel_id   INTEGER NOT NULL REFERENCES artikel(id),
+    soll         REAL NOT NULL,
+    ist          REAL,
+    ek           INTEGER,
+    gezaehlt_am  TEXT,
+    gezaehlt_von TEXT,
+    UNIQUE (inventur_id, artikel_id)
+);
+CREATE TRIGGER IF NOT EXISTS inventur_schutz BEFORE UPDATE ON inventur_positionen
+WHEN (SELECT status FROM inventuren WHERE id=OLD.inventur_id)='abgeschlossen'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Inventuren dürfen nicht geändert werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS inventur_kopf_schutz BEFORE UPDATE ON inventuren
+WHEN OLD.status='abgeschlossen'
+BEGIN
+    SELECT RAISE(ABORT, 'Abgeschlossene Inventuren dürfen nicht geändert werden.');
+END;
+CREATE TABLE IF NOT EXISTS inventur_zugaenge (
+    token       TEXT PRIMARY KEY,
+    inventur_id INTEGER NOT NULL REFERENCES inventuren(id),
+    gueltig_bis TEXT NOT NULL,
+    erstellt_am TEXT NOT NULL
+);

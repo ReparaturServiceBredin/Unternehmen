@@ -1,6 +1,5 @@
 """Phase 5: Garantie je Reparatur/Position, Wiedererkennung per SN/IMEI, Garantiefall."""
 import json
-import re
 from datetime import date
 
 from rsb import db as dbm

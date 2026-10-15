@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.16.0 | 15.10.2026 | Lager: Bestand, Reservierung, Mindestbestand, Inventur, Lagerwert |
 | 0.15.0 | 15.10.2026 | Garantie, Geräte-Wiedererkennung per SN/IMEI, Garantiefälle |
 | 0.14.0 | 15.10.2026 | Kundenbenachrichtigung, Spalte „Wartet auf Teil“, Abhol-Erinnerungen |
 | 0.13.0 | 15.10.2026 | Annahme- und Abholschein mit digitaler Unterschrift, Handy per QR-Code |
@@ -36,6 +37,49 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.16.0 – 15.10.2026
+Lagerverwaltung (Ausbaustufe 6 von 10).
+
+### Neu
+
+**Lagerführende Artikel:** In *Leistungen & Artikel* den Haken „lagerführend“ setzen. Dazu gibt es diese Felder:
+- Mindestbestand, Lagerort
+- EAN und Herstellernummer
+- „Kompatibel mit“, z. B. „iPhone 13, iPhone 13 Pro“; danach kann man suchen
+
+**Bestand nur über Buchungen:** Zugang, Abgang und Korrektur werden immer mit Grund, Benutzer und Zeitpunkt gebucht.
+Lagerbewegungen sind unveränderlich; Fehler berichtigt eine Korrekturbuchung. Den Bestand überschreibt das Programm
+nie direkt.
+
+**Material zum Auftrag:**
+- Im Auftrag gibt es den Reiter **„Material“**. Dort Ersatzteile reservieren oder „Lagerartikel aus dem KVA
+  übernehmen“.
+- Beim Erledigen wird das Material ausgebucht.
+- Beim Storno der Rechnung oder mit „zurückbuchen“ kommt es wieder ins Lager.
+- Bei Garantiefällen zählen die ausgebuchten Teile zum Einkaufspreis automatisch zu den internen Kosten.
+
+**Unter Mindestbestand:** Die Warnliste steht unter *Lager → Unter Mindestbestand*, mit Zähler im Menü.
+**„Bestellvorschlag erstellen“** zeigt einen Vorschlag zum Drucken oder als CSV. Er füllt auf das Doppelte des
+Mindestbestands auf.
+
+**Inventur:**
+1. Stichtag wählen. Gezählt wird am PC, auf der ausgedruckten Zählliste oder per QR-Code am Handy.
+2. Abschließen. Die Differenzen werden als Inventurbuchung gebucht.
+3. Das Inventurprotokoll (PDF) wird unverändert mit SHA-256 archiviert.
+
+**Lagerwert zum Stichtag** zum Einkaufspreis: *Lager → Lagerwert*.
+
+**Datenprüfung** prüft zusätzlich, ob der Lagerbestand der Summe der Buchungen entspricht. Sie prüft auch die PDFs
+von Annahmescheinen und Inventuren.
+
+### Technisch
+- Neue Tabellen:
+  - `lagerbewegungen` (gegen Ändern und Löschen geschützt)
+  - `lager_reservierungen`
+  - `inventuren`, `inventur_positionen` (nach Abschluss geschützt)
+  - `inventur_zugaenge`
+- Neue Artikel-Spalten. Vor der Umstellung wird automatisch gesichert.
 
 ## 0.15.0 – 15.10.2026
 Garantie und Gewährleistung (Ausbaustufe 5 von 10).

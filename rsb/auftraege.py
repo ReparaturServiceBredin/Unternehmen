@@ -271,7 +271,9 @@ def status_setzen(con, auftrag_id, status, vor_id=None):
         from .leihgeraete import interner_auftrag_erledigt, ist_intern
         if status == "erledigt":
             from .annahme import zugang_loeschen
+            from .lager import auftrag_erledigt
             zugang_loeschen(con, auftrag_id, "Auftrag abgeschlossen (automatisch)")
+            auftrag_erledigt(con, auftrag_id)  # reserviertes Material ausbuchen
         if status == "erledigt" and ist_intern(con, a["kunde_id"]):
             interner_auftrag_erledigt(con, auftrag_id)  # interne Reparatur eines Leihgeräts: keine Rechnung
         elif status == "erledigt" and a["auftragsart"] == "garantie":

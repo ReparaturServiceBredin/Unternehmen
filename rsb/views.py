@@ -1,4 +1,5 @@
 """Alle Seiten der Weboberfläche."""
+import hashlib
 import io
 import json
 import re
@@ -14,6 +15,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db as dbm
 from . import benachrichtigung as ben
 from . import katalog, logik
+from . import lager as lgr
 from .backup import backup_erstellen
 from .hilfen import (EingabeFehler, anrede_brief, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
                      zahl_aus_text)
@@ -290,8 +292,9 @@ def artikel_liste():
     q = request.args.get("q", "").strip()
     sql, args = "SELECT * FROM artikel WHERE 1=1", []
     if q:
-        sql += " AND (name LIKE ? OR artikelnr LIKE ? OR leistungsart LIKE ? OR beschreibung LIKE ?)"
-        args += [f"%{q}%"] * 4
+        sql += (" AND (name LIKE ? OR artikelnr LIKE ? OR leistungsart LIKE ? OR beschreibung LIKE ? OR ean LIKE ? "
+                "OR herstellernr LIKE ? OR kompatibilitaet LIKE ?)")
+        args += [f"%{q}%"] * 7
     sql += " ORDER BY aktiv DESC, leistungsart, name"
     return render_template("artikel_liste.html", artikel=dbm.get_db().execute(sql, args).fetchall(), q=q)
 
@@ -324,7 +327,14 @@ def artikel(aid=None):
             "steuersatz": zahl_aus_text(_f("steuersatz"), 19), "aktiv": 1 if request.form.get("aktiv") else 0,
             "ek_unbekannt": ek_unbekannt,
             "garantie_monate": int(_f("garantie_monate")) if _f("garantie_monate").isdigit() else None,
+            "lagerfuehrend": 1 if request.form.get("lagerfuehrend") else 0,
+            "mindestbestand": zahl_aus_text(_f("mindestbestand"), None) if _f("mindestbestand") else None,
+            "lagerort": _f("lagerort"), "ean": _f("ean"), "herstellernr": _f("herstellernr"),
+            "kompatibilitaet": _f("kompatibilitaet"),
         }
+        if a and a["lagerfuehrend"] and not felder["lagerfuehrend"] and (a["bestand"] or 0):
+            raise EingabeFehler("Der Artikel hat noch Lagerbestand. Bitte erst auf 0 korrigieren, dann „lagerführend“ "
+                                "ausschalten.")
         with dbm.Transaktion(con):
             if a:
                 con.execute(f"UPDATE artikel SET {', '.join(f'{f}=?' for f in felder)}, geaendert_am=? WHERE id=?",
@@ -340,26 +350,34 @@ def artikel(aid=None):
                 dbm.aenderungen_erfassen(con, "artikel", aid, None, felder, aktion="angelegt",
                                          namen=ARTIKEL_FELDNAMEN)
         flash("Leistung/Artikel gespeichert.", "ok")
+        if felder["lagerfuehrend"]:
+            return redirect(url_for("main.artikel", aid=aid) + "#lager")
         return redirect(url_for("main.artikel_liste"))
     return render_template("artikel.html", a=a, leistungsarten=_leistungsarten(),
-                           aenderungen=dbm.aenderungen_liste(con, "artikel", aid) if aid else [])
+                           aenderungen=dbm.aenderungen_liste(con, "artikel", aid) if aid else [],
+                           bewegungen=lgr.bewegungen(con, aid, 100) if aid else [], lagerarten=lgr.ARTEN,
+                           reserviert=lgr.reserviert(con, aid) if aid else 0)
 
 
 ARTIKEL_FELDNAMEN = {"artikelnr": "Artikelnummer", "name": "Bezeichnung", "beschreibung": "Beschreibung",
                      "leistungsart": "Leistungsart", "typ": "Typ", "einheit": "Einheit", "preis": "Preis (Cent)",
                      "teilekosten": "Einkauf (Cent)", "aufschlag_prozent": "Aufschlag %", "steuersatz": "Steuersatz",
                      "aktiv": "aktiv", "ek_unbekannt": "Einkauf unbekannt",
-                     "garantie_monate": "Garantie (Monate)"}
+                     "garantie_monate": "Garantie (Monate)", "lagerfuehrend": "lagerführend",
+                     "mindestbestand": "Mindestbestand", "lagerort": "Lagerort", "ean": "EAN",
+                     "herstellernr": "Herstellernummer", "kompatibilitaet": "Kompatibilität"}
 
 
 @bp.route("/artikel/<int:aid>/loeschen", methods=["POST"])
 def artikel_loeschen(aid):
     con = dbm.get_db()
     with dbm.Transaktion(con):
-        if con.execute("SELECT 1 FROM positionen WHERE artikel_id=?", (aid,)).fetchone():
+        if con.execute("SELECT 1 FROM positionen WHERE artikel_id=? UNION SELECT 1 FROM lagerbewegungen "
+                       "WHERE artikel_id=? UNION SELECT 1 FROM lager_reservierungen WHERE artikel_id=?",
+                       (aid, aid, aid)).fetchone():
             con.execute("UPDATE artikel SET aktiv=0, geaendert_am=? WHERE id=?", (dbm.jetzt(), aid))
             dbm.aenderungen_erfassen(con, "artikel", aid, {"aktiv": 1}, {"aktiv": 0}, namen=ARTIKEL_FELDNAMEN)
-            flash("Der Artikel wird in Dokumenten verwendet und wurde deshalb nur deaktiviert.", "info")
+            flash("Der Artikel wird in Dokumenten oder im Lager verwendet und wurde deshalb nur deaktiviert.", "info")
         else:
             alt = con.execute("SELECT name FROM artikel WHERE id=?", (aid,)).fetchone()
             dbm.ereignis_erfassen(con, "artikel", aid, "gelöscht", alt["name"] if alt else "")
@@ -367,6 +385,182 @@ def artikel_loeschen(aid):
             flash("Artikel gelöscht.", "ok")
         dbm.protokollieren("artikel_geloescht", "artikel", aid, con=con)
     return redirect(url_for("main.artikel_liste"))
+
+
+# ====================================================================== Lager
+
+@bp.route("/lager")
+def lager():
+    con = dbm.get_db()
+    ansicht = request.args.get("ansicht", "bestand")
+    q = request.args.get("q", "").strip()
+    stichtag = request.args.get("stichtag") or date.today().isoformat()
+    daten = {}
+    if ansicht == "wert":
+        try:
+            date.fromisoformat(stichtag)
+        except ValueError:
+            raise EingabeFehler("Bitte einen gültigen Stichtag angeben.")
+        daten["wert_zeilen"], daten["wert_summe"] = lgr.lagerwert(con, stichtag)
+    elif ansicht == "bewegungen":
+        daten["bewegungen"] = lgr.bewegungen(con, limit=500)
+    elif ansicht == "inventur":
+        daten["inventuren"] = con.execute("SELECT * FROM inventuren ORDER BY id DESC").fetchall()
+    else:
+        daten["zeilen"] = lgr.uebersicht(con, q, nur_unter_min=ansicht == "mindest")
+    return render_template("lager.html", ansicht=ansicht, q=q, stichtag=stichtag, arten=lgr.ARTEN,
+                           unter_min=lgr.unter_mindestbestand_anzahl(con), heute=date.today().isoformat(), **daten)
+
+
+@bp.route("/lager/<int:artikel_id>/buchen", methods=["POST"])
+def lager_buchen(artikel_id):
+    con = dbm.get_db()
+    art = _f("art")
+    with dbm.Transaktion(con):
+        _, negativ = lgr.bewegung_buchen(con, artikel_id, art, _f("menge"), _f("grund"))
+    flash(f"{lgr.ARTEN.get(art, 'Buchung')} gebucht.", "ok")
+    if negativ:
+        flash("Achtung: Der Bestand ist jetzt negativ. Bitte prüfen (Zählung/Korrektur).", "warnung")
+    return _zurueck(url_for("main.artikel", aid=artikel_id) + "#lager")
+
+
+@bp.route("/lager/bestellvorschlag")
+def lager_bestellvorschlag():
+    con = dbm.get_db()
+    vorschlag = lgr.bestellvorschlag(con)
+    if request.args.get("format") == "csv":
+        import csv
+        puffer = io.StringIO()
+        w = csv.writer(puffer, delimiter=";")
+        w.writerow(["Artikel", "Artikelnr.", "Herstellernr.", "EAN", "Lagerort", "verfügbar", "Mindestbestand",
+                    "Bestellmenge", "Einheit", "EK", "Summe"])
+        for z in vorschlag:
+            a = z["a"]
+            w.writerow([a["name"], a["artikelnr"] or "", a["herstellernr"] or "", a["ean"] or "", a["lagerort"] or "",
+                        menge_text(z["verfuegbar"]), menge_text(a["mindestbestand"]), z["menge"], a["einheit"] or "",
+                        euro(a["teilekosten"] or 0, False), euro(z["summe"], False)])
+        return send_file(io.BytesIO(puffer.getvalue().encode("utf-8-sig")), mimetype="text/csv",
+                         download_name=f"Bestellvorschlag_{date.today().isoformat()}.csv", as_attachment=True)
+    return render_template("lager_bestellvorschlag.html", vorschlag=vorschlag,
+                           summe=sum(z["summe"] for z in vorschlag), heute=date.today().isoformat())
+
+
+@bp.route("/lager/inventur/neu", methods=["POST"])
+def inventur_neu():
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        iid = lgr.inventur_anlegen(con, _f("stichtag") or date.today().isoformat(), _f("bezeichnung"))
+    flash("Inventur angelegt. Jetzt zählen – am PC, ausgedruckt oder per Handy.", "ok")
+    return redirect(url_for("main.inventur", iid=iid))
+
+
+def _inventur_laden(iid):
+    inv = dbm.get_db().execute("SELECT * FROM inventuren WHERE id=?", (iid,)).fetchone()
+    if not inv:
+        abort(404)
+    return inv
+
+
+@bp.route("/lager/inventur/<int:iid>", methods=["GET", "POST"])
+def inventur(iid):
+    con = dbm.get_db()
+    inv = _inventur_laden(iid)
+    if request.method == "POST":
+        werte = {int(k[4:]): v for k, v in request.form.items() if k.startswith("ist_") and k[4:].isdigit()}
+        with dbm.Transaktion(con):
+            n = lgr.zaehlen(con, iid, werte)
+        flash(f"{n} Zählung(en) gespeichert.", "ok")
+        return redirect(url_for("main.inventur", iid=iid, ort=request.args.get("ort", "")))
+    positionen = lgr.inventur_positionen(con, iid)
+    return render_template("inventur.html", inv=inv, positionen=positionen, druck=request.args.get("druck") == "1",
+                           orte=sorted({p["lagerort"] or "" for p in positionen}), ort=request.args.get("ort"),
+                           mobil=False, ziel=url_for("main.inventur", iid=iid))
+
+
+@bp.route("/lager/inventur/<int:iid>/abschliessen", methods=["POST"])
+def inventur_abschliessen(iid):
+    con = dbm.get_db()
+    _inventur_laden(iid)
+    with dbm.Transaktion(con):
+        diff, wert = lgr.inventur_abschliessen(con, iid, daten_dir(), bool(request.form.get("ungezaehlt_wie_soll")))
+    flash(f"Inventur abgeschlossen: {diff} Differenz(en) gebucht, Lagerwert {euro(wert)}. Protokoll archiviert.", "ok")
+    return redirect(url_for("main.inventur", iid=iid))
+
+
+@bp.route("/lager/inventur/<int:iid>/protokoll.pdf")
+def inventur_protokoll(iid):
+    inv = _inventur_laden(iid)
+    if not inv["pdf_datei"]:
+        abort(404)
+    pfad = Path(daten_dir()) / inv["pdf_datei"]
+    daten = pfad.read_bytes() if pfad.is_file() else None
+    if daten is None or hashlib.sha256(daten).hexdigest() != inv["pdf_sha256"]:
+        return render_template("pdf_fehler.html", d={"nummer": f"Inventur {inv['stichtag']}",
+                                                     "pdf_pfad": inv["pdf_datei"], "pdf_sha256": inv["pdf_sha256"]},
+                               fehlt=daten is None), 409
+    return send_file(io.BytesIO(daten), mimetype="application/pdf", download_name=Path(inv["pdf_datei"]).name)
+
+
+@bp.route("/lager/inventur/<int:iid>/handy", methods=["POST"])
+def inventur_handy(iid):
+    con = dbm.get_db()
+    inv = _inventur_laden(iid)
+    with dbm.Transaktion(con):
+        token = lgr.zaehl_token(con, iid)
+    port = current_app.config.get("SERVER_PORT") or request.host.rsplit(":", 1)[-1]
+    url = ann.basis_url(dbm.einstellungen(con), port) + url_for("main.mobil_inventur", token=token)
+    im_netz = current_app.config.get("SERVER_HOST") == "0.0.0.0" or bool(dbm.einstellung("handy_adresse"))
+    return render_template("inventur_qr.html", inv=inv, url=url, qr=Markup(ann.qr_svg(url)), im_netz=im_netz)
+
+
+@bp.route("/m/inventur/<token>", methods=["GET", "POST"])
+def mobil_inventur(token):
+    con = dbm.get_db()
+    z = lgr.zaehl_token_pruefen(con, token)
+    if not z:
+        return render_template("mobil.html", abgelaufen=True), 410
+    g.benutzer_ersatz = "Inventur (Handy)"
+    inv = _inventur_laden(z["inventur_id"])
+    if request.method == "POST":
+        werte = {int(k[4:]): v for k, v in request.form.items() if k.startswith("ist_") and k[4:].isdigit()}
+        with dbm.Transaktion(con):
+            n = lgr.zaehlen(con, inv["id"], werte)
+        flash(f"{n} Zählung(en) gespeichert.", "ok")
+        return redirect(url_for("main.mobil_inventur", token=token, ort=request.args.get("ort", "")))
+    positionen = lgr.inventur_positionen(con, inv["id"])
+    return render_template("inventur.html", inv=inv, positionen=positionen, druck=False, mobil=True,
+                           orte=sorted({p["lagerort"] or "" for p in positionen}), ort=request.args.get("ort"),
+                           ziel=url_for("main.mobil_inventur", token=token))
+
+
+@bp.route("/auftraege/<int:aid>/material", methods=["POST"])
+def auftrag_material(aid):
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    with dbm.Transaktion(con):
+        if request.form.get("aus_kva"):
+            anzahl, warnungen = lgr.aus_kva_reservieren(con, aid)
+            flash(f"{anzahl} Position(en) aus dem KVA reserviert." if anzahl else
+                  "Keine (weiteren) lagerführenden Positionen im KVA.", "ok" if anzahl else "info")
+        else:
+            _, w = lgr.reservieren(con, aid, request.form.get("artikel_id", type=int), _f("menge", "1"))
+            warnungen = [w] if w else []
+            flash("Material reserviert.", "ok")
+    for w in warnungen:
+        flash(w, "warnung")
+    return redirect(url_for("main.auftrag", aid=aid) + "#material")
+
+
+@bp.route("/material/<int:rid>/stornieren", methods=["POST"])
+def material_stornieren(rid):
+    con = dbm.get_db()
+    r = con.execute("SELECT * FROM lager_reservierungen WHERE id=?", (rid,)).fetchone()
+    if not r:
+        abort(404)
+    with dbm.Transaktion(con):
+        lgr.reservierung_stornieren(con, rid, _f("grund"))
+    flash("Material storniert." if r["status"] == "reserviert" else "Material wieder ins Lager gebucht.", "ok")
+    return redirect(url_for("main.auftrag", aid=r["auftrag_id"]) + "#material")
 
 
 # ====================================================================== Dokumente
@@ -1460,6 +1654,9 @@ def auftrag(aid):
                            garantie_bezug=con.execute("SELECT id, auftragsnr FROM auftraege WHERE id=?",
                                                       (a["garantie_bezug_id"],)).fetchone() if a["garantie_bezug_id"] else None,
                            garantiefaelle=gar.garantiefaelle_zu(con, aid), interne_kosten=gar.interne_kosten(con, a),
+                           material=lgr.auftrag_material(con, aid), res_status=lgr.RES_STATUS,
+                           lager_artikel=con.execute("SELECT id, name, einheit, bestand, lagerort, kompatibilitaet "
+                                                     "FROM artikel WHERE lagerfuehrend=1 AND aktiv=1 ORDER BY name").fetchall(),
                            anlaesse=ben.ANLAESSE, leistungsarten=_leistungsarten(),
                            anfrage=anfrage_row, kunden=_kunden_liste(con, a["kunde_id"]), kva_kunde=kva_kunde,
                            fotos=fot.liste(con, aid), kategorien=fot.KATEGORIEN,
@@ -1587,11 +1784,14 @@ def auftrag_loeschen(aid):
         raise EingabeFehler("Zu diesem Auftrag gibt es eine Fotodokumentation – er kann nicht gelöscht werden.")
     if con.execute("SELECT 1 FROM leihen WHERE auftrag_id=?", (aid,)).fetchone():
         raise EingabeFehler("Zu diesem Auftrag wurde ein Leihgerät ausgegeben – er kann nicht gelöscht werden.")
+    if con.execute("SELECT 1 FROM lagerbewegungen WHERE auftrag_id=?", (aid,)).fetchone():
+        raise EingabeFehler("Für diesen Auftrag wurde Material aus dem Lager gebucht – er kann nicht gelöscht werden.")
     if con.execute("SELECT 1 FROM auftrag_belege WHERE auftrag_id=?", (aid,)).fetchone():
         raise EingabeFehler("Zu diesem Auftrag gibt es einen unterschriebenen Annahme-/Abholschein – er kann nicht "
                             "gelöscht werden.")
     with dbm.Transaktion(con):
         con.execute("DELETE FROM mobil_zugaenge WHERE auftrag_id=?", (aid,))
+        con.execute("DELETE FROM lager_reservierungen WHERE auftrag_id=?", (aid,))
         con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
         if a["rechnung_id"]:  # automatisch erzeugter Rechnungsentwurf wird mitgelöscht, der KVA bleibt erhalten
             if con.execute("SELECT 1 FROM dokumente WHERE id=? AND status='entwurf'", (a["rechnung_id"],)).fetchone():

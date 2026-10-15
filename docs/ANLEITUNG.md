@@ -470,3 +470,18 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
 - **Garantiefall anlegen:** Im Hinweis auf „als Garantiefall zu …“ klicken. Interne Kosten eintragen und speichern.
   Beim Erledigen entsteht keine Rechnung. Im ursprünglichen Auftrag steht unter „Garantie“ die Liste seiner
   Garantiefälle.
+
+## 21. Lager und Inventur
+
+1. **Artikel lagerführend machen:** *Leistungen & Artikel* → Artikel öffnen → „lagerführend“ anhaken, Mindestbestand,
+   Lagerort und „Kompatibel mit“ eintragen → Speichern.
+2. **Anfangsbestand:** Unten beim Artikel „Zugang“, Menge und Grund „Erstbestand“ eintragen → **Buchen**.
+3. **Material für einen Auftrag:** Im Auftrag im Reiter **Material** Artikel und Menge wählen → **Reservieren**.
+   Beim Erledigen wird das Material automatisch ausgebucht.
+4. **Nachbestellen:** *Lager → Unter Mindestbestand* oder **Bestellvorschlag erstellen**. Den Vorschlag drucken oder
+   als CSV öffnen.
+5. **Inventur:**
+   1. *Lager → Inventur* öffnen, Stichtag wählen, **Inventur anlegen**.
+   2. Zählen: am PC eintragen, Zählliste drucken oder **Am Handy zählen** (QR-Code). Zwischendurch speichern geht.
+   3. **Inventur abschließen**. Die Differenzen werden gebucht und das Protokoll-PDF wird archiviert.
+6. **Lagerwert:** *Lager → Lagerwert*, Stichtag wählen.
