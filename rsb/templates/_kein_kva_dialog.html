@@ -1,0 +1,20 @@
+<dialog id="keinKvaDialog" class="dialog">
+  <h2>Kein Kostenvoranschlag verknüpft</h2>
+  <p>{{ kein_kva_text or 'Kein KVA verknüpft – leeren Rechnungsentwurf erstellen oder KVA jetzt verknüpfen?' }}</p>
+  <div class="leiste">
+    <button type="button" data-wahl="leer">Leeren Rechnungsentwurf erstellen</button>
+    <button type="button" class="zweit" data-wahl="verknuepfen">KVA jetzt verknüpfen</button>
+    <button type="button" class="zweit" data-wahl="">Abbrechen</button>
+  </div>
+</dialog>
+<script>
+/* Fragt nach, wenn ein Auftrag ohne KVA auf „Erledigt“ gesetzt wird. Ergebnis: 'leer', 'verknuepfen' oder '' */
+function keinKvaFragen() {
+  const d = document.getElementById('keinKvaDialog');
+  return new Promise(fertig => {
+    d.querySelectorAll('[data-wahl]').forEach(b => b.onclick = () => { d.close(); fertig(b.dataset.wahl); });
+    d.oncancel = () => fertig('');
+    d.showModal();
+  });
+}
+</script>

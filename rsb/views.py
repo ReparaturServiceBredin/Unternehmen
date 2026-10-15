@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db as dbm
 from . import katalog, logik
 from .backup import backup_erstellen
-from .hilfen import (EingabeFehler, cent_aus_text, euro, heute, kunde_name, platzhalter_ersetzen, plus_tage,
+from .hilfen import (EingabeFehler, cent_aus_text, datum_de, euro, heute, kunde_name, platzhalter_ersetzen, plus_tage,
                      zahl_aus_text)
 from .mail import MailFehler, senden
 from .pdf import SCHRIFTEN, pdf_erzeugen
@@ -203,10 +203,18 @@ def kunde_loeschen(kid):
     if con.execute("SELECT 1 FROM dokumente WHERE kunde_id=? AND status<>'entwurf'", (kid,)).fetchone():
         raise EingabeFehler("Dieser Kunde hat festgeschriebene Dokumente und muss wegen der Aufbewahrungspflicht "
                             "erhalten bleiben. Sie können ihn stattdessen archivieren.")
+    if con.execute("SELECT 1 FROM auftrag_fotos f JOIN auftraege a ON a.id=f.auftrag_id WHERE a.kunde_id=?",
+                   (kid,)).fetchone():
+        raise EingabeFehler("Zu Aufträgen dieses Kunden gibt es Fotodokumentation – der Kunde kann nicht gelöscht "
+                            "werden. Sie können ihn stattdessen archivieren.")
     with dbm.Transaktion(con):
+        for a in con.execute("SELECT id, auftragsnr FROM auftraege WHERE kunde_id=?", (kid,)).fetchall():
+            auf.verlauf(con, a["id"], "Auftrag gelöscht", a["auftragsnr"])
         con.execute("DELETE FROM auftraege WHERE kunde_id=?", (kid,))
         con.execute("DELETE FROM vertraege WHERE kunde_id=?", (kid,))
         for d in con.execute("SELECT id FROM dokumente WHERE kunde_id=?", (kid,)).fetchall():
+            con.execute("UPDATE auftraege SET kva_id=NULL WHERE kva_id=?", (d["id"],))
+            con.execute("UPDATE auftraege SET rechnung_id=NULL WHERE rechnung_id=?", (d["id"],))
             con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
             con.execute("DELETE FROM dokumente WHERE id=?", (d["id"],))
         con.execute("DELETE FROM anfragen WHERE kunde_id=?", (kid,))
@@ -352,6 +360,8 @@ def dokument(did):
             return redirect(url_for("main.dokument", did=did, vorschau=1))
         if aktion == "festschreiben":
             nummer = logik.festschreiben(con, did, daten_dir())
+            with dbm.Transaktion(con):
+                auf.dokument_ereignis(con, did, "KVA festgeschrieben", "Rechnung festgeschrieben")
             flash(f"{logik.titel(d['typ'])} {nummer} wurde festgeschrieben und archiviert.", "ok")
             return redirect(url_for("main.dokument", did=did))
         flash("Entwurf gespeichert.", "ok")
@@ -505,6 +515,10 @@ def dokument_loeschen(did):
     if d["status"] != "entwurf":
         raise EingabeFehler("Festgeschriebene Dokumente können nicht gelöscht werden. Bitte stornieren.")
     with dbm.Transaktion(con):
+        for a in con.execute("SELECT id, kva_id FROM auftraege WHERE kva_id=? OR rechnung_id=?", (did, did)).fetchall():
+            spalte = "kva_id" if a["kva_id"] == did else "rechnung_id"
+            con.execute(f"UPDATE auftraege SET {spalte}=NULL WHERE id=?", (a["id"],))
+            auf.verlauf(con, a["id"], "KVA-Entwurf gelöscht" if spalte == "kva_id" else "Rechnungsentwurf gelöscht")
         con.execute("DELETE FROM positionen WHERE dokument_id=?", (did,))
         con.execute("DELETE FROM dokumente WHERE id=?", (did,))
         dbm.protokollieren("entwurf_geloescht", "dokument", did, con=con)
@@ -531,8 +545,9 @@ def dokument_kopieren(did):
         if d["typ"] in ("rechnung", "kva") and d["hinweise"]:
             con.execute("UPDATE dokumente SET hinweise=? WHERE id=?", (d["hinweise"], neu))
         # gehört der KVA zu einem Reparaturauftrag ohne Rechnung -> Rechnung dort eintragen
-        con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE kva_id=? AND rechnung_id IS NULL",
-                    (neu, dbm.jetzt(), did))
+        for a in con.execute("SELECT id FROM auftraege WHERE kva_id=? AND rechnung_id IS NULL", (did,)).fetchall():
+            con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE id=?", (neu, dbm.jetzt(), a["id"]))
+            auf.verlauf(con, a["id"], "Rechnung erstellt", f"Entwurf aus KVA {d['nummer'] or ''}".strip())
         dbm.protokollieren("entwurf_kopiert", "dokument", neu, {"von": d["nummer"] or did}, con=con)
     flash("Rechnungsentwurf aus dem Kostenvoranschlag erstellt." if d["typ"] == "kva"
           else "Neuer Entwurf als Kopie angelegt.", "ok")
@@ -559,6 +574,8 @@ def dokument_email(did):
             flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
             return redirect(url_for("main.dokument_email", did=did))
         flash(f"E-Mail an {an} wurde gesendet.", "ok")
+        with dbm.Transaktion(con):
+            auf.dokument_ereignis(con, did, "KVA per E-Mail versendet", "Rechnung per E-Mail versendet")
         if hinweis:
             flash(hinweis, "warnung")
         return redirect(url_for("main.dokument", did=did))
@@ -1002,13 +1019,21 @@ def interessenten_loeschen():
 # ====================================================================== Reparaturaufträge (Tafel)
 
 from . import auftraege as auf  # noqa: E402
+from . import fotos as fot  # noqa: E402
 
 AUFTRAG_SQL = (
     "SELECT a.*, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp, k.telefon AS ktelefon, "
-    "kv.status AS kva_status, kv.nummer AS kva_nummer, kv.summe_brutto AS kva_betrag, "
-    "re.status AS re_status, re.nummer AS re_nummer, re.summe_brutto AS re_betrag "
+    "kv.status AS kva_status, kv.nummer AS kva_nummer, kv.summe_brutto AS kva_betrag, kv.datum AS kva_datum, "
+    "kv.kva_status AS kva_entscheidung, kv.kunde_id AS kva_kunde_id, kv.versendet_am AS kva_versendet_am, "
+    "re.status AS re_status, re.nummer AS re_nummer, re.summe_brutto AS re_betrag, "
+    "(SELECT COUNT(*) FROM auftrag_fotos f WHERE f.auftrag_id=a.id AND f.geloescht_am IS NULL) AS foto_anzahl "
     "FROM auftraege a JOIN kunden k ON k.id=a.kunde_id "
     "LEFT JOIN dokumente kv ON kv.id=a.kva_id LEFT JOIN dokumente re ON re.id=a.rechnung_id ")
+
+
+def _kunden_liste(con, auch_id=None):
+    return con.execute("SELECT * FROM kunden WHERE archiviert=0 OR id=? "
+                       "ORDER BY COALESCE(NULLIF(firma,''), nachname), vorname", (auch_id or 0,)).fetchall()
 
 
 @bp.route("/auftraege")
@@ -1023,30 +1048,86 @@ def auftraege():
             sql += "AND a.erledigt_am >= date('now', '-30 day') "
         sql += "ORDER BY a.reihenfolge, a.id"
         spalten[status] = con.execute(sql, args).fetchall()
-    kunden_liste = con.execute("SELECT * FROM kunden WHERE archiviert=0 "
-                               "ORDER BY COALESCE(NULLIF(firma,''), nachname), vorname").fetchall()
-    return render_template("auftraege.html", spalten=spalten, status_namen=auf.STATUS, kunden=kunden_liste,
-                           leistungsarten=_leistungsarten(), alle_erledigten=alle_erledigten,
-                           heute=date.today().isoformat())
+    return render_template("auftraege.html", spalten=spalten, status_namen=auf.STATUS,
+                           alle_erledigten=alle_erledigten, heute=date.today().isoformat())
 
 
 def _auftrag_felder():
     return {f: _f(f) for f in ("geraet", "leistungsart", "seriennummer", "zubehoer", "fehler", "notizen")}
 
 
-@bp.route("/auftraege/neu", methods=["POST"])
+FELD_NAMEN = {"geraet": "Gerät", "leistungsart": "Leistungsart", "seriennummer": "Seriennr./IMEI",
+              "zubehoer": "Zubehör", "fehler": "Fehlerbeschreibung", "notizen": "Notizen", "kunde_id": "Kunde"}
+
+
+def _upload_token(neu=False):
+    """Kennung für Fotos, die im Formular „+ Neuer Auftrag“ vor dem Speichern hochgeladen werden.
+
+    Sie bleibt in der Sitzung erhalten, bis der Auftrag erfolgreich angelegt wurde – so gehen Fotos
+    auch dann nicht verloren, wenn das Speichern einmal fehlschlägt.
+    """
+    import secrets
+    if neu or not session.get("auftrag_upload_token"):
+        session["auftrag_upload_token"] = secrets.token_hex(16)
+    return session["auftrag_upload_token"]
+
+
+def _ohne_kva_bestaetigt():
+    return request.form.get("ohne_kva") == "1"
+
+
+KEIN_KVA_TEXT = "Kein KVA verknüpft – leeren Rechnungsentwurf erstellen oder KVA jetzt verknüpfen?"
+
+
+@bp.route("/auftraege/neu", methods=["GET", "POST"])
 def auftrag_neu():
     con = dbm.get_db()
-    kid = request.form.get("kunde_id", type=int)
-    anfrage_id = request.form.get("anfrage_id", type=int)
-    with dbm.Transaktion(con):
-        if anfrage_id and not kid:
-            a = con.execute("SELECT * FROM anfragen WHERE id=?", (anfrage_id,)).fetchone()
-            kid = a["kunde_id"] if a and a["kunde_id"] else anf.kunde_aus_anfrage(con, anfrage_id,
-                                                                                  dbm.einstellungen(con))[0]
-        aid = auf.anlegen(con, kid, anfrage_id=anfrage_id, **_auftrag_felder())
-    flash("Reparaturauftrag angelegt.", "ok")
-    return redirect(url_for("main.auftrag", aid=aid))
+    if request.method == "POST" and request.form.get("anfrage_id"):
+        # Aus einer Kontaktanfrage (Knopf auf der Anfrage-Seite)
+        kid = request.form.get("kunde_id", type=int)
+        anfrage_id = request.form.get("anfrage_id", type=int)
+        with dbm.Transaktion(con):
+            if not kid:
+                a = con.execute("SELECT * FROM anfragen WHERE id=?", (anfrage_id,)).fetchone()
+                kid = a["kunde_id"] if a and a["kunde_id"] else anf.kunde_aus_anfrage(con, anfrage_id,
+                                                                                      dbm.einstellungen(con))[0]
+            aid = auf.anlegen(con, kid, anfrage_id=anfrage_id, **_auftrag_felder())
+        flash("Reparaturauftrag angelegt.", "ok")
+        return redirect(url_for("main.auftrag", aid=aid))
+    token = _upload_token()
+    werte = {"kunde_id": request.args.get("kunde_id", "")}
+    if request.method == "POST":
+        werte = request.form.to_dict()
+        try:
+            kid = request.form.get("kunde_id", type=int)
+            status = request.form.get("status", "offen")
+            kva_id = request.form.get("kva_id", type=int)
+            if status == "erledigt" and not kva_id and not _ohne_kva_bestaetigt():
+                raise EingabeFehler(KEIN_KVA_TEXT)
+            with dbm.Transaktion(con):
+                aid = auf.anlegen(con, kid, **_auftrag_felder())
+                warnung = auf.kva_verknuepfen(con, aid, kva_id) if kva_id else False
+                anzahl = fot.zuordnen(con, request.form.get("upload_token") or token, aid)
+                neue_rechnung = auf.status_setzen(con, aid, status) if status != "offen" else None
+        except EingabeFehler as e:
+            flash(f"Der Auftrag wurde NICHT gespeichert: {e} Ihre Eingaben und bereits hochgeladenen Fotos "
+                  "sind noch da.", "fehler")
+        else:
+            _upload_token(neu=True)
+            flash("Reparaturauftrag angelegt" + (f" – {anzahl} Foto(s) zugeordnet." if anzahl else "."), "ok")
+            if warnung:
+                flash("Achtung: Der verknüpfte Kostenvoranschlag gehört zu einem anderen Kunden.", "warnung")
+            if neue_rechnung:
+                flash("Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
+                return redirect(url_for("main.dokument", did=neue_rechnung))
+            return redirect(url_for("main.auftrag", aid=aid))
+    kva_vorauswahl = None
+    if werte.get("kva_id"):
+        kva_vorauswahl = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (werte["kva_id"],)).fetchone()
+    return render_template("auftrag_neu.html", werte=werte, status_namen=auf.STATUS, leistungsarten=_leistungsarten(),
+                           kunden=_kunden_liste(con), token=token, kategorien=fot.KATEGORIEN,
+                           fotos=fot.liste(con, upload_token=token, mit_geloeschten=False),
+                           kva_vorauswahl=kva_vorauswahl, kein_kva_text=KEIN_KVA_TEXT)
 
 
 def _auftrag_laden(aid):
@@ -1062,30 +1143,61 @@ def auftrag(aid):
     a = _auftrag_laden(aid)
     if request.method == "POST":
         felder = _auftrag_felder()
+        kid = request.form.get("kunde_id", type=int) or a["kunde_id"]
+        status = request.form.get("status") or a["status"]
+        if kid != a["kunde_id"] and not con.execute("SELECT 1 FROM kunden WHERE id=?", (kid,)).fetchone():
+            raise EingabeFehler("Bitte einen Kunden auswählen.")
+        if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not _ohne_kva_bestaetigt():
+            flash(KEIN_KVA_TEXT + " Die Änderungen wurden noch nicht gespeichert.", "warnung")
+            return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
+        felder["kunde_id"] = kid
+        geaendert = [FELD_NAMEN[k] for k, v in felder.items() if (a[k] or "") != (v or "")]
+        neue_rechnung = None
         with dbm.Transaktion(con):
             con.execute(f"UPDATE auftraege SET {', '.join(f'{k}=?' for k in felder)}, geaendert_am=? WHERE id=?",
                         (*felder.values(), dbm.jetzt(), aid))
-            dbm.protokollieren("auftrag_geaendert", "auftrag", aid, con=con)
+            if geaendert:
+                dbm.protokollieren("auftrag_geaendert", "auftrag", aid, {"felder": geaendert}, con=con)
+                auf.verlauf(con, aid, "Auftragsdaten geändert", ", ".join(geaendert))
+            if status != a["status"]:
+                neue_rechnung = auf.status_setzen(con, aid, status)
         flash("Auftrag gespeichert.", "ok")
+        if kid != a["kunde_id"] and a["kva_id"] and a["kva_kunde_id"] != kid:
+            flash("Achtung: Der verknüpfte Kostenvoranschlag gehört zu einem anderen Kunden.", "warnung")
+        if neue_rechnung:
+            flash("Auftrag erledigt – Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
+            return redirect(url_for("main.dokument", did=neue_rechnung))
         return redirect(url_for("main.auftrag", aid=aid))
     anfrage_row = con.execute("SELECT * FROM anfragen WHERE id=?", (a["anfrage_id"],)).fetchone() \
         if a["anfrage_id"] else None
+    kva_kunde = con.execute("SELECT * FROM kunden WHERE id=?", (a["kva_kunde_id"],)).fetchone() \
+        if a["kva_id"] and a["kva_kunde_id"] != a["kunde_id"] else None
     return render_template("auftrag.html", a=a, status_namen=auf.STATUS, leistungsarten=_leistungsarten(),
-                           anfrage=anfrage_row)
+                           anfrage=anfrage_row, kunden=_kunden_liste(con, a["kunde_id"]), kva_kunde=kva_kunde,
+                           fotos=fot.liste(con, aid), kategorien=fot.KATEGORIEN,
+                           verlauf=auf.verlauf_liste(con, aid), kva_status_namen=auf.KVA_STATUS,
+                           kein_kva_text=KEIN_KVA_TEXT)
 
 
 @bp.route("/auftraege/<int:aid>/status", methods=["POST"])
 def auftrag_status(aid):
     """Wird von der Tafel (Ziehen & Ablegen) per fetch aufgerufen, oder per Knopf als normales Formular."""
     con = dbm.get_db()
-    _auftrag_laden(aid)
+    a = _auftrag_laden(aid)
     status = request.form.get("status", "")
+    per_fetch = request.headers.get("X-Requested-With") == "fetch"
+    if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not _ohne_kva_bestaetigt():
+        if per_fetch:
+            return jsonify(ok=False, kein_kva=True, meldung=KEIN_KVA_TEXT,
+                           auftrag_url=url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
+        flash(KEIN_KVA_TEXT, "warnung")
+        return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
     with dbm.Transaktion(con):
         neue_rechnung = auf.status_setzen(con, aid, status, request.form.get("vor_id", type=int))
     ziel = url_for("main.dokument", did=neue_rechnung) if neue_rechnung else None
     if neue_rechnung:
         flash("Auftrag erledigt – Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
-    if request.headers.get("X-Requested-With") == "fetch":
+    if per_fetch:
         return jsonify(ok=True, rechnung_url=ziel)
     if neue_rechnung:
         return redirect(ziel)
@@ -1094,11 +1206,61 @@ def auftrag_status(aid):
 
 @bp.route("/auftraege/<int:aid>/kva", methods=["POST"])
 def auftrag_kva(aid):
+    """Neuen KVA aus dem Auftrag erstellen (vorausgefüllt) und automatisch verknüpfen."""
     con = dbm.get_db()
     _auftrag_laden(aid)
     with dbm.Transaktion(con):
         did = auf.kva_erstellen(con, aid)
+    flash("Kostenvoranschlag erstellt und mit dem Auftrag verknüpft.", "ok")
     return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/auftraege/kva-auswahl")
+def auftrag_kva_auswahl():
+    """Liste der KVAs, die noch keinem Auftrag zugeordnet sind (für die Verknüpfen-Auswahl)."""
+    con = dbm.get_db()
+    zeilen = auf.kva_kandidaten(con, request.args.get("kunde_id", type=int), request.args.get("alle") == "1",
+                                request.args.get("q", ""))
+    return jsonify([{"id": d["id"], "nummer": d["nummer"] or "Entwurf", "datum": datum_de(d["datum"]),
+                     "betrag": euro(d["summe_brutto"]), "betreff": d["betreff"] or "",
+                     "kunde": f"{d['kundennr'] or ''} · {kunde_name({**dict(d), 'typ': d['ktyp']})}"
+                     if d["kunde_id"] else "–",
+                     "kunde_id": d["kunde_id"], "status": d["status"],
+                     "entscheidung": d["kva_status"] or "offen"} for d in zeilen])
+
+
+@bp.route("/auftraege/<int:aid>/kva-verknuepfen", methods=["POST"])
+def auftrag_kva_verknuepfen(aid):
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    kva_id = request.form.get("kva_id", type=int)
+    if not kva_id:
+        raise EingabeFehler("Bitte einen Kostenvoranschlag auswählen.")
+    with dbm.Transaktion(con):
+        warnung = auf.kva_verknuepfen(con, aid, kva_id)
+    flash("Kostenvoranschlag verknüpft.", "ok")
+    if warnung:
+        flash("Achtung: Der Kostenvoranschlag gehört zu einem anderen Kunden als der Auftrag.", "warnung")
+    return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
+
+
+@bp.route("/auftraege/<int:aid>/kva-loesen", methods=["POST"])
+def auftrag_kva_loesen(aid):
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    with dbm.Transaktion(con):
+        auf.kva_loesen(con, aid)
+    flash("Verknüpfung gelöst. Der Kostenvoranschlag selbst bleibt erhalten.", "ok")
+    return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
+
+
+@bp.route("/dokumente/<int:did>/kva-status", methods=["POST"])
+def kva_status(did):
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        auf.kva_status_setzen(con, did, request.form.get("kva_status", ""))
+    flash("Status des Kostenvoranschlags gespeichert.", "ok")
+    return redirect(request.referrer or url_for("main.dokument", did=did))
 
 
 @bp.route("/auftraege/<int:aid>/rechnung", methods=["POST"])
@@ -1116,18 +1278,103 @@ def auftrag_rechnung(aid):
 def auftrag_loeschen(aid):
     con = dbm.get_db()
     a = _auftrag_laden(aid)
-    if a["re_status"] in ("festgeschrieben", "storniert") or a["kva_status"] in ("festgeschrieben",):
-        raise EingabeFehler("Zu diesem Auftrag gibt es festgeschriebene Dokumente – er kann nicht gelöscht werden.")
+    if a["re_status"] in ("festgeschrieben", "storniert"):
+        raise EingabeFehler("Zu diesem Auftrag gibt es eine festgeschriebene Rechnung – er kann nicht gelöscht werden.")
+    if con.execute("SELECT 1 FROM auftrag_fotos WHERE auftrag_id=?", (aid,)).fetchone():
+        raise EingabeFehler("Zu diesem Auftrag gibt es eine Fotodokumentation – er kann nicht gelöscht werden.")
     with dbm.Transaktion(con):
-        for did in (a["kva_id"], a["rechnung_id"]):
-            if did:
-                con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
-                con.execute("DELETE FROM positionen WHERE dokument_id=?", (did,))
-                con.execute("DELETE FROM dokumente WHERE id=? AND status='entwurf'", (did,))
+        con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
+        if a["rechnung_id"]:  # automatisch erzeugter Rechnungsentwurf wird mitgelöscht, der KVA bleibt erhalten
+            if con.execute("SELECT 1 FROM dokumente WHERE id=? AND status='entwurf'", (a["rechnung_id"],)).fetchone():
+                con.execute("DELETE FROM positionen WHERE dokument_id=?", (a["rechnung_id"],))
+                con.execute("DELETE FROM dokumente WHERE id=?", (a["rechnung_id"],))
         con.execute("DELETE FROM auftraege WHERE id=?", (aid,))
+        auf.verlauf(con, aid, "Auftrag gelöscht", a["auftragsnr"])
         dbm.protokollieren("auftrag_geloescht", "auftrag", aid, {"auftragsnr": a["auftragsnr"]}, con=con)
-    flash("Auftrag gelöscht.", "ok")
+    flash("Auftrag gelöscht. Ein verknüpfter Kostenvoranschlag bleibt erhalten.", "ok")
     return redirect(url_for("main.auftraege"))
+
+
+# ---------------------------------------------------------------------- Fotos
+
+def _foto_hochladen(auftrag_id=None, token=None):
+    con = dbm.get_db()
+    dateien = request.files.getlist("foto")
+    if not dateien:
+        return jsonify(ok=False, meldung="Keine Datei empfangen."), 400
+    ergebnis = []
+    for datei in dateien:
+        try:
+            with dbm.Transaktion(con):
+                fid = fot.speichern(con, daten_dir(), datei.read(), datei.filename, request.form.get("kategorie", ""),
+                                    auftrag_id=auftrag_id, upload_token=token)
+            ergebnis.append({"ok": True, "id": fid, "datei": datei.filename})
+        except EingabeFehler as e:
+            ergebnis.append({"ok": False, "datei": datei.filename, "meldung": str(e)})
+    return jsonify(ok=all(e["ok"] for e in ergebnis), dateien=ergebnis)
+
+
+@bp.route("/auftraege/<int:aid>/fotos", methods=["POST"])
+def auftrag_fotos_hochladen(aid):
+    _auftrag_laden(aid)
+    return _foto_hochladen(auftrag_id=aid)
+
+
+@bp.route("/auftraege/neu/fotos", methods=["POST"])
+def auftrag_neu_fotos():
+    token = request.form.get("upload_token") or ""
+    if token != session.get("auftrag_upload_token"):
+        return jsonify(ok=False, meldung="Sitzung abgelaufen – bitte die Seite neu laden."), 400
+    return _foto_hochladen(token=token)
+
+
+def _foto_laden(fid):
+    f = dbm.get_db().execute("SELECT * FROM auftrag_fotos WHERE id=?", (fid,)).fetchone()
+    if not f or (not f["auftrag_id"] and f["upload_token"] != session.get("auftrag_upload_token")):
+        abort(404)
+    return f
+
+
+@bp.route("/fotos/<int:fid>")
+def foto_original(fid):
+    f = _foto_laden(fid)
+    return send_file(Path(daten_dir()) / f["pfad"], mimetype=f["mime"], download_name=f["dateiname"],
+                     as_attachment=request.args.get("download") == "1")
+
+
+@bp.route("/fotos/<int:fid>/vorschau")
+def foto_vorschau(fid):
+    f = _foto_laden(fid)
+    pfad = fot.vorschau_pfad(daten_dir(), f["sha256"])
+    if not pfad.exists():
+        original = Path(daten_dir()) / f["pfad"]
+        if not original.exists() or not fot.vorschau_erzeugen(daten_dir(), f["sha256"], original.read_bytes()):
+            return redirect(url_for("static", filename="bilder/keine_vorschau.svg"))
+    return send_file(pfad, mimetype="image/jpeg", max_age=86400)
+
+
+@bp.route("/fotos/<int:fid>/loeschen", methods=["POST"])
+def foto_loeschen(fid):
+    con = dbm.get_db()
+    f = _foto_laden(fid)
+    with dbm.Transaktion(con):
+        fot.als_geloescht_markieren(con, fid, _f("grund"))
+    flash("Foto als gelöscht markiert. Es bleibt zur Nachvollziehbarkeit gespeichert.", "ok")
+    if f["auftrag_id"]:
+        return redirect(url_for("main.auftrag", aid=f["auftrag_id"]) + "#fotos")
+    return redirect(url_for("main.auftrag_neu"))
+
+
+@bp.route("/auftraege/<int:aid>/fotodokumentation.pdf")
+def auftrag_fotos_pdf(aid):
+    con = dbm.get_db()
+    a = con.execute("SELECT * FROM auftraege WHERE id=?", (aid,)).fetchone()
+    if not a:
+        abort(404)
+    pdf = fot.pdf_dokumentation(con, a, daten_dir())
+    from io import BytesIO
+    return send_file(BytesIO(pdf), mimetype="application/pdf", download_name=f"Fotodokumentation_{a['auftragsnr']}.pdf",
+                     as_attachment=request.args.get("download") == "1")
 
 
 # ====================================================================== Programm-Version & Updates

@@ -10,7 +10,7 @@ datas = [
 ]
 binaries = []
 hiddenimports = ["waitress", "pystray._win32"]
-for paket in ("reportlab",):
+for paket in ("reportlab", "tzdata"):  # tzdata: deutsche Zeitzone für Foto-Zeitstempel unter Windows
     d, b, h = collect_all(paket)
     datas += d
     binaries += b

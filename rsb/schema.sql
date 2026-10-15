@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS dokumente (
     storniert_durch  INTEGER REFERENCES dokumente(id),
     versendet_am     TEXT,
     bezahlt_betrag   INTEGER NOT NULL DEFAULT 0,
+    kva_status       TEXT,            -- nur Kostenvoranschlag: offen / angenommen / abgelehnt
     erstellt_am      TEXT NOT NULL,
     geaendert_am     TEXT NOT NULL
 );
@@ -350,3 +351,66 @@ CREATE TABLE IF NOT EXISTS vertrag_abrechnungen (
     betrag       INTEGER NOT NULL,
     UNIQUE (vertrag_id, von)
 );
+
+-- Fotodokumentation zu Reparaturaufträgen: Originale bleiben unverändert, Löschen nur als Markierung mit Grund
+CREATE TABLE IF NOT EXISTS auftrag_fotos (
+    id             INTEGER PRIMARY KEY,
+    auftrag_id     INTEGER REFERENCES auftraege(id),   -- leer = beim Anlegen hochgeladen, noch nicht zugeordnet
+    upload_token   TEXT,                               -- Zuordnung von Fotos aus „+ Neuer Auftrag“
+    kategorie      TEXT NOT NULL,
+    dateiname      TEXT NOT NULL,                      -- ursprünglicher Dateiname
+    pfad           TEXT NOT NULL,                      -- relativ zum Datenordner
+    mime           TEXT,
+    groesse        INTEGER NOT NULL,
+    sha256         TEXT NOT NULL,
+    exif_zeit      TEXT,                               -- Aufnahmezeit laut Kamera (EXIF), falls vorhanden
+    hochgeladen_am TEXT NOT NULL,                      -- Server-Zeit Europe/Berlin mit Sekunden
+    benutzer       TEXT,
+    geloescht_am   TEXT,
+    geloescht_von  TEXT,
+    loeschgrund    TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_fotos_auftrag ON auftrag_fotos(auftrag_id);
+CREATE INDEX IF NOT EXISTS ix_fotos_token ON auftrag_fotos(upload_token);
+
+CREATE TRIGGER IF NOT EXISTS foto_schutz_update
+BEFORE UPDATE ON auftrag_fotos
+WHEN NEW.id IS NOT OLD.id OR NEW.kategorie IS NOT OLD.kategorie OR NEW.dateiname IS NOT OLD.dateiname
+  OR NEW.pfad IS NOT OLD.pfad OR NEW.groesse IS NOT OLD.groesse OR NEW.sha256 IS NOT OLD.sha256
+  OR NEW.exif_zeit IS NOT OLD.exif_zeit OR NEW.hochgeladen_am IS NOT OLD.hochgeladen_am
+  OR NEW.benutzer IS NOT OLD.benutzer OR NEW.mime IS NOT OLD.mime
+  OR (OLD.auftrag_id IS NOT NULL AND NEW.auftrag_id IS NOT OLD.auftrag_id)
+  OR (OLD.geloescht_am IS NOT NULL AND (NEW.geloescht_am IS NOT OLD.geloescht_am
+      OR NEW.geloescht_von IS NOT OLD.geloescht_von OR NEW.loeschgrund IS NOT OLD.loeschgrund))
+BEGIN
+    SELECT RAISE(ABORT, 'Fotos können nicht verändert werden (nur einmalig zuordnen oder als gelöscht markieren).');
+END;
+
+CREATE TRIGGER IF NOT EXISTS foto_schutz_delete
+BEFORE DELETE ON auftrag_fotos
+BEGIN
+    SELECT RAISE(ABORT, 'Fotos können nicht gelöscht werden – bitte mit Begründung als gelöscht markieren.');
+END;
+
+-- Verlauf je Reparaturauftrag (nur anhängen)
+CREATE TABLE IF NOT EXISTS auftrag_verlauf (
+    id          INTEGER PRIMARY KEY,
+    auftrag_id  INTEGER NOT NULL,
+    zeitpunkt   TEXT NOT NULL,
+    benutzer    TEXT,
+    ereignis    TEXT NOT NULL,
+    details     TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_verlauf_auftrag ON auftrag_verlauf(auftrag_id);
+
+CREATE TRIGGER IF NOT EXISTS verlauf_schutz_update
+BEFORE UPDATE ON auftrag_verlauf
+BEGIN
+    SELECT RAISE(ABORT, 'Der Verlauf kann nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS verlauf_schutz_delete
+BEFORE DELETE ON auftrag_verlauf
+BEGIN
+    SELECT RAISE(ABORT, 'Der Verlauf kann nicht gelöscht werden.');
+END;

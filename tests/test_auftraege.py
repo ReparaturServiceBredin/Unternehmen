@@ -73,8 +73,15 @@ def test_erledigt_ohne_kva_und_reihenfolge(client, con):
                 headers={"X-Requested-With": "fetch"})
     reihe = [r[0] for r in con.execute("SELECT id FROM auftraege WHERE status='offen' ORDER BY reihenfolge")]
     assert reihe == [a3, a1, a2]
-    # per Knopf erledigt -> Weiterleitung auf leeren Rechnungsentwurf
+    # ohne KVA wird erst nachgefragt (Tafel: JSON, Knopf: Weiterleitung zum KVA-Bereich), nichts wird geändert
+    r = client.post(f"/auftraege/{a2}/status", data={"csrf": "test-token", "status": "erledigt"},
+                    headers={"X-Requested-With": "fetch"})
+    assert r.get_json()["kein_kva"] is True
     r = post(client, f"/auftraege/{a2}/status", status="erledigt")
+    assert r.headers["Location"].endswith("#kostenvoranschlag")
+    assert con.execute("SELECT status FROM auftraege WHERE id=?", (a2,)).fetchone()[0] == "offen"
+    # bestätigt „leeren Rechnungsentwurf erstellen“ -> Weiterleitung auf leeren Rechnungsentwurf
+    r = post(client, f"/auftraege/{a2}/status", status="erledigt", ohne_kva="1")
     assert "/dokumente/" in r.headers["Location"]
     rid = con.execute("SELECT rechnung_id FROM auftraege WHERE id=?", (a2,)).fetchone()[0]
     assert con.execute("SELECT betreff FROM dokumente WHERE id=?", (rid,)).fetchone()[0].startswith("Reparatur")
@@ -112,9 +119,11 @@ def test_loeschen_und_seiten(client, con):
         assert client.get(url, follow_redirects=True).status_code == 200, url
     post(client, f"/auftraege/{aid}/loeschen")
     assert not con.execute("SELECT 1 FROM auftraege WHERE id=?", (aid,)).fetchone()
-    assert not con.execute("SELECT 1 FROM dokumente WHERE id=?", (kva,)).fetchone()  # Entwurf mitgelöscht
-    # mit festgeschriebenem KVA nicht löschbar
+    assert con.execute("SELECT 1 FROM dokumente WHERE id=?", (kva,)).fetchone()  # KVA bleibt erhalten
+    # mit festgeschriebener Rechnung nicht löschbar
     aid2 = auftrag_anlegen(client, kid)
     kva_mit_position(client, con, aid2)
+    rid = int(post(client, f"/auftraege/{aid2}/rechnung").headers["Location"].rsplit("/", 1)[1])
+    con.execute("UPDATE dokumente SET status='festgeschrieben' WHERE id=?", (rid,))
     post(client, f"/auftraege/{aid2}/loeschen")
     assert con.execute("SELECT 1 FROM auftraege WHERE id=?", (aid2,)).fetchone()

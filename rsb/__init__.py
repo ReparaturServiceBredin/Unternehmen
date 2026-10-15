@@ -10,7 +10,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.7.0"
+VERSION_NUMMER = "0.8.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -21,7 +21,7 @@ else:
 
 def create_app(daten_dir=None, testing=False):
     daten = Path(daten_dir or os.environ.get("RSB_DATEN") or PROJEKT / "Daten").resolve()
-    for unterordner in ("dokumente", "belege", "bilder", "backups", "geheim"):
+    for unterordner in ("dokumente", "belege", "bilder", "backups", "geheim", "fotos"):
         (daten / unterordner).mkdir(parents=True, exist_ok=True)
 
     app = Flask(__name__)
@@ -32,7 +32,7 @@ def create_app(daten_dir=None, testing=False):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=10),
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_HTTPONLY=True,
-        MAX_CONTENT_LENGTH=20 * 1024 * 1024,
+        MAX_CONTENT_LENGTH=60 * 1024 * 1024,  # Fotos vom Handy können groß sein
         TESTING=testing,
     )
     dbm.initialisieren(app.config["DB_PFAD"])
@@ -44,7 +44,14 @@ def create_app(daten_dir=None, testing=False):
         except (TypeError, ValueError):
             return ""
 
-    app.jinja_env.filters.update(euro=euro, datum=datum_de, zeit=zeit_de, menge=menge_text, kunde_name=kunde_name,
+    def zeit_sek(iso):
+        """ISO-Zeitstempel -> 15.10.2026 14:03:27 (mit Sekunden)."""
+        try:
+            return datetime.fromisoformat(iso).strftime("%d.%m.%Y %H:%M:%S")
+        except (TypeError, ValueError):
+            return iso or ""
+
+    app.jinja_env.filters.update(zeit_sek=zeit_sek, euro=euro, datum=datum_de, zeit=zeit_de, menge=menge_text, kunde_name=kunde_name,
                                  tage_seit=tage_seit)
     app.jinja_env.globals.update(csrf_token=csrf_token, version=VERSION)
 

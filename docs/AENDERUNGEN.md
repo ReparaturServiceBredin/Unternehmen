@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.8.0 | 15.10.2026 | Auftrags-Detailansicht: KVA verknüpfen, Fotodokumentation, Verlauf |
 | 0.7.0 | 15.10.2026 | Gesendet-Ordner per IMAP, Katalog-Übernahme, ausführliche Beschreibungen |
 | 0.6.1 | 15.10.2026 | Vertragsrechnungen vollautomatisch |
 | 0.6.0 | 15.10.2026 | Verträge & Lizenzen (Wertgarantie, ESET, MSP) mit wiederkehrenden Rechnungen |
@@ -25,6 +26,58 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.8.0 – 15.10.2026
+Reparaturaufträge mit Detailansicht: Kostenvoranschlag verknüpfen, Fotos dokumentieren, lückenloser Verlauf.
+
+### Neu
+- **Detailansicht je Auftrag:** Ein Klick auf eine Karte öffnet den Auftrag. Ziehen & Ablegen und die Pfeil-Knöpfe
+  funktionieren wie bisher. Kopf mit Auftragsnummer, Status und Eingangsdatum, Reiter **Auftragsdaten**,
+  **Kostenvoranschlag**, **Fotos** und **Verlauf**. Alle Felder sind bearbeitbar, auch Kunde und Status.
+- **KVA verknüpfen:**
+  - **„Bestehenden KVA verknüpfen“** zeigt freie Kostenvoranschläge des Kunden. Suche nach Nummer, Datum oder
+    Betrag, optional „alle Kunden anzeigen“.
+  - **„Neuen KVA aus diesem Auftrag erstellen“** füllt den KVA vor und verknüpft ihn automatisch.
+  - Ist ein KVA verknüpft: Nummer, Datum, Betrag und Status (offen / angenommen / abgelehnt) sowie die Knöpfe
+    Öffnen, PDF, Per E-Mail senden und **Verknüpfung lösen** (mit Rückfrage; der KVA bleibt erhalten).
+  - Warnung, wenn KVA und Auftrag zu unterschiedlichen Kunden gehören.
+  - Die KVA-Seite zeigt den zugehörigen Auftrag mit Link und den KVA-Status.
+- **Erledigt ohne KVA:** Statt stillschweigend eine leere Rechnung anzulegen, fragt das Programm:
+  „Kein KVA verknüpft – leeren Rechnungsentwurf erstellen oder KVA jetzt verknüpfen?“ (Tafel, Knopf und
+  Detailansicht).
+- **Fotodokumentation:**
+  - mehrere Fotos auf einmal, Ziehen & Ablegen, am Handy direkt die Kamera
+  - Kategorien: Geräteeingang, Vorschaden, Während der Reparatur, Nach der Reparatur, Geräteausgabe
+  - Gespeichert werden: Server-Zeit (deutsche Zeit, mit Sekunden), Aufnahmezeit aus der Kamera (EXIF), Benutzer
+    und SHA-256-Prüfsumme. Das Original bleibt unverändert.
+  - Löschen nur als Markierung mit Pflicht-Begründung; das Foto bleibt erhalten.
+  - Fotodokumentation als PDF mit Änderungsprotokoll
+- **Karten auf der Tafel** zeigen 📷 Anzahl Fotos und „KVA ✓“ bzw. „kein KVA“.
+- **„+ Neuer Auftrag“** ist jetzt eine eigene Seite mit denselben Feldern wie die Detailansicht. Dort können Sie
+  gleich einen KVA verknüpfen und Fotos hochladen. Die Fotos werden sofort gespeichert und bleiben erhalten, auch
+  wenn das Speichern des Auftrags einmal fehlschlägt (z. B. Kunde vergessen). Ihre Eingaben bleiben dann ebenfalls
+  stehen.
+- **Verlauf** je Auftrag mit Zeitpunkt und Benutzer:
+  - angelegt, Daten geändert, Statuswechsel
+  - KVA verknüpft, gelöst, festgeschrieben, angenommen/abgelehnt, per E-Mail versendet
+  - Fotos hochgeladen oder als gelöscht markiert
+  - Rechnung erstellt
+
+### Geändert
+- Beim Löschen eines Auftrags bleibt ein verknüpfter KVA jetzt erhalten (bisher wurde ein KVA-Entwurf
+  mitgelöscht). Aufträge mit Fotos oder festgeschriebener Rechnung lassen sich nicht löschen. Kunden, zu deren
+  Aufträgen es Fotos gibt, ebenfalls nicht; sie können archiviert werden.
+- Größere Uploads möglich (bis 60 MB je Foto).
+
+### Technik
+- Neue Tabellen `auftrag_fotos` und `auftrag_verlauf`, beide durch Datenbank-Trigger gegen Ändern und Löschen
+  geschützt. Neues Feld `dokumente.kva_status`. Fotos liegen in `Daten\fotos\JJJJ\MM\` (Vorschaubilder in
+  `Daten\fotos\vorschau\`) und sind Teil des Backups.
+- Vor der Datenbank-Erweiterung wird automatisch `Daten\backups\vor_update_….db` angelegt. Für bestehende
+  Aufträge wird der Verlauf einmalig aus dem Änderungsprotokoll nachgetragen.
+- 82 automatische Tests.
 
 ---
 

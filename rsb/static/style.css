@@ -193,3 +193,32 @@ table.positionen textarea.beschreibung { height: auto; overflow: hidden; line-he
 .katalog-zeile .check { font-weight: 400; color: var(--grau); margin: 0; }
 table.positionen select.klein-select { width: auto; padding: 2px 6px; font-size: 12px; }
 .katalog-info { margin-top: 3px; }
+
+/* Auftrag: Detailansicht, Fotos, KVA-Verknüpfung */
+.auftrag { cursor: pointer; }
+.a-icons { display: flex; gap: 6px; margin-top: 6px; font-size: 12px; }
+.a-icon { background: var(--grau-hell); border: 1px solid var(--rand); border-radius: 99px; padding: 1px 8px; white-space: nowrap; }
+.a-icon.ok { background: var(--gruen-hell); border-color: #b7dfc3; color: var(--gruen); }
+.a-icon.fehlt { color: var(--grau); }
+.reiter { display: flex; gap: 4px; border-bottom: 2px solid var(--rand); margin-bottom: 16px; flex-wrap: wrap; }
+.reiter a { padding: 9px 16px; font-weight: 600; color: var(--grau); border-bottom: 3px solid transparent; margin-bottom: -2px; }
+.reiter a:hover { text-decoration: none; color: var(--blau); }
+.reiter a.aktiv { color: var(--blau); border-bottom-color: var(--blau); }
+.reiter .zahl { background: var(--blau-hell); color: var(--blau); border-radius: 99px; padding: 0 7px; font-size: 11px; margin-left: 4px; }
+.auftrag-kopf { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; color: var(--grau); font-size: 13px; }
+.auftrag-kopf b { color: var(--text); }
+.foto-zone { border: 2px dashed #c3cad3; border-radius: var(--radius); padding: 22px; text-align: center; margin-top: 10px; background: #fafbfd; }
+.foto-zone.ueber { border-color: var(--blau); background: var(--blau-hell); }
+.foto-zone .knopf { cursor: pointer; }
+.galerie { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 10px; }
+.foto { background: #fff; border: 1px solid var(--rand); border-radius: var(--radius); overflow: hidden; font-size: 12px; }
+.foto img { width: 100%; height: 150px; object-fit: cover; display: block; background: #e9edf2; }
+.foto .info { padding: 8px 10px; }
+.foto.geloescht { opacity: .6; border-color: var(--rot); }
+.foto.geloescht img { filter: grayscale(1); }
+.foto details summary { cursor: pointer; color: var(--rot); }
+.verlauf td:first-child { white-space: nowrap; }
+dialog.dialog { border: 0; border-radius: var(--radius); padding: 22px 24px; max-width: 520px; box-shadow: 0 10px 40px rgba(0,0,0,.25); }
+dialog.dialog::backdrop { background: rgba(20, 30, 45, .45); }
+.kva-tabelle tr.gewaehlt td { background: var(--blau-hell); }
+@media (max-width: 900px) { .galerie { grid-template-columns: repeat(2, 1fr); } }

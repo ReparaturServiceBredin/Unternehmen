@@ -136,6 +136,19 @@ def jetzt():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def jetzt_berlin():
+    """Server-Zeitstempel in deutscher Zeit (Europe/Berlin) mit Sekunden und Zeitzonen-Angabe."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Europe/Berlin")).isoformat(timespec="seconds")
+    except Exception:  # z. B. fehlende Zeitzonendaten – dann lokale Zeit mit Abstand zu UTC
+        return datetime.now().astimezone().isoformat(timespec="seconds")
+
+
+def aktueller_benutzer():
+    return session.get("benutzer", "system") if has_request_context() else "system"
+
+
 def verbinden(pfad):
     con = sqlite3.connect(pfad, timeout=15, isolation_level=None)  # Autocommit, Transaktionen explizit
     con.row_factory = sqlite3.Row
@@ -174,6 +187,7 @@ def initialisieren(pfad):
             con.execute("INSERT INTO vertragsarten (name, kategorie, beschreibung, abrechnung, laufzeit_monate, "
                         "mindestlaufzeit_monate, preis, einkauf, auto_verlaengern, erstellt_am) "
                         "VALUES (?,?,?,?,?,?,?,?,?,?)", (*va, jetzt()))
+    _verlauf_nachtragen(con)
     from .textbausteine_standard import STANDARD_TEXTBAUSTEINE
     vorhandene_typen = {r[0] for r in con.execute("SELECT DISTINCT dokumenttyp FROM textbausteine")}
     leer = not vorhandene_typen
@@ -194,6 +208,7 @@ MIGRATIONEN = [
     ("vertraege", "abgerechnet_bis", "TEXT"),
     ("versandprotokoll", "ablage", "TEXT"),
     ("artikel", "ek_unbekannt", "INTEGER NOT NULL DEFAULT 0"),
+    ("dokumente", "kva_status", "TEXT"),
 ]
 
 
@@ -214,6 +229,28 @@ def _migrieren(con, pfad=None):
     for tabelle, spalte, definition in fehlend:
         con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {definition}")
     return fehlend
+
+
+def _verlauf_nachtragen(con):
+    """Einmalig: Für Aufträge aus älteren Versionen den Verlauf aus dem Änderungsprotokoll übernehmen."""
+    if con.execute("SELECT 1 FROM einstellungen WHERE schluessel='verlauf_nachgetragen'").fetchone():
+        return
+    texte = {"auftrag_angelegt": "Auftrag angelegt", "auftrag_geaendert": "Auftragsdaten geändert"}
+    for a in con.execute("SELECT id, eingang_am FROM auftraege").fetchall():
+        eintraege = con.execute("SELECT * FROM protokoll WHERE objekt='auftrag' AND objekt_id=? ORDER BY id",
+                                (a["id"],)).fetchall()
+        if not eintraege:
+            con.execute("INSERT INTO auftrag_verlauf (auftrag_id, zeitpunkt, benutzer, ereignis, details) "
+                        "VALUES (?,?,?,?,?)", (a["id"], a["eingang_am"], "system", "Auftrag angelegt", None))
+        for e in eintraege:
+            if e["aktion"] == "auftrag_status":
+                d = json.loads(e["details"] or "{}")
+                text, details = "Status geändert", f"{d.get('von')} → {d.get('nach')}"
+            else:
+                text, details = texte.get(e["aktion"], e["aktion"]), None
+            con.execute("INSERT INTO auftrag_verlauf (auftrag_id, zeitpunkt, benutzer, ereignis, details) "
+                        "VALUES (?,?,?,?,?)", (a["id"], e["zeitpunkt"], e["benutzer"], text, details))
+    con.execute("INSERT INTO einstellungen VALUES ('verlauf_nachgetragen', ?)", (json.dumps(jetzt()),))
 
 
 def _sicherung_vor_migration(con, pfad):
@@ -265,7 +302,7 @@ def _hash(vorher, zeitpunkt, benutzer, aktion, objekt, objekt_id, details):
 def protokollieren(aktion, objekt=None, objekt_id=None, details=None, con=None):
     """Schreibt einen Eintrag ins Änderungsprotokoll. Jeder Eintrag enthält den Hash des vorherigen."""
     con = con or get_db()
-    benutzer = session.get("benutzer", "system") if has_request_context() else "system"
+    benutzer = aktueller_benutzer()
     if details is not None and not isinstance(details, str):
         details = json.dumps(details, ensure_ascii=False, default=str)
     letzte = con.execute("SELECT hash FROM protokoll ORDER BY id DESC LIMIT 1").fetchone()

@@ -205,13 +205,33 @@ Unter **Verkauf → Reparaturaufträge** sehen Sie alle Aufträge auf einer Tafe
 **Offen → In Arbeit → Erledigt**. Die Übersicht zeigt die Anzahl je Spalte.
 
 **Auftrag anlegen** – drei Wege:
-- auf der Tafel über **„+ Neuer Auftrag“** (Kunde, Gerät, Seriennummer/IMEI, Zubehör, Fehler),
+- auf der Tafel über **„+ Neuer Auftrag“**. Sie geben Kunde, Status, Gerät, Seriennummer/IMEI, Zubehör, Fehler und
+  Notizen ein. Optional verknüpfen Sie gleich einen KVA und laden Fotos hoch. Fotos werden sofort gespeichert. Klappt
+  das Anlegen einmal nicht (z. B. Kunde vergessen), bleiben Fotos und Eingaben erhalten.
 - aus einer **Anfrage** über „Reparaturauftrag anlegen“. Gerät und Fehlerbeschreibung werden übernommen.
-- beim **Kunden** über „+ Reparaturauftrag“.
+- beim **Kunden** über „+ Reparaturauftrag“ (der Kunde ist dann schon ausgewählt).
 
-**Kostenvoranschlag (KVA):** Im Auftrag auf **„KVA erstellen“** klicken. Positionen einfügen wie bei einer Rechnung.
-Danach **festschreiben**, dann bekommt er eine Nummer (`KV-2026-0001`), und **per E-Mail senden**.
-Die Gültigkeit beträgt standardmäßig 30 Tage (*Einstellungen → Rechnung & Steuer*).
+**Auftrag öffnen:** Klicken Sie auf eine Karte. Kopf mit Nummer, Status und Eingang, darunter vier Reiter:
+- **Auftragsdaten** – alles bearbeitbar, auch Kunde und Status, mit „Speichern“.
+- **Kostenvoranschlag** – siehe unten.
+- **Fotos** – Kategorie wählen, dann Fotos hineinziehen, „Dateien auswählen“ oder am Handy „Kamera“. Zu jedem Foto
+  sehen Sie Upload-Zeit (mit Sekunden), Aufnahmezeit der Kamera, Benutzer und Prüfsumme. **Löschen** geht nur
+  mit Begründung: das Foto wird grau markiert, bleibt aber gespeichert. **„Fotodokumentation als PDF“** erzeugt
+  ein PDF aller Fotos mit diesen Angaben, z. B. für Versicherung oder Reklamation.
+- **Verlauf** – wer wann was gemacht hat (angelegt, Status, KVA, Fotos, Rechnung). Nicht änderbar.
+
+**Kostenvoranschlag (KVA):**
+- Noch keiner verknüpft:
+  - **„Neuen KVA aus diesem Auftrag erstellen“** – Kunde, Gerät und Fehler sind schon eingetragen.
+  - oder unter **„Bestehenden KVA verknüpfen“** einen vorhandenen auswählen. Angezeigt werden freie KVAs des Kunden.
+    Sie können nach Nummer, Datum oder Betrag suchen oder „alle Kunden anzeigen“ wählen.
+- Verknüpft: Nummer, Datum, Betrag und Status (offen / angenommen / abgelehnt – nach Rückmeldung des Kunden
+  einstellen), dazu Öffnen, PDF, Per E-Mail senden und **Verknüpfung lösen**. Der KVA selbst bleibt dabei erhalten.
+- Gehört der KVA zu einem anderen Kunden als der Auftrag, erscheint ein gelber Warnhinweis.
+- Positionen fügen Sie ein wie bei einer Rechnung. Danach **festschreiben**, dann bekommt er eine Nummer
+  (`KV-2026-0001`), und **per E-Mail senden**. Die Gültigkeit beträgt standardmäßig 30 Tage
+  (*Einstellungen → Rechnung & Steuer*).
+- Die Karten auf der Tafel zeigen **📷 Anzahl** und **„KVA ✓“** bzw. **„kein KVA“**.
 
 **Verschieben:** Ziehen Sie eine Karte mit der Maus in eine andere Spalte.
 Ohne Maus, zum Beispiel auf dem Tablet, nutzen Sie die Knöpfe auf der Karte („Starten →“, „Erledigt ✓“, „←“).
@@ -222,6 +242,9 @@ Innerhalb einer Spalte können Sie die Reihenfolge ebenfalls per Ziehen ändern.
    und der Seriennummer im Betreff und dem heutigen Tag als Leistungsdatum.
 2. Der Entwurf öffnet sich sofort. Sie prüfen ihn (z. B. ob noch ein Teil dazukam) und klicken auf
    **„Festschreiben & Nummer vergeben“**.
+
+Ist **kein KVA verknüpft**, fragt das Programm vorher: *„Kein KVA verknüpft – leeren Rechnungsentwurf erstellen
+oder KVA jetzt verknüpfen?“*. „KVA jetzt verknüpfen“ öffnet den Reiter Kostenvoranschlag des Auftrags.
 
 Die Rechnung wird bewusst **nicht ungefragt festgeschrieben**. Eine festgeschriebene Rechnung lässt sich nur noch
 stornieren. Ein versehentlicher Zug auf „Erledigt“ soll keine Rechnungsnummer verbrauchen.

@@ -5,3 +5,4 @@ reportlab>=4.2,<6
 cryptography>=42
 pillow>=10
 pystray>=0.19; sys_platform == "win32"
+tzdata>=2024.1
