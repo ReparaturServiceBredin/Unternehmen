@@ -186,3 +186,10 @@ span.marke-status.s-offen, span.marke-status.s-in_arbeit, span.marke-status.s-er
 .versionsprotokoll li.unter { margin-left: 22px; list-style: circle; }
 .versionsprotokoll hr { border: 0; border-top: 1px solid var(--rand); margin: 22px 0; }
 .versionsprotokoll table { margin: 10px 0; }
+
+/* Positionen: Beschreibung & Katalog */
+table.positionen textarea.beschreibung { height: auto; overflow: hidden; line-height: 1.4; }
+.katalog-zeile { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+.katalog-zeile .check { font-weight: 400; color: var(--grau); margin: 0; }
+table.positionen select.klein-select { width: auto; padding: 2px 6px; font-size: 12px; }
+.katalog-info { margin-top: 3px; }

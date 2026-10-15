@@ -100,7 +100,31 @@
       <div class="hilfe">Wird verschlüsselt gespeichert.</div></div>
     {{ feld('absender_name', 'Absendername') }}{{ feld('absender_email', 'Absenderadresse') }}
     {{ haken('bcc_an_mich', 'Kopie jeder E-Mail an mich (BCC) – so liegt der Versand auch in Ihrem Postfach') }}
-  </div><br><button>Speichern</button>
+  </div>
+  <br>
+  <h2>IMAP (Kopie im Gesendet-Ordner speichern)</h2>
+  <p class="klein">Beim Versand per SMTP legt der Server keine Kopie in Ihrem Postfach ab. Mit IMAP speichert das Programm jede versendete E-Mail (mit Anhang) zusätzlich im Ordner „Gesendet“ – sichtbar in Webmail, Outlook und auf dem Handy.
+    IONOS: <code>imap.ionos.de</code> · Strato: <code>imap.strato.de</code> – Port 993 mit SSL/TLS.</p>
+  <div class="felder" id="imapbereich">
+    {{ haken('gesendet_aktiv', 'Gesendete Mails im Postfach ablegen') }}
+    {{ feld('gesendet_imap_host', 'IMAP-Server', span='s6') }}{{ feld('gesendet_imap_port', 'Port', 'number', 's2') }}
+    <div class="s4"><label>Verschlüsselung</label><select name="gesendet_imap_sicherheit" id="imapsicherheit">
+      {% for k, t in [('ssl','SSL/TLS (Port 993, empfohlen)'),('starttls','STARTTLS (Port 143)')] %}<option value="{{ k }}" {{ 'selected' if einst.gesendet_imap_sicherheit == k }}>{{ t }}</option>{% endfor %}</select></div>
+    <div class="s12"><label class="check"><input type="checkbox" name="gesendet_gleiche_zugangsdaten" id="gleichezugang" {{ 'checked' if einst.gesendet_gleiche_zugangsdaten }}> Gleiche Zugangsdaten wie SMTP verwenden</label></div>
+    <div class="imap-eigen"><label>IMAP-Benutzername</label><input type="text" name="gesendet_imap_benutzer" value="{{ einst.gesendet_imap_benutzer or '' }}"></div>
+    <div class="imap-eigen"><label>IMAP-Passwort</label><input type="password" name="gesendet_imap_passwort" autocomplete="new-password" placeholder="{{ '•••••••• (gespeichert – nur ausfüllen zum Ändern)' if gesendet_passwort_gesetzt else '' }}">
+      <div class="hilfe">Wird verschlüsselt gespeichert.</div></div>
+    <div class="s8"><label>Ordner für gesendete Mails</label>
+      <input type="text" name="gesendet_ordner" id="gesendetordner" list="ordnerliste" value="{{ einst.gesendet_ordner or '' }}" placeholder="z. B. Gesendete Objekte">
+      <datalist id="ordnerliste"></datalist>
+      <select id="ordnerauswahl" style="display:none;margin-top:6px"></select>
+      <div class="hilfe">Bei IONOS meist „Gesendete Objekte“. Am sichersten über „Ordner abrufen“ auswählen.</div></div>
+    <div class="s4" style="align-self:start;padding-top:20px"><div class="leiste">
+      <button type="button" class="zweit" id="ordnerknopf">Ordner abrufen</button>
+      <button type="button" class="zweit" id="imaptestknopf">Verbindung testen</button></div></div>
+    <div class="s12"><div id="imapmeldung" class="meldung" style="display:none;margin:0"></div></div>
+  </div>
+  <br><button>Speichern</button>
 </form>
 <form method="post" action="{{ url_for('main.testmail') }}" class="karte">{{ csrf() }}
   <h2>Test</h2>
@@ -233,5 +257,54 @@
   <button name="aktion" value="aus" class="gefahr">Passwortschutz ausschalten</button>
 </form>
 {% endif %}
+{% endif %}
+{% endblock %}
+{% block skript %}
+{% if bereich == 'email' %}
+<script>
+(function () {
+  const form = document.getElementById('imapbereich').closest('form');
+  const gleich = document.getElementById('gleichezugang');
+  const eigen = document.querySelectorAll('.imap-eigen');
+  const meldung = document.getElementById('imapmeldung');
+  function umschalten() { eigen.forEach(e => e.style.display = gleich.checked ? 'none' : ''); }
+  gleich.addEventListener('change', umschalten); umschalten();
+  document.getElementById('imapsicherheit').addEventListener('change', e => {
+    const port = form.querySelector('[name=gesendet_imap_port]');
+    if (e.target.value === 'starttls' && port.value === '993') port.value = '143';
+    if (e.target.value === 'ssl' && port.value === '143') port.value = '993';
+  });
+  function zeige(ok, text) { meldung.style.display = ''; meldung.className = 'meldung ' + (ok ? 'ok' : 'fehler'); meldung.textContent = text; }
+  async function anfrage(url, knopf) {
+    const alt = knopf.textContent; knopf.disabled = true; knopf.textContent = 'Bitte warten …';
+    try {
+      const daten = new FormData(form);
+      if (gleich.checked) daten.set('gesendet_gleiche_zugangsdaten', 'on');
+      const r = await fetch(url, { method: 'POST', body: daten, headers: { 'X-Requested-With': 'fetch' } });
+      return await r.json();
+    } catch (e) { return { ok: false, meldung: 'Keine Antwort vom Programm: ' + e }; }
+    finally { knopf.disabled = false; knopf.textContent = alt; }
+  }
+  document.getElementById('ordnerknopf').onclick = async e => {
+    const j = await anfrage('{{ url_for('main.imap_ordner_abrufen') }}', e.target);
+    zeige(j.ok, j.meldung);
+    if (!j.ok) return;
+    const auswahl = document.getElementById('ordnerauswahl'), feld = document.getElementById('gesendetordner');
+    const liste = document.getElementById('ordnerliste');
+    auswahl.innerHTML = '<option value="">– Ordner auswählen –</option>' + j.ordner.map(o =>
+      `<option value="${o.name.replace(/"/g, '&quot;')}">${o.name}${o.gesendet ? ' (Gesendet)' : ''}</option>`).join('');
+    liste.innerHTML = j.ordner.map(o => `<option value="${o.name.replace(/"/g, '&quot;')}">`).join('');
+    auswahl.style.display = '';
+    const vorschlag = j.ordner.find(o => o.gesendet);
+    if (vorschlag && !feld.value) { feld.value = vorschlag.name; }
+    auswahl.value = feld.value;
+    auswahl.onchange = () => { if (auswahl.value) feld.value = auswahl.value; };
+  };
+  document.getElementById('imaptestknopf').onclick = async e => {
+    const j = await anfrage('{{ url_for('main.imap_verbindung_testen') }}', e.target);
+    zeige(j.ok, j.meldung);
+  };
+})();
+</script>
 {% endif %}
 {% endblock %}

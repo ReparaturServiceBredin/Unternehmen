@@ -92,6 +92,16 @@ Bitte ersetzen Sie sie durch Ihre eigenen Texte und lassen Sie rechtliche Formul
 | Gmail | smtp.gmail.com | 587 | STARTTLS (nur mit „App-Passwort“) |
 
 Bitte prüfen Sie die Werte bei Ihrem Anbieter. Benutzername ist meist die vollständige E-Mail-Adresse.
+
+**Kopie im Ordner „Gesendet“ (IMAP):** Darunter im Abschnitt *IMAP* den Haken „Gesendete Mails im Postfach
+ablegen“ setzen, `imap.ionos.de`, Port 993, SSL/TLS. „Gleiche Zugangsdaten wie SMTP“ angehakt lassen. Dann
+**„Ordner abrufen“** (wählt „Gesendete Objekte“ vor) → **„Verbindung testen“** → Speichern. Danach liegt jede
+versendete Rechnung auch im Postfach unter „Gesendet“. Klappt die Ablage einmal nicht, ist die Mail trotzdem
+verschickt – Sie sehen dann einen gelben Hinweis.
+
+**Fehler „Zielcomputer verweigerte die Verbindung“ (WinError 10061):** Das Programm versucht es automatisch ein
+zweites Mal. Bleibt der Fehler, blockiert meist ein Virenschutz den Versand aus Programmen (z. B. ESET
+„E-Mail-Client-Schutz“ bzw. Firewall-Regel). Dann `RSB-Buchhaltung.exe` dort als vertrauenswürdig freigeben.
 Das Passwort wird verschlüsselt gespeichert.
 „Kopie an mich (BCC)“ legt jede versendete Rechnung zusätzlich in Ihrem Postfach ab.
 Jeder Versand und jeder Fehlversuch steht unter **Protokoll**.
@@ -247,3 +257,15 @@ Periode bzw. Mindestlaufzeit), Grund. Bis zu diesem Datum wird noch berechnet, d
 
 **Bestehende Verträge übernehmen:** Beginn wie im Original eintragen und **„Bereits berechnet bis“** setzen
 (z. B. Ende des letzten in Lexware berechneten Monats) – sonst würden vergangene Monate nachberechnet.
+
+## 13. Leistungen und Artikel automatisch füllen
+
+- Positionen, die Sie in einem KVA oder einer Rechnung **von Hand** eingeben, landen beim Speichern automatisch in
+  *Leistungen & Artikel* – inklusive Beschreibung, Einkaufspreis und Marge. Beim nächsten Mal einfach aus der Liste
+  einfügen.
+- Für einmalige Sonderpositionen den Haken **„In Leistungen und Artikel speichern“** unter der Position entfernen.
+- Gibt es die Bezeichnung schon mit anderem Preis, fragt das Programm: **„Preise im Katalog aktualisieren?“**
+- Alte Dokumente: *Leistungen & Artikel → „Aus bisherigen Dokumenten übernehmen“* – Vorschau prüfen, abhaken,
+  übernehmen.
+- **Beschreibung:** Im Artikel beliebig lang und mehrzeilig (z. B. Anschlüsse, Maße, Kompatibilität). Beim Einfügen
+  in ein Dokument wird sie übernommen und kann dort gekürzt werden – der Katalog bleibt unverändert.

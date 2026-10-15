@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS kunden (
     ust_idnr         TEXT,
     zahlungsziel_tage INTEGER,
     notizen          TEXT,
+    interessent      INTEGER NOT NULL DEFAULT 0,
+    quelle           TEXT,
     archiviert       INTEGER NOT NULL DEFAULT 0,
     erstellt_am      TEXT NOT NULL,
     geaendert_am     TEXT NOT NULL
@@ -42,6 +44,7 @@ CREATE TABLE IF NOT EXISTS artikel (
     teilekosten       INTEGER NOT NULL DEFAULT 0,   -- Einkauf/Teilekosten in Cent
     aufschlag_prozent REAL,
     steuersatz        REAL NOT NULL DEFAULT 19,
+    ek_unbekannt      INTEGER NOT NULL DEFAULT 0,   -- 1 = Einkaufspreis nicht bekannt -> keine Marge anzeigen
     aktiv             INTEGER NOT NULL DEFAULT 1,
     erstellt_am       TEXT NOT NULL,
     geaendert_am      TEXT NOT NULL
@@ -123,7 +126,8 @@ CREATE TABLE IF NOT EXISTS versandprotokoll (
     anhang_name    TEXT,
     anhang_sha256  TEXT,
     status         TEXT NOT NULL,   -- gesendet / fehler
-    fehlermeldung  TEXT
+    fehlermeldung  TEXT,
+    ablage         TEXT             -- Kopie im IMAP-Gesendet-Ordner: abgelegt / fehler: … / leer = nicht aktiv
 );
 
 -- Änderungsprotokoll (nur anhängen, mit Hash-Kette gegen unbemerkte Manipulation)

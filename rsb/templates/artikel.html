@@ -8,15 +8,17 @@
   <div class="felder">
     <div class="s8"><label>Bezeichnung (erscheint auf der Rechnung)</label><input type="text" name="name" required value="{{ (a.name or '') if a }}"></div>
     <div class="s4"><label>Artikelnummer (optional)</label><input type="text" name="artikelnr" value="{{ (a.artikelnr or '') if a }}"></div>
-    <div class="s12"><label>Beschreibung (zweite Zeile auf der Rechnung)</label><textarea name="beschreibung">{{ (a.beschreibung or '') if a }}</textarea></div>
+    <div class="s12"><label>Beschreibung</label><textarea name="beschreibung" rows="7" style="min-height:150px" placeholder="z. B. technische Details: Anschlüsse/Ports, Varianten, Maße, Kompatibilität …">{{ (a.beschreibung or '') if a }}</textarea>
+      <div class="hilfe">Erscheint im Kostenvoranschlag und in der Rechnung unter der Bezeichnung (Zeilenumbrüche bleiben erhalten). Im Dokument kann sie für den Einzelfall angepasst werden, ohne diesen Katalogeintrag zu ändern.</div></div>
     <div class="s4"><label>Leistungsart (für Auswertungen)</label>
       <select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if a and a.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
     <div class="s4"><label>Typ</label><select name="typ">
       <option value="leistung" {{ 'selected' if not a or a.typ == 'leistung' }}>Leistung (Arbeit / Festpreis)</option>
-      <option value="material" {{ 'selected' if a and a.typ == 'material' }}>Material / Ersatzteil</option></select></div>
+      <option value="material" {{ 'selected' if a and a.typ == 'material' }}>Artikel (Material / Ersatzteil)</option></select></div>
     <div class="s4"><label>Einheit</label><input type="text" name="einheit" list="einheiten" value="{{ a.einheit if a else 'Stk.' }}">
       <datalist id="einheiten"><option>Stk.</option><option>pauschal</option><option>Std.</option><option>km</option></datalist></div>
-    <div class="s3"><label>Teilekosten / Einkauf (€)</label><input type="text" name="teilekosten" id="teile" value="{{ (a.teilekosten|euro(false)) if a else '0,00' }}"></div>
+    <div class="s3"><label>Einkaufspreis (€)</label><input type="text" name="teilekosten" id="teile" value="{{ (a.teilekosten|euro(false)) if a and not a.ek_unbekannt else '' }}" placeholder="unbekannt">
+      <div class="hilfe">Leer lassen, wenn unbekannt – dann wird keine Marge angezeigt.</div></div>
     <div class="s3"><label>Aufschlag (%)</label><input type="text" name="aufschlag_prozent" id="aufschlag" value="{{ (a.aufschlag_prozent|menge) if a and a.aufschlag_prozent is not none }}">
       <div class="hilfe"><a href="#" id="berechnen">Preis aus Aufschlag berechnen</a></div></div>
     <div class="s3"><label>Verkaufspreis (€)</label><input type="text" name="preis" id="preis" value="{{ (a.preis|euro(false)) if a }}"></div>
@@ -39,6 +41,7 @@
   function zeigeMarge() {
     const t = zahl(teile.value), p = zahl(preis.value), m = p - t;
     const el = document.getElementById('margeanzeige');
+    if (!teile.value.trim()) { el.textContent = 'Marge: – (Einkaufspreis unbekannt)'; el.className = 'meldung info'; return; }
     el.textContent = 'Marge: ' + euro(m) + (p ? ' (' + Math.round(m / p * 100) + ' % vom Preis)' : '') + (t ? ' · Aufschlag auf Teile: ' + Math.round(m / t * 100) + ' %' : '');
     el.className = 'meldung ' + (m < 0 ? 'fehler' : 'ok');
   }

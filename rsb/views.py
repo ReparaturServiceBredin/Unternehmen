@@ -10,7 +10,7 @@ from PIL import Image
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db as dbm
-from . import logik
+from . import katalog, logik
 from .backup import backup_erstellen
 from .hilfen import (EingabeFehler, cent_aus_text, euro, heute, kunde_name, platzhalter_ersetzen, plus_tage,
                      zahl_aus_text)
@@ -243,19 +243,23 @@ def artikel(aid=None):
     if request.method == "POST":
         if not _f("name"):
             raise EingabeFehler("Bitte eine Bezeichnung angeben.")
+        ek_unbekannt = 1 if not _f("teilekosten") else 0
         teile = cent_aus_text(_f("teilekosten"))
         aufschlag = _f("aufschlag_prozent")
         aufschlag = zahl_aus_text(aufschlag) if aufschlag else None
         preis = cent_aus_text(_f("preis"), leer=None)
         if preis is None:
-            if aufschlag is None:
-                raise EingabeFehler("Bitte einen Verkaufspreis oder Teilekosten mit Aufschlag angeben.")
+            if aufschlag is None or ek_unbekannt:
+                raise EingabeFehler("Bitte einen Verkaufspreis oder Einkaufspreis mit Aufschlag angeben.")
             preis = int(round(teile * (1 + aufschlag / 100)))
+        if not ek_unbekannt and aufschlag is None:
+            aufschlag = katalog.aufschlag(preis, teile)
         felder = {
             "artikelnr": _f("artikelnr"), "name": _f("name"), "beschreibung": _f("beschreibung"),
             "leistungsart": _f("leistungsart"), "typ": _f("typ") if _f("typ") in ("leistung", "material") else "leistung",
             "einheit": _f("einheit", "Stk."), "preis": preis, "teilekosten": teile, "aufschlag_prozent": aufschlag,
             "steuersatz": zahl_aus_text(_f("steuersatz"), 19), "aktiv": 1 if request.form.get("aktiv") else 0,
+            "ek_unbekannt": ek_unbekannt,
         }
         with dbm.Transaktion(con):
             if a:
@@ -370,7 +374,10 @@ def dokument(did):
         "SELECT * FROM textbausteine WHERE kategorie IN ('einleitung','schluss','hinweis') "
         "AND dokumenttyp IN (?, 'alle') ORDER BY kategorie, name", (d["typ"],))]
     summen = logik.summen_berechnen(positionen, einst["steuer_modus"])
-    return render_template("dokument_bearbeiten.html", d=d, kunde=kunde, positionen=positionen,
+    konflikte = session.get("preis_konflikte")
+    if konflikte and konflikte.get("dokument_id") != did:
+        konflikte = None
+    return render_template("dokument_bearbeiten.html", d=d, kunde=kunde, positionen=positionen, konflikte=konflikte,
                            kunden=kunden_liste, artikel=artikel_liste, bausteine=bausteine, summen=summen,
                            leistungsarten=_leistungsarten(), titel=logik.titel(d["typ"]),
                            vorschau=request.args.get("vorschau"))
@@ -395,16 +402,27 @@ def _entwurf_speichern(con, d, einst):
     except ValueError:
         raise EingabeFehler("Bitte ein gültiges Datum eingeben.")
     f = request.form
-    zeilen = zip(f.getlist("p_bezeichnung"), f.getlist("p_beschreibung"), f.getlist("p_menge"),
-                 f.getlist("p_einheit"), f.getlist("p_preis"), f.getlist("p_teilekosten"),
-                 f.getlist("p_steuersatz"), f.getlist("p_leistungsart"), f.getlist("p_artikel_id"))
+    anzahl = len(f.getlist("p_bezeichnung"))
+
+    def liste(name, standard=""):
+        werte = f.getlist(name)
+        return werte + [standard] * (anzahl - len(werte))  # ältere Formulare ohne das Feld
+
+    zeilen = zip(f.getlist("p_bezeichnung"), liste("p_beschreibung"), liste("p_menge", "1"), liste("p_einheit"),
+                 liste("p_preis", "0"), liste("p_teilekosten"), liste("p_steuersatz", "19"), liste("p_leistungsart"),
+                 liste("p_artikel_id"), liste("p_katalog", "0"), liste("p_typ"))
     positionen = []
-    for bez, beschr, menge, einheit, preis, teile, satz, art, aid in zeilen:
+    for bez, beschr, menge, einheit, preis, teile, satz, art, aid, katalog_flag, typ in zeilen:
         if not bez.strip():
             continue
-        positionen.append((bez.strip(), beschr.strip(), zahl_aus_text(menge, 1), einheit.strip(),
-                           cent_aus_text(preis), cent_aus_text(teile), zahl_aus_text(satz, 19), art.strip(),
-                           int(aid) if aid.isdigit() else None))
+        positionen.append({
+            "bezeichnung": bez.strip(), "beschreibung": beschr.strip("\n\r "), "menge": zahl_aus_text(menge, 1),
+            "einheit": einheit.strip(), "preis": cent_aus_text(preis),
+            "teilekosten": cent_aus_text(teile, leer=None), "steuersatz": zahl_aus_text(satz, 19),
+            "leistungsart": art.strip(), "artikel_id": int(aid) if aid.isdigit() else None,
+            "katalog": katalog_flag == "1", "typ": typ,
+        })
+    konflikte = []
     with dbm.Transaktion(con):
         con.execute(
             "UPDATE dokumente SET kunde_id=?, datum=?, leistungsdatum=?, leistungsdatum_bis=?, zahlungsziel_tage=?, "
@@ -415,11 +433,49 @@ def _entwurf_speichern(con, d, einst):
              einst["steuer_modus"], dbm.jetzt(), d["id"]))
         con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
         for i, p in enumerate(positionen, 1):
+            if p["artikel_id"] is None and p["katalog"]:
+                # manuell eingegebene Position -> in „Leistungen und Artikel“ übernehmen und verknüpfen
+                p["artikel_id"], konflikt = katalog.uebernehmen(con, p)
+                if konflikt:
+                    konflikte.append(konflikt)
             con.execute(
                 "INSERT INTO positionen (dokument_id, pos, bezeichnung, beschreibung, menge, einheit, einzelpreis, "
                 "teilekosten, steuersatz, leistungsart, artikel_id) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (d["id"], i, *p))
+                (d["id"], i, p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"], p["preis"],
+                 p["teilekosten"] or 0, p["steuersatz"], p["leistungsart"], p["artikel_id"]))
         logik.summen_speichern(con, d["id"])
+    if konflikte:
+        session["preis_konflikte"] = {"dokument_id": d["id"], "liste": konflikte}
+
+
+@bp.route("/artikel/preise-aktualisieren", methods=["POST"])
+def artikel_preise_aktualisieren():
+    """Antwort auf die Rückfrage „Preise im Katalog aktualisieren?“."""
+    daten = session.pop("preis_konflikte", None) or {}
+    con = dbm.get_db()
+    if request.form.get("antwort") == "ja":
+        gewaehlt = {int(i) for i in request.form.getlist("artikel_id") if i.isdigit()}
+        with dbm.Transaktion(con):
+            for k in daten.get("liste", []):
+                if k["artikel_id"] in gewaehlt:
+                    katalog.preise_aktualisieren(con, k["artikel_id"], k["neu_preis"], k["neu_ek"])
+        flash(f"Preise von {len(gewaehlt)} Katalogeintrag/-einträgen aktualisiert.", "ok")
+    else:
+        flash("Katalogpreise bleiben unverändert.", "info")
+    return redirect(url_for("main.dokument", did=daten["dokument_id"]) if daten.get("dokument_id")
+                    else url_for("main.artikel_liste"))
+
+
+@bp.route("/artikel/aus-dokumenten", methods=["GET", "POST"])
+def artikel_aus_dokumenten():
+    """Einmalige Übernahme: manuelle Positionen aus bisherigen Rechnungen und Kostenvoranschlägen."""
+    con = dbm.get_db()
+    if request.method == "POST":
+        with dbm.Transaktion(con):
+            n = katalog.aus_dokumenten_importieren(con, request.form.getlist("schluessel"))
+        flash(f"{n} Einträge in „Leistungen und Artikel“ übernommen.", "ok")
+        return redirect(url_for("main.artikel_liste"))
+    return render_template("artikel_import.html", vorschlaege=katalog.aus_dokumenten_sammeln(con))
 
 
 @bp.route("/dokumente/<int:did>/pdf")
@@ -497,11 +553,14 @@ def dokument_email(did):
             raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
         pdf = (Path(daten_dir()) / d["pdf_pfad"]).read_bytes()
         try:
-            senden(con, einst, an, _f("betreff"), request.form.get("text", ""), pdf, f"{d['nummer']}.pdf", did)
+            hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""), pdf, f"{d['nummer']}.pdf",
+                             did)
         except MailFehler as e:
             flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
             return redirect(url_for("main.dokument_email", did=did))
         flash(f"E-Mail an {an} wurde gesendet.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
         return redirect(url_for("main.dokument", did=did))
     bezug = con.execute("SELECT * FROM dokumente WHERE id=?", (d["bezug_id"],)).fetchone() if d["bezug_id"] else None
     werte = logik.platzhalter_werte(d, kunde, einst, bezug=bezug)
@@ -524,7 +583,8 @@ EINSTELLUNGS_BEREICHE = {
     "layout": ["farbe_primaer", "farbe_sekundaer", "schrift", "schriftgroesse", "logo_breite_mm", "logo_position",
                "kopfzeile_text", "fusszeile_text", "faltmarken", "girocode"],
     "email": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "absender_name", "absender_email",
-              "bcc_an_mich"],
+              "bcc_an_mich", "gesendet_aktiv", "gesendet_imap_host", "gesendet_imap_port", "gesendet_imap_sicherheit",
+              "gesendet_gleiche_zugangsdaten", "gesendet_imap_benutzer", "gesendet_ordner"],
     "backup": ["backup_auto", "backup_ziel", "backup_behalten"],
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
@@ -533,9 +593,9 @@ EINSTELLUNGS_BEREICHE = {
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {"update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {"gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
+GANZZAHL = {"gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
@@ -564,6 +624,15 @@ def einstellungen():
             neu["iban"] = neu["iban"].replace(" ", "").upper()
         if bereich == "email" and request.form.get("smtp_passwort"):
             neu["smtp_passwort_enc"] = verschluesseln(request.form["smtp_passwort"])
+        if bereich == "email" and request.form.get("gesendet_imap_passwort"):
+            neu["gesendet_imap_passwort_enc"] = verschluesseln(request.form["gesendet_imap_passwort"])
+        if bereich == "email":
+            if neu["gesendet_imap_sicherheit"] not in ("ssl", "starttls"):
+                neu["gesendet_imap_sicherheit"] = "ssl"
+            if not 1 <= int(neu["smtp_port"] or 0) <= 65535:
+                raise EingabeFehler("Bitte einen gültigen SMTP-Port angeben (587 für STARTTLS, 465 für SSL/TLS).")
+            if neu["gesendet_aktiv"] and not neu["gesendet_imap_host"]:
+                raise EingabeFehler("Für die Ablage im Gesendet-Ordner bitte einen IMAP-Server angeben.")
         if bereich == "anfragen" and request.form.get("imap_passwort"):
             neu["imap_passwort_enc"] = verschluesseln(request.form["imap_passwort"])
         if bereich == "vertraege" and neu["abo_modus"] not in ("entwurf", "automatisch"):
@@ -581,7 +650,7 @@ def einstellungen():
         with dbm.Transaktion(con):
             alt = dbm.einstellungen(con)
             dbm.einstellungen_speichern(neu, con)
-            geheim = ("smtp_passwort_enc", "imap_passwort_enc")
+            geheim = ("smtp_passwort_enc", "imap_passwort_enc", "gesendet_imap_passwort_enc")
             geaendert = {k: v for k, v in neu.items() if alt.get(k) != v and k not in geheim}
             for k in geheim:
                 if k in neu:
@@ -591,6 +660,7 @@ def einstellungen():
         return redirect(url_for("main.einstellungen", bereich=bereich))
     return render_template("einstellungen.html", bereich=bereich, schriften=list(SCHRIFTEN),
                            smtp_passwort_gesetzt=bool(dbm.einstellung("smtp_passwort_enc")),
+                           gesendet_passwort_gesetzt=bool(dbm.einstellung("gesendet_imap_passwort_enc")),
                            imap_passwort_gesetzt=bool(dbm.einstellung("imap_passwort_enc")),
                            backups=_backup_liste())
 
@@ -675,9 +745,12 @@ def testmail():
     einst = dbm.einstellungen(con)
     an = _f("an") or einst.get("absender_email")
     try:
-        senden(con, {**einst, "bcc_an_mich": False}, an, "Test-E-Mail aus der Buchhaltung",
-               "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand funktioniert.")
-        flash(f"Test-E-Mail an {an} gesendet.", "ok")
+        hinweis = senden(con, {"bcc_an_mich": False}, an, "Test-E-Mail aus der Buchhaltung",
+                         "Diese Test-E-Mail bestätigt, dass der E-Mail-Versand funktioniert.")
+        flash(f"Test-E-Mail an {an} gesendet." + (" Eine Kopie liegt im Gesendet-Ordner."
+                                                   if einst.get("gesendet_aktiv") and not hinweis else ""), "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
     except MailFehler as e:
         flash(f"Test fehlgeschlagen: {e}", "fehler")
     return redirect(url_for("main.einstellungen", bereich="email"))
@@ -1355,3 +1428,50 @@ def vertragsarten(aid=None):
     liste = con.execute("SELECT * FROM vertragsarten ORDER BY aktiv DESC, kategorie, name").fetchall()
     return render_template("vertragsarten.html", liste=liste, art=art, kategorien=vtr.KATEGORIEN,
                            abrechnung=vtr.ABRECHNUNG, neu=request.args.get("neu") or aid)
+
+
+# ====================================================================== IMAP: Gesendet-Ordner (Einstellungen)
+
+def _gesendet_cfg_aus_formular():
+    """IMAP-Konfiguration aus den (evtl. noch nicht gespeicherten) Formularfeldern."""
+    from .imap_ablage import konfiguration
+    f = request.form
+    werte = {
+        "gesendet_imap_host": f.get("gesendet_imap_host", "").strip(),
+        "gesendet_imap_port": f.get("gesendet_imap_port", "").strip() or 993,
+        "gesendet_imap_sicherheit": f.get("gesendet_imap_sicherheit") or "ssl",
+        "gesendet_gleiche_zugangsdaten": f.get("gesendet_gleiche_zugangsdaten") in ("on", "1", "true"),
+        "gesendet_imap_benutzer": f.get("gesendet_imap_benutzer", "").strip(),
+        "gesendet_ordner": f.get("gesendet_ordner", "").strip(),
+    }
+    if f.get("smtp_benutzer"):
+        werte["smtp_benutzer"] = f.get("smtp_benutzer").strip()
+    pw = f.get("smtp_passwort") if werte["gesendet_gleiche_zugangsdaten"] else f.get("gesendet_imap_passwort")
+    if pw:
+        werte["passwort_klartext"] = pw
+    return konfiguration(dbm.einstellungen(), werte)
+
+
+@bp.route("/einstellungen/imap-ordner", methods=["POST"])
+def imap_ordner_abrufen():
+    from .imap_ablage import AblageFehler, _abmelden, ordner_auflisten, verbinden
+    try:
+        imap = verbinden(_gesendet_cfg_aus_formular())
+        try:
+            ordner = ordner_auflisten(imap)
+        finally:
+            _abmelden(imap)
+    except AblageFehler as e:
+        return jsonify(ok=False, meldung=str(e))
+    return jsonify(ok=True, ordner=ordner,
+                   meldung=f"{len(ordner)} Ordner gefunden." + (" Der Gesendet-Ordner ist vorausgewählt."
+                                                                 if any(o["gesendet"] for o in ordner) else ""))
+
+
+@bp.route("/einstellungen/imap-test", methods=["POST"])
+def imap_verbindung_testen():
+    from .imap_ablage import AblageFehler, verbindung_testen
+    try:
+        return jsonify(ok=True, meldung=verbindung_testen(_gesendet_cfg_aus_formular()))
+    except AblageFehler as e:
+        return jsonify(ok=False, meldung=str(e))

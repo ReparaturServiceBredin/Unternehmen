@@ -74,6 +74,15 @@ STANDARD_EINSTELLUNGEN = {
     "absender_name": "Reparatur Service Bredin",
     "absender_email": "kontakt@reparatur-bredin.de",
     "bcc_an_mich": True,
+    # Kopie gesendeter Mails per IMAP im Postfach ablegen
+    "gesendet_aktiv": False,
+    "gesendet_imap_host": "imap.ionos.de",
+    "gesendet_imap_port": 993,
+    "gesendet_imap_sicherheit": "ssl",      # ssl (Port 993) / starttls (Port 143)
+    "gesendet_gleiche_zugangsdaten": True,
+    "gesendet_imap_benutzer": "",
+    "gesendet_imap_passwort_enc": "",
+    "gesendet_ordner": "",
     # Backup
     "backup_auto": True,
     "backup_ziel": "",
@@ -149,8 +158,9 @@ def schliessen(_exc=None):
 
 def initialisieren(pfad):
     con = verbinden(pfad)
+    _migrieren(con, pfad)  # zuerst: Indizes/Trigger im Schema dürfen sich auf neue Spalten beziehen
     con.executescript(SCHEMA.read_text(encoding="utf-8"))
-    _migrieren(con)
+    _migrieren(con, pfad)
     vorhanden = {r["schluessel"] for r in con.execute("SELECT schluessel FROM einstellungen")}
     for k, v in STANDARD_EINSTELLUNGEN.items():
         if k not in vorhanden:
@@ -177,16 +187,45 @@ def initialisieren(pfad):
     con.close()
 
 
-def _migrieren(con):
-    """Ergänzt neue Spalten in bestehenden Datenbanken (Updates ohne Datenverlust)."""
-    spalten = {r["name"] for r in con.execute("PRAGMA table_info(kunden)")}
-    if "interessent" not in spalten:
-        con.execute("ALTER TABLE kunden ADD COLUMN interessent INTEGER NOT NULL DEFAULT 0")
-    if "quelle" not in spalten:
-        con.execute("ALTER TABLE kunden ADD COLUMN quelle TEXT")
-    vspalten = {r["name"] for r in con.execute("PRAGMA table_info(vertraege)")}
-    if vspalten and "abgerechnet_bis" not in vspalten:
-        con.execute("ALTER TABLE vertraege ADD COLUMN abgerechnet_bis TEXT")
+# Spalten, die in neueren Versionen dazugekommen sind: (Tabelle, Spalte, Definition)
+MIGRATIONEN = [
+    ("kunden", "interessent", "INTEGER NOT NULL DEFAULT 0"),
+    ("kunden", "quelle", "TEXT"),
+    ("vertraege", "abgerechnet_bis", "TEXT"),
+    ("versandprotokoll", "ablage", "TEXT"),
+    ("artikel", "ek_unbekannt", "INTEGER NOT NULL DEFAULT 0"),
+]
+
+
+def _migrieren(con, pfad=None):
+    """Ergänzt neue Spalten in bestehenden Datenbanken (Updates ohne Datenverlust).
+
+    Vor jeder Änderung wird eine Sicherungskopie der Datenbank im Ordner backups angelegt.
+    """
+    fehlend = []
+    for tabelle, spalte, definition in MIGRATIONEN:
+        spalten = {r["name"] for r in con.execute(f"PRAGMA table_info({tabelle})")}
+        if spalten and spalte not in spalten:
+            fehlend.append((tabelle, spalte, definition))
+    if not fehlend:
+        return []
+    if pfad:
+        _sicherung_vor_migration(con, pfad)
+    for tabelle, spalte, definition in fehlend:
+        con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {definition}")
+    return fehlend
+
+
+def _sicherung_vor_migration(con, pfad):
+    ziel_ordner = Path(pfad).parent / "backups"
+    ziel_ordner.mkdir(parents=True, exist_ok=True)
+    ziel = ziel_ordner / f"vor_update_{datetime.now():%Y-%m-%d_%H%M%S}.db"
+    if ziel.exists():  # nie eine ältere Sicherung überschreiben
+        ziel = ziel.with_name(f"{ziel.stem}_{datetime.now():%f}.db")
+    kopie = sqlite3.connect(ziel)
+    with kopie:
+        con.backup(kopie)
+    kopie.close()
 
 
 # ---------------------------------------------------------------- Einstellungen

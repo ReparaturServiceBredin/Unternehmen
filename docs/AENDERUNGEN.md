@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.7.0 | 15.10.2026 | Gesendet-Ordner per IMAP, Katalog-Übernahme, ausführliche Beschreibungen |
 | 0.6.1 | 15.10.2026 | Vertragsrechnungen vollautomatisch |
 | 0.6.0 | 15.10.2026 | Verträge & Lizenzen (Wertgarantie, ESET, MSP) mit wiederkehrenden Rechnungen |
 | 0.5.1 | 15.10.2026 | Versionsprotokoll im Programm |
@@ -24,6 +25,53 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.7.0 – 15.10.2026
+Versendete Mails im Postfach, manuelle Positionen automatisch im Katalog, ausführliche Artikelbeschreibungen.
+
+### Neu
+- **Kopie im Gesendet-Ordner (IMAP):** *Einstellungen → E-Mail → IMAP*. Jede versendete Mail wird nach dem
+  erfolgreichen SMTP-Versand mit Anhängen, Datum und Message-ID per IMAP im gewählten Ordner abgelegt
+  (als gelesen markiert).
+  - IMAP-Server, Port (993), Verschlüsselung (SSL/TLS oder STARTTLS/143), gleiche Zugangsdaten wie SMTP oder eigene
+    (Passwort verschlüsselt gespeichert)
+  - **„Ordner abrufen“** listet die Ordner des Postfachs (Umlaute/IMAP-UTF-7 werden richtig angezeigt),
+    der Gesendet-Ordner wird vorausgewählt
+  - **„Verbindung testen“** mit verständlicher Meldung: Erfolg, falsches Passwort, Server nicht erreichbar,
+    Ordner fehlt
+  - Schlägt die Ablage fehl, gilt die Mail trotzdem als gesendet – gelber Hinweis, Eintrag im Protokoll,
+    **kein erneuter Versand**. Das Versandprotokoll vermerkt, ob die Kopie abgelegt wurde.
+- **Manuelle Positionen → „Leistungen und Artikel“:** Von Hand eingegebene Positionen in KVA und Rechnungen werden
+  beim Speichern automatisch in den Katalog übernommen (Bezeichnung, Beschreibung, Einheit, Einkauf, Preis, Marge,
+  Steuersatz, Typ) und mit der Position verknüpft.
+  - pro Position Haken **„In Leistungen und Artikel speichern“** (für einmalige Sonderpositionen abwählen) und Typ
+    Leistung/Artikel (mit Einkaufspreis automatisch „Artikel“)
+  - keine Duplikate (Groß-/Kleinschreibung und Leerzeichen werden ignoriert); weichen die Preise ab, kommt die
+    Rückfrage **„Preise im Katalog aktualisieren?“** (Ja/Nein)
+  - fehlt der Einkaufspreis, bleibt die Marge leer (statt 0 % oder 100 %)
+- **„Aus bisherigen Dokumenten übernehmen“** (in *Leistungen & Artikel*): sammelt alle manuellen Positionen aus
+  früheren KVA und Rechnungen, fasst Duplikate zusammen und zeigt eine Vorschau mit Preisen, früheren Preisen und
+  Margen zum Abhaken.
+- **Ausführliche Beschreibung** für Leistungen und Artikel (großes mehrzeiliges Feld, keine Längenbegrenzung):
+  wird beim Einfügen in KVA/Rechnung übernommen und kann dort für den Einzelfall angepasst werden, ohne den
+  Katalog zu ändern. Im PDF steht sie kleiner unter der Bezeichnung, Zeilenumbrüche bleiben erhalten, lange Texte
+  brechen sauber auf die nächste Seite um.
+- Artikelsuche durchsucht auch die Beschreibung (z. B. „USB-C“, „HDMI“); die Liste zeigt nur die erste Zeile.
+
+### Geändert
+- E-Mail-Versand liest die Zugangsdaten immer frisch aus den gespeicherten Einstellungen. Fehlen sie oder sind sie
+  ungültig (z. B. leer oder „localhost“), kommt eine klare Meldung statt eines Verbindungsversuchs.
+- Zeitlimit 20 Sekunden für SMTP und IMAP (auch beim Abholen der Anfragen).
+- Bei „Verbindung abgelehnt“ (z. B. WinError 10061) ein zweiter Verbindungsversuch nach 2 Sekunden – nur beim
+  Verbindungsaufbau, es wird nie doppelt gesendet; die Fehlermeldung nennt Server und Port.
+- Einkaufspreis bei Leistungen/Artikeln darf leer bleiben (= unbekannt, keine Marge).
+
+### Technik
+- Neue Felder `artikel.ek_unbekannt`, `versandprotokoll.ablage`. Vor jeder Datenbank-Erweiterung wird automatisch
+  eine Sicherung `Daten\backups\vor_update_….db` angelegt.
+- 73 automatische Tests.
 
 ---
 

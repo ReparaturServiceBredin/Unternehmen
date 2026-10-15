@@ -464,7 +464,7 @@ def abrufen(con, einst, imap_klasse=imaplib.IMAP4_SSL):
     erkennung = (einst.get("anfrage_erkennung") or "").strip().lower()
     ergebnis = {"gelesen": 0, "neu": 0, "echt": 0, "unsicher": 0, "spam": 0, "verschoben": 0}
     try:
-        imap = imap_klasse(host, int(einst.get("imap_port") or 993))
+        imap = imap_klasse(host, int(einst.get("imap_port") or 993), timeout=20)
     except OSError as e:
         raise AbrufFehler(f"Verbindung zu {host} fehlgeschlagen: {e}")
     try:

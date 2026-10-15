@@ -216,10 +216,12 @@ def abrechnungslauf(con, daten_dir, heute=None):
             werte = logik.platzhalter_werte(d, kunde, einst)
             texte = logik.standard_texte(con, "rechnung")
             try:
-                senden(con, einst, kunde["email"], platzhalter_ersetzen(texte.get("email_betreff", "{nummer}"), werte),
+                hinweis = senden(con, None, kunde["email"], platzhalter_ersetzen(texte.get("email_betreff", "{nummer}"), werte),
                        platzhalter_ersetzen(texte.get("email_text", ""), werte),
                        (Path(daten_dir) / d["pdf_pfad"]).read_bytes(), f"{nummer}.pdf", did)
                 ergebnis["versendet"] += 1
+                if hinweis:
+                    ergebnis["fehler"].append(f"{nummer}: {hinweis}")
             except MailFehler as e:
                 ergebnis["fehler"].append(f"{nummer}: {e}")
     with dbm.Transaktion(con):

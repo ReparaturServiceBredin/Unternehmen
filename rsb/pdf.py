@@ -126,6 +126,8 @@ def pdf_erzeugen(snap, daten_dir=None, entwurf=False):
         "zelle": ParagraphStyle("z", fontName=f_norm, fontSize=groesse - 0.5, leading=(groesse - 0.5) * 1.35),
         "zelle_r": ParagraphStyle("zr", fontName=f_norm, fontSize=groesse - 0.5, leading=(groesse - 0.5) * 1.35,
                                   alignment=TA_RIGHT),
+        "beschreibung": ParagraphStyle("pb", fontName=f_norm, fontSize=groesse - 1.5, leading=(groesse - 1.5) * 1.35,
+                                       textColor=sekundaer),
         "zelle_fett": ParagraphStyle("zf", fontName=f_fett, fontSize=groesse - 0.5, leading=(groesse - 0.5) * 1.35),
         "summe": ParagraphStyle("s", fontName=f_norm, fontSize=groesse, leading=groesse * 1.4, alignment=TA_RIGHT),
         "summe_fett": ParagraphStyle("sf", fontName=f_fett, fontSize=groesse + 1.5, leading=groesse * 1.7,
@@ -339,16 +341,34 @@ def _positionstabelle(snap, st, primaer, sekundaer):
     mit_ust = snap["steuer_modus"] == "regel"
     kopf = ["Pos.", "Bezeichnung", "Menge", "Einheit"] + (["USt."] if mit_ust else []) + ["Einzelpreis", "Gesamt"]
     zeilen = [[Paragraph(k, st["kopf_r"] if i >= 2 and k != "Einheit" else st["kopf"]) for i, k in enumerate(kopf)]]
+    leer = ""
+    positions_zeilen = []  # (erste Zeilennummer, letzte Zeilennummer) je Position – für Linien und Hintergrund
     for p in snap["positionen"]:
-        bez = f"<b>{escape(p['bezeichnung'])}</b>"
-        if p.get("beschreibung"):
-            bez += f"<br/><font color='{sekundaer.hexval().replace('0x', '#')}'>{_absatz(p['beschreibung'])}</font>"
-        zeile = [Paragraph(str(p["pos"]), st["zelle"]), Paragraph(bez, st["zelle"]),
+        # Bezeichnung fett, darunter die Beschreibung kleiner (Zeilenumbrüche bleiben erhalten).
+        # Lange Beschreibungen werden auf Fortsetzungszeilen verteilt, damit die Tabelle sauber
+        # zwischen den Seiten umbricht.
+        teile = []
+        for zeile_text in (p.get("beschreibung") or "").replace("\r\n", "\n").split("\n"):
+            if zeile_text.strip():
+                einrueckung = len(zeile_text) - len(zeile_text.lstrip(" "))
+                teile.append(Paragraph("&nbsp;" * einrueckung + escape(zeile_text.strip()), st["beschreibung"]))
+            elif teile:
+                teile.append(Spacer(1, st["beschreibung"].leading * 0.6))
+        while teile and isinstance(teile[-1], Spacer):
+            teile.pop()
+        erste = [Paragraph(f"<b>{escape(p['bezeichnung'])}</b>", st["zelle"])] + teile[:4]
+        zeile = [Paragraph(str(p["pos"]), st["zelle"]), erste,
                  Paragraph(menge_text(p["menge"]), st["zelle_r"]), Paragraph(escape(p["einheit"]), st["zelle"])]
         if mit_ust:
             zeile.append(Paragraph(f"{menge_text(p['steuersatz'])} %", st["zelle_r"]))
         zeile += [Paragraph(euro(p["einzelpreis"]), st["zelle_r"]), Paragraph(euro(p["betrag"]), st["zelle_r"])]
+        start = len(zeilen)
         zeilen.append(zeile)
+        for i in range(4, len(teile), 3):
+            fortsetzung = [leer] * len(zeile)
+            fortsetzung[1] = teile[i:i + 3]
+            zeilen.append(fortsetzung)
+        positions_zeilen.append((start, len(zeilen) - 1))
     feste = [10 * mm, None, 15 * mm, 18 * mm] + ([13 * mm] if mit_ust else []) + [25 * mm, 25 * mm]
     rest = INHALT_B - sum(b for b in feste if b)
     breiten = [b if b else rest for b in feste]
@@ -360,10 +380,14 @@ def _positionstabelle(snap, st, primaer, sekundaer):
         ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
         ("LEFTPADDING", (0, 0), (-1, -1), 4),
         ("RIGHTPADDING", (0, 0), (-1, -1), 4),
-        ("LINEBELOW", (0, 1), (-1, -1), 0.3, colors.HexColor("#D5D9DE")),
     ]
-    for i in range(2, len(zeilen), 2):
-        stil.append(("BACKGROUND", (0, i), (-1, i), colors.HexColor("#F5F7FA")))
+    for nr, (von, bis) in enumerate(positions_zeilen):
+        stil.append(("LINEBELOW", (0, bis), (-1, bis), 0.3, colors.HexColor("#D5D9DE")))
+        if bis > von:  # Fortsetzungszeilen ohne Abstand dazwischen
+            stil.append(("BOTTOMPADDING", (0, von), (-1, bis - 1), 0))
+            stil.append(("TOPPADDING", (0, von + 1), (-1, bis), 0))
+        if nr % 2 == 1:
+            stil.append(("BACKGROUND", (0, von), (-1, bis), colors.HexColor("#F5F7FA")))
     t.setStyle(TableStyle(stil))
     return t
 

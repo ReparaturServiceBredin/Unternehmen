@@ -12,6 +12,18 @@
 {% if einst.steuer_modus == 'kleinunternehmer' %}
 <div class="meldung info">Kleinunternehmer-Modus: Es wird keine Umsatzsteuer berechnet, der Hinweis nach § 19 UStG wird automatisch gedruckt.</div>
 {% endif %}
+{% if konflikte %}
+<form method="post" action="{{ url_for('main.artikel_preise_aktualisieren') }}" class="meldung warnung">{{ csrf() }}
+  <b>Preise im Katalog aktualisieren?</b> Diese Positionen gibt es schon unter „Leistungen und Artikel“, aber mit anderen Preisen:
+  <table class="liste" style="margin:8px 0;background:transparent">
+    <tr><th></th><th>Bezeichnung</th><th class="zahl">Katalog: Preis / Einkauf</th><th class="zahl">Neu: Preis / Einkauf</th></tr>
+    {% for k in konflikte.liste %}<tr><td><input type="checkbox" name="artikel_id" value="{{ k.artikel_id }}" checked></td><td>{{ k.name }}</td>
+      <td class="zahl">{{ k.alt_preis|euro }} / {{ (k.alt_ek|euro) if k.alt_ek is not none else 'unbekannt' }}</td>
+      <td class="zahl"><b>{{ k.neu_preis|euro }}</b> / {{ (k.neu_ek|euro) if k.neu_ek is not none else 'unverändert' }}</td></tr>{% endfor %}
+  </table>
+  <div class="leiste"><button name="antwort" value="ja">Ja, Katalog aktualisieren</button><button name="antwort" value="nein" class="zweit">Nein</button></div>
+</form>
+{% endif %}
 <form method="post" id="dokform">
   {{ csrf() }}
   <div class="karte">
@@ -51,7 +63,7 @@
     </div>
     <table class="positionen">
       <thead><tr><th style="width:40%">Bezeichnung / Beschreibung</th><th>Leistungsart</th><th style="width:70px">Menge</th><th style="width:95px">Einheit</th>
-        <th style="width:95px">Teilekosten</th><th style="width:95px">Einzelpreis</th>{% if einst.steuer_modus == 'regel' %}<th style="width:60px">USt %</th>{% endif %}<th style="width:110px" class="zahl">Gesamt</th><th></th></tr></thead>
+        <th style="width:95px">Einkauf</th><th style="width:95px">Einzelpreis</th>{% if einst.steuer_modus == 'regel' %}<th style="width:60px">USt %</th>{% endif %}<th style="width:110px" class="zahl">Gesamt</th><th></th></tr></thead>
       <tbody id="positionen"></tbody>
     </table>
     <div class="summenbox" id="summen"></div>
@@ -102,19 +114,38 @@ function zeile(p) {
   const arten = LEISTUNGSARTEN.map(a => `<option ${a === p.leistungsart ? 'selected' : ''}>${esc(a)}</option>`).join('');
   tr.innerHTML = `
     <td><input type="text" name="p_bezeichnung" value="${esc(p.bezeichnung)}" placeholder="Bezeichnung">
-        <textarea name="p_beschreibung" placeholder="Beschreibung (optional)">${esc(p.beschreibung)}</textarea>
-        <input type="hidden" name="p_artikel_id" value="${esc(p.artikel_id)}"></td>
+        <textarea name="p_beschreibung" class="beschreibung" placeholder="Beschreibung (optional, mehrzeilig – erscheint unter der Bezeichnung)">${esc(p.beschreibung)}</textarea>
+        <input type="hidden" name="p_artikel_id" value="${esc(p.artikel_id)}">
+        <input type="hidden" name="p_katalog" value="${p.artikel_id ? '0' : (p.katalog === false ? '0' : '1')}">
+        ${p.artikel_id
+          ? `<input type="hidden" name="p_typ" value=""><div class="klein katalog-info">aus „Leistungen und Artikel“ – Änderungen gelten nur für dieses Dokument</div>`
+          : `<div class="katalog-zeile"><label class="check klein"><input type="checkbox" class="katalog-haken" ${p.katalog === false ? '' : 'checked'}> In Leistungen und Artikel speichern</label>
+             <select name="p_typ" class="klein-select" title="Typ im Katalog"><option value="leistung" ${p.typ === 'material' ? '' : 'selected'}>Leistung</option><option value="material" ${p.typ === 'material' ? 'selected' : ''}>Artikel</option></select></div>`}</td>
     <td><select name="p_leistungsart"><option></option>${arten}</select></td>
     <td><input type="text" name="p_menge" value="${esc(String(p.menge ?? 1).replace('.', ','))}"></td>
     <td><input type="text" name="p_einheit" value="${esc(p.einheit)}"></td>
-    <td><input type="text" name="p_teilekosten" value="${euroText((p.teilekosten || 0) / 100)}"></td>
+    <td><input type="text" name="p_teilekosten" value="${p.teilekosten ? euroText(p.teilekosten / 100) : ''}" placeholder="unbekannt"></td>
     <td><input type="text" name="p_preis" value="${euroText((p.einzelpreis || 0) / 100)}"></td>
     ${MIT_UST ? `<td><input type="text" name="p_steuersatz" value="${esc(p.steuersatz ?? 19)}"></td>` : `<input type="hidden" name="p_steuersatz" value="${esc(p.steuersatz ?? 19)}">`}
     <td class="zahl"><b class="ges"></b><div class="marge"></div></td>
     <td><button type="button" class="gefahr klein" title="Position entfernen">✕</button></td>`;
   tr.querySelector('button').onclick = () => { tr.remove(); rechne(); };
+  const haken = tr.querySelector('.katalog-haken');
+  if (haken) haken.onchange = () => { tr.querySelector('[name=p_katalog]').value = haken.checked ? '1' : '0'; };
+  const beschr = tr.querySelector('textarea.beschreibung');
+  const hoehe = () => { beschr.style.height = 'auto'; beschr.style.height = Math.max(34, beschr.scrollHeight + 2) + 'px'; };
+  beschr.addEventListener('input', hoehe);
+  const typ = tr.querySelector('select[name=p_typ]');
+  if (typ) {  // Typ automatisch vorschlagen: mit Einkaufspreis = Artikel, sonst Leistung (bis man selbst wählt)
+    let selbst = !!p.typ;
+    typ.addEventListener('change', () => { selbst = true; });
+    const ek = tr.querySelector('[name=p_teilekosten]');
+    const vorschlag = () => { if (!selbst) typ.value = ek.value.trim() ? 'material' : 'leistung'; };
+    ek.addEventListener('input', vorschlag); vorschlag();
+  }
   tr.querySelectorAll('input').forEach(i => i.addEventListener('input', rechne));
   tbody.appendChild(tr);
+  hoehe();
   rechne();
 }
 function rechne() {
