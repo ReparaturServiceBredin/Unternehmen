@@ -92,3 +92,15 @@ document.querySelectorAll('.kva-auswahl').forEach(box => {
   });
   laden();
 });
+
+// ---------------------------------------------------------------- Reiter (#hash)
+function reiterInit(standard) {
+  function zeigen() {
+    const name = (location.hash || '#' + standard).slice(1);
+    const gueltig = document.querySelector(`[data-bereich="${name}"]`) ? name : standard;
+    document.querySelectorAll('[data-bereich]').forEach(s => s.hidden = s.dataset.bereich !== gueltig);
+    document.querySelectorAll('[data-reiter]').forEach(r => r.classList.toggle('aktiv', r.dataset.reiter === gueltig));
+  }
+  window.addEventListener('hashchange', zeigen);
+  zeigen();
+}

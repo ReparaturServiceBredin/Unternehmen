@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.9.0 | 15.10.2026 | Leihgeräte: Ausgabe, Rückgabe, Schadensfall, Abrechnung |
 | 0.8.0 | 15.10.2026 | Auftrags-Detailansicht: KVA verknüpfen, Fotodokumentation, Verlauf |
 | 0.7.0 | 15.10.2026 | Gesendet-Ordner per IMAP, Katalog-Übernahme, ausführliche Beschreibungen |
 | 0.6.1 | 15.10.2026 | Vertragsrechnungen vollautomatisch |
@@ -26,6 +27,69 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.9.0 – 15.10.2026
+Leihgeräte für Kunden während der Reparatur, mit Leihvertrag, Rückgabeprotokoll, Schadensfällen und Abrechnung.
+
+### Neu
+- **Menüpunkt „Leihgeräte“:**
+  - Übersicht mit Status (Verfügbar, Verliehen, Defekt / in Reparatur, Ausgemustert), Filter und Suche
+  - verliehene Geräte zeigen Kunde, Auftrag, Ausgabe und Rückgabedatum; überfällige Rückgaben sind rot markiert
+  - im Menü ein Zähler für überfällige Rückgaben
+- **Je Leihgerät:**
+  - Bezeichnung, Typ, Hersteller, Modell, Seriennummer, Inventarnummer
+  - Standard-Zubehör als Checkliste, Zustand, Anschaffungsdatum, Anschaffungs- und Zeitwert
+  - Leihgebühr kostenlos / pauschal / pro Tag mit kostenlosen Tagen, optionale Kaution
+  - Fotos und eine Historie aller Leihen, Schäden und Statuswechsel
+  - Geräte werden nicht gelöscht, sondern ausgemustert
+- **Reiter „Leihgerät“ im Reparaturauftrag:**
+  - **Ausgeben:** nur verfügbare Geräte. Erfasst werden Zeitpunkt (Server-Zeit, vorbelegt), voraussichtliche Rückgabe,
+    Zubehör zum Abhaken, Leihgebühr (vorbelegt, änderbar, auch „kostenlos (Kulanz)“), Kaution mit Zahlungsart sowie
+    Zustand mit Notiz und Fotos („Leihgerät Ausgabe“).
+  - **Leihvertrag / Übergabeprotokoll als PDF:** Kunde, Gerät mit Seriennummer, Zubehör, Zustand mit Fotos,
+    Leihgebühr, Kaution, Rückgabedatum, Leihbedingungen und Unterschriftsfelder. Auf Wunsch direkt per E-Mail an
+    den Kunden.
+  - Die Leihbedingungen sind unter *Einstellungen → Leihgeräte* frei bearbeitbar.
+- **Rücknahme:**
+  - Zeitpunkt, Zubehör-Checkliste (was fehlt?), Zustand „einwandfrei“ oder „Schaden festgestellt“, Notiz und
+    Fotos („Leihgerät Rückgabe“). Die Fotos von Ausgabe und Rückgabe stehen nebeneinander zum Vergleich.
+  - Die Leihgebühr wird automatisch berechnet (Kalendertage minus kostenlose Tage, bzw. Pauschale) und kann vor der
+    Übernahme geändert werden.
+  - Ohne Schaden ist das Gerät wieder verfügbar und die Kaution steht auf „zurückzuzahlen“.
+  - Rückgabeprotokoll als PDF.
+- **Schadensfall** (bei Schaden oder fehlendem Zubehör):
+  - Beschreibung, Fotos und Kostenart (Reparatur, Zubehör-Ersatz, Totalschaden/Verlust mit dem Zeitwert vorbelegt)
+  - transparente Verrechnung mit der Kaution: noch zu zahlen bzw. Erstattung
+  - das Gerät wird automatisch auf „Defekt“ bzw. „Ausgemustert“ gesetzt
+  - per Klick ein interner Reparaturauftrag für das Leihgerät (ohne Rechnung; nach dem Erledigen ist das Gerät
+    wieder verfügbar)
+  - Schadensfall-Dokumentation als PDF mit Fotos und Verlauf
+- **Abrechnung:**
+  - Beim Ziehen auf „Erledigt“ kommen Leihgebühr und Schäden als eigene Positionen in den Rechnungsentwurf, z. B.
+    „Leihgerät Lenovo ThinkPad T14 #1, 2 Tage à 5,00 €“ und „Schaden Leihgerät: Netzteil fehlt“.
+  - Die Kautionsverrechnung steht als Hinweis auf der Rechnung.
+  - Ist das Gerät noch nicht zurück, fragt das Programm: „Leihgerät jetzt zurücknehmen oder später separat
+    abrechnen?“
+- **Katalog:** neue Positionen „Leihgebühr pauschal“, „Leihgebühr pro Tag“ und „Schadenersatz Leihgerät“ unter
+  *Leistungen & Artikel*.
+- **Tafel:** Auftragskarten zeigen „🔁 Leihgerät“, bei überfälliger Rückgabe rot.
+- **Kunde:** Hinweis, wenn der Kunde gerade ein Leihgerät hat, sowie eine Liste früherer Leihen mit Schadensfällen.
+
+### Geändert
+- Aufträge mit Leihgerät und Kunden mit Leihvorgängen lassen sich nicht mehr löschen (Archivieren ist möglich).
+- Interne Aufträge (Reparatur eigener Leihgeräte) erzeugen beim Erledigen keine Rechnung und fragen nicht nach
+  einem KVA.
+
+### Technik
+- Neue Tabellen `leihgeraete`, `leihen`, `schadensfaelle` und `leihgeraet_verlauf`, neue Foto-Felder
+  `leihgeraet_id`, `leihe_id` und `schadensfall_id`. Datenbank-Trigger verhindern das Ändern von Ausgabe- und
+  Rückgabeprotokollen und das Löschen von Leihvorgängen, Schadensfällen, Historie und Geräten. Korrekturen gehen nur
+  als Stornierung mit Begründung.
+- Zeitstempel serverseitig in Europe/Berlin mit Sekunden.
+- Vor der Datenbank-Erweiterung wird automatisch `Daten\backups\vor_update_….db` angelegt.
+- 94 automatische Tests.
 
 ---
 

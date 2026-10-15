@@ -70,6 +70,24 @@
   </table>
 </div>
 {% endif %}
+{% if leihen %}{% set aktuell = leihen|rejectattr('rueckgabe_am')|rejectattr('storniert_am')|list %}
+<div class="karte" {% if aktuell %}style="border-left:5px solid var(--blau)"{% endif %}>
+  <h2>Leihgeräte</h2>
+  {% for le in aktuell %}{% set ueber = le.rueckgabe_geplant and le.rueckgabe_geplant < heute %}
+  <div class="meldung {{ 'fehler' if ueber else 'info' }}">🔁 Hat aktuell <a href="{{ url_for('main.leihe', lid=le.id) }}"><b>{{ le.bezeichnung }}</b></a> ({{ le.leihnr }}) seit {{ le.ausgabe_am|zeit }} – Rückgabe {{ 'bis ' ~ (le.rueckgabe_geplant|datum) if le.rueckgabe_geplant else 'offen' }}{{ ' – ÜBERFÄLLIG' if ueber }}{% if le.auftragsnr %} · Auftrag <a href="{{ url_for('main.auftrag', aid=le.auftrag_id) }}#leihgeraet">{{ le.auftragsnr }}</a>{% endif %}</div>
+  {% endfor %}
+  <table class="liste">
+    <tr><th>Leihvertrag</th><th>Gerät</th><th>Ausgabe – Rückgabe</th><th>Zustand</th><th class="zahl">Gebühr</th><th>Schaden</th></tr>
+    {% for le in leihen %}<tr>
+      <td><a href="{{ url_for('main.leihe', lid=le.id) }}">{{ le.leihnr }}</a>{% if le.storniert_am %} <span class="marke-status st-storniert">storniert</span>{% endif %}<div class="klein">{{ le.auftragsnr or '' }}</div></td>
+      <td>{{ le.bezeichnung }}</td>
+      <td>{{ le.ausgabe_am|datum }} – {{ le.rueckgabe_am|datum if le.rueckgabe_am else ('läuft' if not le.storniert_am else '–') }}</td>
+      <td>{{ {'einwandfrei': 'einwandfrei', 'schaden': 'Schaden'}.get(le.zustand_rueckgabe, '–') }}</td>
+      <td class="zahl">{{ le.gebuehr_berechnet|euro if le.gebuehr_berechnet is not none else '' }}</td>
+      <td>{% if le.schaden_anzahl %}<a href="{{ url_for('main.leihe', lid=le.id) }}#schaden" class="marke-status st-fehler">{{ le.schaden_anzahl }} {{ 'Schadensfälle' if le.schaden_anzahl > 1 else 'Schadensfall' }} · {{ le.schaden_summe|euro }}</a>{% endif %}</td></tr>{% endfor %}
+  </table>
+</div>
+{% endif %}
 {% if auftraege %}
 <div class="karte">
   <h2>Reparaturaufträge</h2>

@@ -292,3 +292,46 @@ Periode bzw. Mindestlaufzeit), Grund. Bis zu diesem Datum wird noch berechnet, d
   übernehmen.
 - **Beschreibung:** Im Artikel beliebig lang und mehrzeilig (z. B. Anschlüsse, Maße, Kompatibilität). Beim Einfügen
   in ein Dokument wird sie übernommen und kann dort gekürzt werden – der Katalog bleibt unverändert.
+
+## 14. Leihgeräte
+
+Unter **Verkauf → Leihgeräte** verwalten Sie Geräte, die Kunden während einer Reparatur bekommen.
+
+**Gerät anlegen:** „+ Neues Leihgerät“. Tragen Sie Bezeichnung (z. B. „Lenovo ThinkPad T14 #1“), Seriennummer,
+Inventarnummer und das Zubehör ein (eins je Zeile, z. B. Netzteil, Tasche, Maus). Dazu kommt der **Zeitwert**, der
+bei Verlust oder Totalschaden angesetzt wird, und die Standard-Leihgebühr: kostenlos, pauschal oder pro Tag. Bei „pro
+Tag“ können die ersten Tage kostenlos sein. Optional geben Sie eine Kaution an. Fotos des Geräts laden Sie im Reiter
+„Fotos“ hoch.
+
+**Ausgeben:** im Reparaturauftrag Reiter **„Leihgerät“** → **„Leihgerät ausgeben“**.
+1. Ein verfügbares Gerät wählen. Leihgebühr, Kaution und Zubehör werden vom Gerät übernommen und lassen sich für
+   diesen Fall ändern, auch auf „kostenlos (Kulanz)“.
+2. Voraussichtliche Rückgabe eintragen und das mitgegebene Zubehör abhaken.
+3. Zustand notieren und Fotos machen (am Handy über „Kamera“).
+4. „Leihgerät ausgeben“. Danach **„Leihvertrag / Übergabeprotokoll (PDF)“** drucken und vom Kunden unterschreiben
+   lassen, oder per E-Mail senden.
+
+Die Leihbedingungen im Vertrag ändern Sie unter *Einstellungen → Leihgeräte*. Lassen Sie diesen Text im Zweifel
+einmal rechtlich prüfen.
+
+**Zurücknehmen:** im Auftrag oder in der Leihgeräte-Übersicht **„Leihgerät zurücknehmen“**.
+- Zubehör abhaken: was nicht abgehakt ist, gilt als fehlend.
+- Zustand wählen und Fotos machen. Die Ausgabe-Fotos stehen zum Vergleich daneben.
+- Die Leihgebühr wird berechnet. Beispiel: 5 Tage, 3 frei, 5 € pro Tag = 2 × 5 € = 10 €. Sie können den Betrag vor
+  dem Speichern ändern.
+- Bei Schaden oder fehlendem Zubehör erscheint der Bereich **Schadensfall**: Beschreibung, Kostenart, Betrag (bei
+  Totalschaden mit dem Zeitwert vorbelegt) und Schadensfotos. Mit dem Haken „internen Reparaturauftrag anlegen“
+  erscheint die Reparatur des Leihgeräts auf der Tafel. Für interne Aufträge gibt es keine Rechnung; nach „Erledigt“
+  ist das Gerät wieder verfügbar.
+
+**Kaution:** Ohne Schaden steht sie auf „zurückzuzahlen“. Klicken Sie nach der Auszahlung auf „… zurückgezahlt“.
+Bei einem Schaden wird sie verrechnet. Der Leihvorgang zeigt, was der Kunde noch zahlen muss bzw. was Sie erstatten.
+
+**Abrechnung:** Ziehen Sie den Auftrag auf **Erledigt**, stehen Leihgebühr und Schadenersatz als eigene Positionen im
+Rechnungsentwurf. Die Kautionsverrechnung steht als Hinweis darunter. Ist das Gerät dann noch beim Kunden, fragt das
+Programm: *„Leihgerät jetzt zurücknehmen oder später separat abrechnen?“*. Bei „später“ erstellen Sie nach der
+Rücknahme eine eigene Rechnung über „Abrechnung“ im Leihvorgang.
+
+**Nichts geht verloren:** Ausgabe- und Rückgabeprotokolle, Schadensfälle und die Historie lassen sich nicht ändern
+oder löschen. Eine irrtümliche Ausgabe oder ein falscher Schadensfall wird mit Begründung **storniert** und bleibt
+markiert sichtbar.

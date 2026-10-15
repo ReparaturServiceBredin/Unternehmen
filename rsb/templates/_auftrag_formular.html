@@ -13,6 +13,7 @@
   <div class="s12"><label>Interne Notizen (z. B. bestellte Teile, Rücksprache)</label><textarea name="notizen">{{ w.notizen or '' }}</textarea></div>
 </div>
 <input type="hidden" name="ohne_kva" value="">
+<input type="hidden" name="leihe_spaeter" value="">
 {%- endmacro %}
 
 {# Auswahlliste „Bestehenden KVA verknüpfen“. modus = 'formular' (Auswahl in verstecktes Feld) oder 'verknuepfen' (POST) #}

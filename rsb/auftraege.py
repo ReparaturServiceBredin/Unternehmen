@@ -182,6 +182,8 @@ def rechnung_erstellen(con, auftrag_id):
     con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE id=?", (did, dbm.jetzt(), auftrag_id))
     verlauf(con, auftrag_id, "Rechnung erstellt",
             "Entwurf mit Positionen aus dem KVA" if positionen else "leerer Rechnungsentwurf")
+    from .leihgeraete import fuer_auftragsrechnung
+    fuer_auftragsrechnung(con, auftrag_id, did)  # Leihgebühr/Schäden zurückgenommener Leihgeräte
     return did, True
 
 
@@ -217,7 +219,10 @@ def status_setzen(con, auftrag_id, status, vor_id=None):
     if status != a["status"]:
         dbm.protokollieren("auftrag_status", "auftrag", auftrag_id, {"von": a["status"], "nach": status}, con=con)
         verlauf(con, auftrag_id, "Status geändert", f"{STATUS[a['status']]} → {STATUS[status]}")
-        if status == "erledigt":
+        from .leihgeraete import interner_auftrag_erledigt, ist_intern
+        if status == "erledigt" and ist_intern(con, a["kunde_id"]):
+            interner_auftrag_erledigt(con, auftrag_id)  # interne Reparatur eines Leihgeräts: keine Rechnung
+        elif status == "erledigt":
             did, neu = rechnung_erstellen(con, auftrag_id)
             if neu:
                 neue_rechnung = did

@@ -22,6 +22,7 @@
 <nav class="reiter">
   <a href="#auftragsdaten" data-reiter="auftragsdaten">Auftragsdaten</a>
   <a href="#kostenvoranschlag" data-reiter="kostenvoranschlag">Kostenvoranschlag {{ '✓' if a.kva_id else '' }}</a>
+  <a href="#leihgeraet" data-reiter="leihgeraet">Leihgerät{% if a.leihen_offen %} <span class="zahl" {% if a.leihe_bis and a.leihe_bis < heute %}style="background:var(--rot-hell);color:var(--rot)"{% endif %}>🔁 {{ a.leihen_offen }}</span>{% endif %}</a>
   <a href="#fotos" data-reiter="fotos">Fotos <span class="zahl">{{ gueltige_fotos|length }}</span></a>
   <a href="#verlauf" data-reiter="verlauf">Verlauf <span class="zahl">{{ verlauf|length }}</span></a>
 </nav>
@@ -86,13 +87,50 @@
   </div>
 </section>
 
+<section data-bereich="leihgeraet">
+  {% for le in leihen if not le.rueckgabe_am and not le.storniert_am %}
+  <div class="karte" {% if le.ueberfaellig %}style="border-color:var(--rot)"{% endif %}>
+    <div class="kopf" style="margin-bottom:8px"><h2 style="margin:0">🔁 {{ le.bezeichnung }} <span class="marke-status lg-verliehen">verliehen</span>{% if le.ueberfaellig %} <span class="marke-status st-fehler">Rückgabe überfällig</span>{% endif %}</h2>
+      <a class="knopf" href="{{ url_for('main.leihe_rueckgabe', lid=le.id) }}">Leihgerät zurücknehmen</a></div>
+    <table class="liste" style="max-width:720px">
+      <tr><td>Leihvertrag</td><td><a href="{{ url_for('main.leihe', lid=le.id) }}"><b>{{ le.leihnr }}</b></a></td></tr>
+      <tr><td>Ausgabe</td><td>{{ le.ausgabe_am|zeit_sek }}</td></tr>
+      <tr><td>Rückgabe bis</td><td {% if le.ueberfaellig %}style="color:var(--rot);font-weight:700"{% endif %}>{{ le.rueckgabe_geplant|datum if le.rueckgabe_geplant else 'offen' }}</td></tr>
+      <tr><td>Kaution</td><td>{{ (le.kaution_betrag|euro ~ ' (' ~ le.kaution_zahlart ~ ')') if le.kaution_erhalten else 'keine' }}</td></tr>
+    </table><br>
+    <div class="leiste">
+      <a class="knopf zweit" href="{{ url_for('main.leihe_pdf', lid=le.id, art='ausgabe') }}" target="_blank">Leihvertrag / Übergabeprotokoll (PDF)</a>
+      <a class="knopf zweit" href="{{ url_for('main.leihe_email', lid=le.id, art='ausgabe') }}">Per E-Mail senden</a>
+      <a class="knopf zweit" href="{{ url_for('main.leihe', lid=le.id) }}">Details &amp; Fotos</a>
+    </div>
+  </div>
+  {% endfor %}
+  <div class="karte">
+    <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Leihgerät</h2>
+      {% if not a.intern %}<a class="knopf {{ 'zweit' if a.leihen_offen }}" href="{{ url_for('main.leihe_ausgeben', aid=a.id) }}">Leihgerät ausgeben</a>{% endif %}</div>
+    {% set fruehere = leihen|selectattr('rueckgabe_am')|list + leihen|selectattr('storniert_am')|list %}
+    {% if not leihen %}<p class="klein">Zu diesem Auftrag wurde noch kein Leihgerät ausgegeben.</p>{% endif %}
+    {% if fruehere %}
+    <table class="liste"><thead><tr><th>Leihvertrag</th><th>Gerät</th><th>Ausgabe – Rückgabe</th><th>Zustand</th><th class="zahl">Gebühr</th><th class="zahl">Schaden</th><th>Abrechnung</th></tr></thead><tbody>
+    {% for le in fruehere %}<tr>
+      <td><a href="{{ url_for('main.leihe', lid=le.id) }}"><b>{{ le.leihnr }}</b></a>{% if le.storniert_am %} <span class="marke-status st-storniert">storniert</span>{% endif %}</td>
+      <td>{{ le.bezeichnung }}</td>
+      <td>{{ le.ausgabe_am|zeit }}{% if le.rueckgabe_am %} – {{ le.rueckgabe_am|zeit }}{% endif %}</td>
+      <td>{{ {'einwandfrei': 'einwandfrei', 'schaden': 'Schaden'}.get(le.zustand_rueckgabe, '–') }}</td>
+      <td class="zahl">{{ le.gebuehr_berechnet|euro if le.gebuehr_berechnet is not none else '' }}</td>
+      <td class="zahl">{{ (le.schaeden|sum(attribute='betrag'))|euro if le.schaeden else '' }}</td>
+      <td>{% if le.offen_abzurechnen %}<form method="post" action="{{ url_for('main.leihe_abrechnen', lid=le.id) }}">{{ csrf() }}<button class="zweit klein">abrechnen</button></form>{% elif le.rechnung_id %}<a href="{{ url_for('main.dokument', did=le.rechnung_id) }}">in Rechnung</a>{% endif %}</td></tr>
+    {% endfor %}</tbody></table>{% endif %}
+  </div>
+</section>
+
 <section data-bereich="fotos">
   <div class="karte">
     <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Fotos hochladen</h2>
       {% if fotos %}<a class="knopf zweit" href="{{ url_for('main.auftrag_fotos_pdf', aid=a.id) }}" target="_blank">Fotodokumentation als PDF</a>{% endif %}</div>
     {{ hochladen(url_for('main.auftrag_fotos_hochladen', aid=a.id), kategorien) }}
   </div>
-  {% for kat in kategorien %}{% set gruppe = fotos|selectattr('kategorie', 'equalto', kat)|list %}{% if gruppe %}
+  {% for kat in alle_kategorien %}{% set gruppe = fotos|selectattr('kategorie', 'equalto', kat)|list %}{% if gruppe %}
   <div class="karte">
     <h2>{{ kat }} <span class="klein">({{ gruppe|rejectattr('geloescht_am')|list|length }})</span></h2>
     <div class="galerie">
@@ -138,18 +176,20 @@
 {% block skript %}
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
-function reiterZeigen() {
-  const name = (location.hash || '#auftragsdaten').slice(1);
-  const gueltig = document.querySelector(`[data-bereich="${name}"]`) ? name : 'auftragsdaten';
-  document.querySelectorAll('[data-bereich]').forEach(s => s.hidden = s.dataset.bereich !== gueltig);
-  document.querySelectorAll('[data-reiter]').forEach(r => r.classList.toggle('aktiv', r.dataset.reiter === gueltig));
-}
-window.addEventListener('hashchange', reiterZeigen);
-reiterZeigen();
+reiterInit('auftragsdaten');
 const formular = document.getElementById('auftragsformular');
-const hatKva = {{ 'true' if a.kva_id else 'false' }}, warErledigt = {{ 'true' if a.status == 'erledigt' else 'false' }};
+const hatKva = {{ 'true' if a.kva_id or a.intern else 'false' }}, warErledigt = {{ 'true' if a.status == 'erledigt' else 'false' }};
+const leiheDraussen = {{ 'true' if a.leihen_offen else 'false' }};
 formular.addEventListener('submit', async e => {
-  if (hatKva || warErledigt || formular.status.value !== 'erledigt' || formular.ohne_kva.value === '1') return;
+  if (warErledigt || formular.status.value !== 'erledigt') return;
+  if (leiheDraussen && formular.leihe_spaeter.value !== '1') {
+    e.preventDefault();
+    const w = await leiheOffenFragen();
+    if (w === 'zuruecknehmen') { location.hash = 'leihgeraet'; return; }
+    if (w !== 'spaeter') return;
+    formular.leihe_spaeter.value = '1';
+  }
+  if (hatKva || formular.ohne_kva.value === '1') { if (e.defaultPrevented) formular.submit(); return; }
   e.preventDefault();
   const wahl = await keinKvaFragen();
   if (wahl === 'leer') { formular.ohne_kva.value = '1'; formular.submit(); }

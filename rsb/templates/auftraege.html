@@ -39,12 +39,28 @@ document.querySelectorAll('.auftrag').forEach(k => {
 // „Erledigt ✓“-Knopf: ohne KVA erst nachfragen
 document.querySelectorAll('form[data-erledigt]').forEach(f => f.addEventListener('submit', async e => {
   const karte = f.closest('.auftrag');
-  if (karte.dataset.kva === '1' || f.ohne_kva.value === '1') return;
   e.preventDefault();
-  const wahl = await keinKvaFragen();
-  if (wahl === 'leer') { f.ohne_kva.value = '1'; f.submit(); }
-  else if (wahl === 'verknuepfen') window.location = karte.dataset.url + '#kostenvoranschlag';
+  const r = await erledigtFragen(karte);
+  if (!r || r === 'weg') return;
+  f.ohne_kva.value = r.ohneKva; f.leihe_spaeter.value = r.leiheSpaeter; f.submit();
 }));
+/* Rückfragen beim Erledigen: Leihgerät noch draußen? Kein KVA? Ergebnis null = abbrechen, 'weg' = Seite wird gewechselt */
+async function erledigtFragen(karte) {
+  const r = { ohneKva: '', leiheSpaeter: '' };
+  if (karte.dataset.leihe === '1') {
+    const w = await leiheOffenFragen();
+    if (w === 'zuruecknehmen') { window.location = karte.dataset.url + '#leihgeraet'; return 'weg'; }
+    if (w !== 'spaeter') return null;
+    r.leiheSpaeter = '1';
+  }
+  if (karte.dataset.kva !== '1') {
+    const w = await keinKvaFragen();
+    if (w === 'verknuepfen') { window.location = karte.dataset.url + '#kostenvoranschlag'; return 'weg'; }
+    if (w !== 'leer') return null;
+    r.ohneKva = '1';
+  }
+  return r;
+}
 function karteNach(spalte, y) {
   return [...spalte.querySelectorAll('.auftrag:not(.zieht)')].find(k => { const r = k.getBoundingClientRect(); return y < r.top + r.height / 2; });
 }
@@ -59,23 +75,23 @@ document.querySelectorAll('.spalte').forEach(sp => {
     e.preventDefault();
     if (!gezogen) return;
     const karte = gezogen;
-    let ohneKva = '';
-    if (sp.dataset.status === 'erledigt' && karte.dataset.kva !== '1' && karte.closest('.spalte') === sp
-        && karte.dataset.status !== 'erledigt') {
-      const wahl = await keinKvaFragen();
-      if (wahl === 'verknuepfen') { window.location = karte.dataset.url + '#kostenvoranschlag'; return; }
-      if (wahl !== 'leer') { window.location.reload(); return; }
-      ohneKva = '1';
+    let ohneKva = '', leiheSpaeter = '';
+    if (sp.dataset.status === 'erledigt' && karte.dataset.status !== 'erledigt') {
+      const r = await erledigtFragen(karte);
+      if (r === 'weg') return;
+      if (!r) { window.location.reload(); return; }
+      ohneKva = r.ohneKva; leiheSpaeter = r.leiheSpaeter;
     }
     const naechste = gezogen.nextElementSibling;
     const daten = new FormData();
     daten.append('csrf', CSRF);
     daten.append('status', sp.dataset.status);
     daten.append('ohne_kva', ohneKva);
+    daten.append('leihe_spaeter', leiheSpaeter);
     if (naechste && naechste.classList.contains('auftrag')) daten.append('vor_id', naechste.dataset.id);
     const r = await fetch(`/auftraege/${karte.dataset.id}/status`, { method: 'POST', body: daten, headers: { 'X-Requested-With': 'fetch' } });
     const j = r.ok ? await r.json() : null;
-    if (j && j.kein_kva) { window.location = j.auftrag_url; return; }
+    if (j && (j.kein_kva || j.leihe_offen)) { window.location = j.auftrag_url; return; }
     if (!j || !j.ok) { alert('Speichern fehlgeschlagen. Bitte Seite neu laden.'); return; }
     if (j.rechnung_url) { window.location = j.rechnung_url; return; }
     window.location.reload();

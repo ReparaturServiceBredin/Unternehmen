@@ -1,5 +1,5 @@
 {% macro karte(a, heute) -%}
-<div class="auftrag" draggable="true" data-id="{{ a.id }}" data-status="{{ a.status }}" data-kva="{{ 1 if a.kva_id else 0 }}" data-url="{{ url_for('main.auftrag', aid=a.id) }}" title="Klicken zum Öffnen">
+<div class="auftrag" draggable="true" data-id="{{ a.id }}" data-status="{{ a.status }}" data-kva="{{ 1 if a.kva_id or a.intern else 0 }}" data-leihe="{{ 1 if a.leihen_offen else 0 }}" data-url="{{ url_for('main.auftrag', aid=a.id) }}" title="Klicken zum Öffnen">
   <div class="a-kopf"><a href="{{ url_for('main.auftrag', aid=a.id) }}">{{ a.auftragsnr }}</a>
     <span class="klein">{{ 'seit ' ~ a.eingang_am|tage_seit ~ ' Tg.' if a.status != 'erledigt' else (a.erledigt_am|datum) }}</span></div>
   <div class="a-name">{{ a.firma if a.ktyp == 'firma' and a.firma else ((a.vorname or '') ~ ' ' ~ (a.nachname or '')).strip() }}</div>
@@ -7,7 +7,8 @@
   {% if a.fehler %}<div class="klein">{{ a.fehler|truncate(70) }}</div>{% endif %}
   <div class="a-icons">
     <span class="a-icon {{ 'ok' if a.foto_anzahl else 'fehlt' }}" title="Fotos">📷 {{ a.foto_anzahl }}</span>
-    <span class="a-icon {{ 'ok' if a.kva_id else 'fehlt' }}">{{ 'KVA ✓' if a.kva_id else 'kein KVA' }}</span>
+    {% if a.intern %}<span class="a-icon">intern</span>{% else %}<span class="a-icon {{ 'ok' if a.kva_id else 'fehlt' }}">{{ 'KVA ✓' if a.kva_id else 'kein KVA' }}</span>{% endif %}
+    {% if a.leihen_offen %}{% set ueber = a.leihe_bis and a.leihe_bis < heute %}<a class="a-icon {{ 'rot' if ueber else 'leihe' }}" href="{{ url_for('main.auftrag', aid=a.id) }}#leihgeraet" title="{{ 'Rückgabe überfällig seit ' ~ (a.leihe_bis|datum) if ueber else ('Rückgabe bis ' ~ (a.leihe_bis|datum) if a.leihe_bis else 'Leihgerät beim Kunden') }}">🔁 Leihgerät{{ ' überfällig' if ueber }}</a>{% endif %}
   </div>
   <div class="a-docs">
     {% if a.kva_id %}<a href="{{ url_for('main.dokument', did=a.kva_id) }}" class="marke-status {{ 'st-festgeschrieben' if a.kva_status == 'festgeschrieben' else 'st-entwurf' }}">KVA {{ a.kva_nummer or 'Entwurf' }} · {{ a.kva_betrag|euro }}{{ (' · ' ~ a.kva_entscheidung) if a.kva_entscheidung in ('angenommen', 'abgelehnt') }}</a>{% endif %}
@@ -16,7 +17,7 @@
   <div class="a-pfeile">
     {% set reihe = ['offen', 'in_arbeit', 'erledigt'] %}{% set i = reihe.index(a.status) %}
     {% if i > 0 %}<form method="post" action="{{ url_for('main.auftrag_status', aid=a.id) }}"><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ reihe[i-1] }}"><button class="zweit klein" title="zurück">←</button></form>{% endif %}
-    {% if i < 2 %}<form method="post" action="{{ url_for('main.auftrag_status', aid=a.id) }}" {{ 'data-erledigt=1' if reihe[i+1] == 'erledigt' }}><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ reihe[i+1] }}"><input type="hidden" name="ohne_kva" value=""><button class="zweit klein" title="weiter">{{ 'Starten →' if i == 0 else 'Erledigt ✓' }}</button></form>{% endif %}
+    {% if i < 2 %}<form method="post" action="{{ url_for('main.auftrag_status', aid=a.id) }}" {{ 'data-erledigt=1' if reihe[i+1] == 'erledigt' }}><input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="status" value="{{ reihe[i+1] }}"><input type="hidden" name="ohne_kva" value=""><input type="hidden" name="leihe_spaeter" value=""><button class="zweit klein" title="weiter">{{ 'Starten →' if i == 0 else 'Erledigt ✓' }}</button></form>{% endif %}
   </div>
 </div>
 {%- endmacro %}

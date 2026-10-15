@@ -222,3 +222,19 @@ dialog.dialog { border: 0; border-radius: var(--radius); padding: 22px 24px; max
 dialog.dialog::backdrop { background: rgba(20, 30, 45, .45); }
 .kva-tabelle tr.gewaehlt td { background: var(--blau-hell); }
 @media (max-width: 900px) { .galerie { grid-template-columns: repeat(2, 1fr); } }
+
+/* Leihgeräte */
+.lg-verfuegbar { background: var(--gruen-hell); color: var(--gruen); }
+.lg-verliehen { background: var(--blau-hell); color: var(--blau); }
+.lg-defekt { background: var(--gelb-hell); color: #7a5b00; }
+.lg-ausgemustert { background: #eef0f3; color: var(--grau); }
+table.liste tr.zeile-rot td { background: var(--rot-hell); }
+.a-icon.leihe { background: var(--blau-hell); border-color: #c4d6f0; color: var(--blau); }
+.a-icon.rot { background: var(--rot-hell); border-color: #f2b8b5; color: var(--rot); font-weight: 700; }
+.checkliste { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.checkliste .check { font-weight: 400; }
+.vergleich { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.vergleich h3 { margin: 0 0 8px; font-size: 14px; color: var(--grau); }
+.verrechnung td:last-child { text-align: right; white-space: nowrap; }
+.verrechnung tr.summe td { font-weight: 700; border-top: 2px solid var(--text); }
+@media (max-width: 900px) { .vergleich { grid-template-columns: 1fr; } }

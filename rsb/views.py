@@ -182,8 +182,15 @@ def kunde(kid=None):
         "SELECT * FROM vertraege WHERE kunde_id=? ORDER BY status, beginn DESC", (kid,)).fetchall()] if kid else []
     kunden_auftraege = con.execute("SELECT * FROM auftraege WHERE kunde_id=? ORDER BY eingang_am DESC",
                                    (kid,)).fetchall() if kid else []
+    kunden_leihen = con.execute(
+        "SELECT l.*, g.bezeichnung, (SELECT COUNT(*) FROM schadensfaelle s WHERE s.leihe_id=l.id "
+        "AND s.storniert_am IS NULL) AS schaden_anzahl, (SELECT COALESCE(SUM(betrag), 0) FROM schadensfaelle s "
+        "WHERE s.leihe_id=l.id AND s.storniert_am IS NULL) AS schaden_summe FROM leihen l "
+        "JOIN leihgeraete g ON g.id=l.geraet_id WHERE l.kunde_id=? ORDER BY l.ausgabe_am DESC", (kid,)).fetchall() \
+        if kid else []
     return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen,
-                           auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG)
+                           auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG,
+                           leihen=kunden_leihen, heute=date.today().isoformat())
 
 
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
@@ -207,6 +214,9 @@ def kunde_loeschen(kid):
                    (kid,)).fetchone():
         raise EingabeFehler("Zu Aufträgen dieses Kunden gibt es Fotodokumentation – der Kunde kann nicht gelöscht "
                             "werden. Sie können ihn stattdessen archivieren.")
+    if con.execute("SELECT 1 FROM leihen WHERE kunde_id=?", (kid,)).fetchone():
+        raise EingabeFehler("Dieser Kunde hatte Leihgeräte – die Leihprotokolle müssen erhalten bleiben. "
+                            "Sie können ihn stattdessen archivieren.")
     with dbm.Transaktion(con):
         for a in con.execute("SELECT id, auftragsnr FROM auftraege WHERE kunde_id=?", (kid,)).fetchall():
             auf.verlauf(con, a["id"], "Auftrag gelöscht", a["auftragsnr"])
@@ -519,6 +529,8 @@ def dokument_loeschen(did):
             spalte = "kva_id" if a["kva_id"] == did else "rechnung_id"
             con.execute(f"UPDATE auftraege SET {spalte}=NULL WHERE id=?", (a["id"],))
             auf.verlauf(con, a["id"], "KVA-Entwurf gelöscht" if spalte == "kva_id" else "Rechnungsentwurf gelöscht")
+        con.execute("UPDATE leihen SET rechnung_id=NULL WHERE rechnung_id=?", (did,))  # wieder abrechenbar
+        con.execute("UPDATE schadensfaelle SET rechnung_id=NULL WHERE rechnung_id=?", (did,))
         con.execute("DELETE FROM positionen WHERE dokument_id=?", (did,))
         con.execute("DELETE FROM dokumente WHERE id=?", (did,))
         dbm.protokollieren("entwurf_geloescht", "dokument", did, con=con)
@@ -605,6 +617,7 @@ EINSTELLUNGS_BEREICHE = {
     "backup": ["backup_auto", "backup_ziel", "backup_behalten"],
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
+    "leihgeraete": ["leihbedingungen"],
     "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_benutzer",
                  "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
@@ -1026,7 +1039,11 @@ AUFTRAG_SQL = (
     "kv.status AS kva_status, kv.nummer AS kva_nummer, kv.summe_brutto AS kva_betrag, kv.datum AS kva_datum, "
     "kv.kva_status AS kva_entscheidung, kv.kunde_id AS kva_kunde_id, kv.versendet_am AS kva_versendet_am, "
     "re.status AS re_status, re.nummer AS re_nummer, re.summe_brutto AS re_betrag, "
-    "(SELECT COUNT(*) FROM auftrag_fotos f WHERE f.auftrag_id=a.id AND f.geloescht_am IS NULL) AS foto_anzahl "
+    "(SELECT COUNT(*) FROM auftrag_fotos f WHERE f.auftrag_id=a.id AND f.geloescht_am IS NULL) AS foto_anzahl, "
+    "(SELECT COUNT(*) FROM leihen l WHERE l.auftrag_id=a.id AND l.rueckgabe_am IS NULL AND l.storniert_am IS NULL) "
+    "AS leihen_offen, (SELECT MIN(l.rueckgabe_geplant) FROM leihen l WHERE l.auftrag_id=a.id "
+    "AND l.rueckgabe_am IS NULL AND l.storniert_am IS NULL) AS leihe_bis, "
+    "(a.kunde_id = (SELECT CAST(wert AS INTEGER) FROM einstellungen WHERE schluessel='interner_kunde_id')) AS intern "
     "FROM auftraege a JOIN kunden k ON k.id=a.kunde_id "
     "LEFT JOIN dokumente kv ON kv.id=a.kva_id LEFT JOIN dokumente re ON re.id=a.rechnung_id ")
 
@@ -1048,7 +1065,7 @@ def auftraege():
             sql += "AND a.erledigt_am >= date('now', '-30 day') "
         sql += "ORDER BY a.reihenfolge, a.id"
         spalten[status] = con.execute(sql, args).fetchall()
-    return render_template("auftraege.html", spalten=spalten, status_namen=auf.STATUS,
+    return render_template("auftraege.html", spalten=spalten, status_namen=auf.STATUS, leihe_offen_text=LEIHE_OFFEN_TEXT,
                            alle_erledigten=alle_erledigten, heute=date.today().isoformat())
 
 
@@ -1060,16 +1077,19 @@ FELD_NAMEN = {"geraet": "Gerät", "leistungsart": "Leistungsart", "seriennummer"
               "zubehoer": "Zubehör", "fehler": "Fehlerbeschreibung", "notizen": "Notizen", "kunde_id": "Kunde"}
 
 
-def _upload_token(neu=False):
-    """Kennung für Fotos, die im Formular „+ Neuer Auftrag“ vor dem Speichern hochgeladen werden.
+UPLOAD_SCHLUESSEL = ("auftrag_upload_token", "leihe_ausgabe_token", "leihe_rueckgabe_token")
 
-    Sie bleibt in der Sitzung erhalten, bis der Auftrag erfolgreich angelegt wurde – so gehen Fotos
+
+def _upload_token(neu=False, schluessel="auftrag_upload_token"):
+    """Kennung für Fotos, die in einem Formular (z. B. „+ Neuer Auftrag“) vor dem Speichern hochgeladen werden.
+
+    Sie bleibt in der Sitzung erhalten, bis das Formular erfolgreich gespeichert wurde – so gehen Fotos
     auch dann nicht verloren, wenn das Speichern einmal fehlschlägt.
     """
     import secrets
-    if neu or not session.get("auftrag_upload_token"):
-        session["auftrag_upload_token"] = secrets.token_hex(16)
-    return session["auftrag_upload_token"]
+    if neu or not session.get(schluessel):
+        session[schluessel] = secrets.token_hex(16)
+    return session[schluessel]
 
 
 def _ohne_kva_bestaetigt():
@@ -1077,6 +1097,13 @@ def _ohne_kva_bestaetigt():
 
 
 KEIN_KVA_TEXT = "Kein KVA verknüpft – leeren Rechnungsentwurf erstellen oder KVA jetzt verknüpfen?"
+LEIHE_OFFEN_TEXT = "Das Leihgerät ist noch nicht zurück. Leihgerät jetzt zurücknehmen oder später separat abrechnen?"
+
+
+def _leihen_spaeter_abrechnen(con, aid):
+    for le in lg.offene_leihen_auftrag(con, aid):
+        con.execute("UPDATE leihen SET separat_abrechnen=1 WHERE id=?", (le["id"],))
+        auf.verlauf(con, aid, "Leihgerät wird später separat abgerechnet", f"{le['bezeichnung']} ({le['leihnr']})")
 
 
 @bp.route("/auftraege/neu", methods=["GET", "POST"])
@@ -1147,7 +1174,12 @@ def auftrag(aid):
         status = request.form.get("status") or a["status"]
         if kid != a["kunde_id"] and not con.execute("SELECT 1 FROM kunden WHERE id=?", (kid,)).fetchone():
             raise EingabeFehler("Bitte einen Kunden auswählen.")
-        if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not _ohne_kva_bestaetigt():
+        if status == "erledigt" and a["status"] != "erledigt" and a["leihen_offen"] \
+                and request.form.get("leihe_spaeter") != "1":
+            flash(LEIHE_OFFEN_TEXT + " Die Änderungen wurden noch nicht gespeichert.", "warnung")
+            return redirect(url_for("main.auftrag", aid=aid) + "#leihgeraet")
+        if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not a["intern"] \
+                and not _ohne_kva_bestaetigt():
             flash(KEIN_KVA_TEXT + " Die Änderungen wurden noch nicht gespeichert.", "warnung")
             return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
         felder["kunde_id"] = kid
@@ -1160,6 +1192,8 @@ def auftrag(aid):
                 dbm.protokollieren("auftrag_geaendert", "auftrag", aid, {"felder": geaendert}, con=con)
                 auf.verlauf(con, aid, "Auftragsdaten geändert", ", ".join(geaendert))
             if status != a["status"]:
+                if status == "erledigt" and a["leihen_offen"]:
+                    _leihen_spaeter_abrechnen(con, aid)
                 neue_rechnung = auf.status_setzen(con, aid, status)
         flash("Auftrag gespeichert.", "ok")
         if kid != a["kunde_id"] and a["kva_id"] and a["kva_kunde_id"] != kid:
@@ -1176,7 +1210,9 @@ def auftrag(aid):
                            anfrage=anfrage_row, kunden=_kunden_liste(con, a["kunde_id"]), kva_kunde=kva_kunde,
                            fotos=fot.liste(con, aid), kategorien=fot.KATEGORIEN,
                            verlauf=auf.verlauf_liste(con, aid), kva_status_namen=auf.KVA_STATUS,
-                           kein_kva_text=KEIN_KVA_TEXT)
+                           kein_kva_text=KEIN_KVA_TEXT, leihe_offen_text=LEIHE_OFFEN_TEXT,
+                           leihen=_leihen_zum_auftrag(con, aid), alle_kategorien=fot.ALLE_KATEGORIEN,
+                           heute=date.today().isoformat())
 
 
 @bp.route("/auftraege/<int:aid>/status", methods=["POST"])
@@ -1186,13 +1222,23 @@ def auftrag_status(aid):
     a = _auftrag_laden(aid)
     status = request.form.get("status", "")
     per_fetch = request.headers.get("X-Requested-With") == "fetch"
-    if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not _ohne_kva_bestaetigt():
+    if status == "erledigt" and a["status"] != "erledigt" and a["leihen_offen"]:
+        if request.form.get("leihe_spaeter") != "1":
+            if per_fetch:
+                return jsonify(ok=False, leihe_offen=True, meldung=LEIHE_OFFEN_TEXT,
+                               auftrag_url=url_for("main.auftrag", aid=aid) + "#leihgeraet")
+            flash(LEIHE_OFFEN_TEXT, "warnung")
+            return redirect(url_for("main.auftrag", aid=aid) + "#leihgeraet")
+    if status == "erledigt" and a["status"] != "erledigt" and not a["kva_id"] and not a["intern"] \
+            and not _ohne_kva_bestaetigt():
         if per_fetch:
             return jsonify(ok=False, kein_kva=True, meldung=KEIN_KVA_TEXT,
                            auftrag_url=url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
         flash(KEIN_KVA_TEXT, "warnung")
         return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
     with dbm.Transaktion(con):
+        if status == "erledigt" and a["leihen_offen"]:
+            _leihen_spaeter_abrechnen(con, aid)
         neue_rechnung = auf.status_setzen(con, aid, status, request.form.get("vor_id", type=int))
     ziel = url_for("main.dokument", did=neue_rechnung) if neue_rechnung else None
     if neue_rechnung:
@@ -1282,6 +1328,8 @@ def auftrag_loeschen(aid):
         raise EingabeFehler("Zu diesem Auftrag gibt es eine festgeschriebene Rechnung – er kann nicht gelöscht werden.")
     if con.execute("SELECT 1 FROM auftrag_fotos WHERE auftrag_id=?", (aid,)).fetchone():
         raise EingabeFehler("Zu diesem Auftrag gibt es eine Fotodokumentation – er kann nicht gelöscht werden.")
+    if con.execute("SELECT 1 FROM leihen WHERE auftrag_id=?", (aid,)).fetchone():
+        raise EingabeFehler("Zu diesem Auftrag wurde ein Leihgerät ausgegeben – er kann nicht gelöscht werden.")
     with dbm.Transaktion(con):
         con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
         if a["rechnung_id"]:  # automatisch erzeugter Rechnungsentwurf wird mitgelöscht, der KVA bleibt erhalten
@@ -1297,7 +1345,7 @@ def auftrag_loeschen(aid):
 
 # ---------------------------------------------------------------------- Fotos
 
-def _foto_hochladen(auftrag_id=None, token=None):
+def _foto_hochladen(auftrag_id=None, token=None, kategorien=None, **zuordnung):
     con = dbm.get_db()
     dateien = request.files.getlist("foto")
     if not dateien:
@@ -1305,9 +1353,12 @@ def _foto_hochladen(auftrag_id=None, token=None):
     ergebnis = []
     for datei in dateien:
         try:
+            kategorie = request.form.get("kategorie", "")
+            if kategorien and kategorie not in kategorien:
+                raise EingabeFehler("Bitte eine passende Foto-Kategorie auswählen.")
             with dbm.Transaktion(con):
-                fid = fot.speichern(con, daten_dir(), datei.read(), datei.filename, request.form.get("kategorie", ""),
-                                    auftrag_id=auftrag_id, upload_token=token)
+                fid = fot.speichern(con, daten_dir(), datei.read(), datei.filename, kategorie,
+                                    auftrag_id=auftrag_id, upload_token=token, **zuordnung)
             ergebnis.append({"ok": True, "id": fid, "datei": datei.filename})
         except EingabeFehler as e:
             ergebnis.append({"ok": False, "datei": datei.filename, "meldung": str(e)})
@@ -1317,7 +1368,7 @@ def _foto_hochladen(auftrag_id=None, token=None):
 @bp.route("/auftraege/<int:aid>/fotos", methods=["POST"])
 def auftrag_fotos_hochladen(aid):
     _auftrag_laden(aid)
-    return _foto_hochladen(auftrag_id=aid)
+    return _foto_hochladen(auftrag_id=aid, kategorien=fot.KATEGORIEN)
 
 
 @bp.route("/auftraege/neu/fotos", methods=["POST"])
@@ -1325,12 +1376,13 @@ def auftrag_neu_fotos():
     token = request.form.get("upload_token") or ""
     if token != session.get("auftrag_upload_token"):
         return jsonify(ok=False, meldung="Sitzung abgelaufen – bitte die Seite neu laden."), 400
-    return _foto_hochladen(token=token)
+    return _foto_hochladen(token=token, kategorien=fot.KATEGORIEN)
 
 
 def _foto_laden(fid):
     f = dbm.get_db().execute("SELECT * FROM auftrag_fotos WHERE id=?", (fid,)).fetchone()
-    if not f or (not f["auftrag_id"] and f["upload_token"] != session.get("auftrag_upload_token")):
+    if not f or (not f["auftrag_id"] and not f["leihgeraet_id"]
+                 and f["upload_token"] not in [session.get(s) for s in UPLOAD_SCHLUESSEL]):
         abort(404)
     return f
 
@@ -1360,6 +1412,12 @@ def foto_loeschen(fid):
     with dbm.Transaktion(con):
         fot.als_geloescht_markieren(con, fid, _f("grund"))
     flash("Foto als gelöscht markiert. Es bleibt zur Nachvollziehbarkeit gespeichert.", "ok")
+    if request.form.get("zurueck", "").startswith("/"):
+        return redirect(request.form["zurueck"])
+    if f["leihe_id"]:
+        return redirect(url_for("main.leihe", lid=f["leihe_id"]) + "#fotos")
+    if f["leihgeraet_id"]:
+        return redirect(url_for("main.leihgeraet", gid=f["leihgeraet_id"]) + "#fotos")
     if f["auftrag_id"]:
         return redirect(url_for("main.auftrag", aid=f["auftrag_id"]) + "#fotos")
     return redirect(url_for("main.auftrag_neu"))
@@ -1375,6 +1433,389 @@ def auftrag_fotos_pdf(aid):
     from io import BytesIO
     return send_file(BytesIO(pdf), mimetype="application/pdf", download_name=f"Fotodokumentation_{a['auftragsnr']}.pdf",
                      as_attachment=request.args.get("download") == "1")
+
+
+# ====================================================================== Leihgeräte
+
+from . import leih_pdf as lpdf  # noqa: E402
+from . import leihgeraete as lg  # noqa: E402
+
+LEIHE_SQL = ("SELECT l.*, g.bezeichnung, g.seriennummer AS g_seriennummer, g.inventarnr, g.zeitwert, "
+             "k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp, k.email AS kemail FROM leihen l "
+             "JOIN leihgeraete g ON g.id=l.geraet_id JOIN kunden k ON k.id=l.kunde_id ")
+
+
+def _leihe_laden(lid):
+    le = dbm.get_db().execute(LEIHE_SQL + "WHERE l.id=?", (lid,)).fetchone()
+    if not le:
+        abort(404)
+    return le
+
+
+def _leihen_zum_auftrag(con, aid):
+    return [dict(le, schaeden=lg.schaeden(con, le["id"]), offen_abzurechnen=lg.offen_abzurechnen(con, le),
+                 ueberfaellig=lg.ist_ueberfaellig(le))
+            for le in con.execute(LEIHE_SQL + "WHERE l.auftrag_id=? ORDER BY l.id DESC", (aid,)).fetchall()]
+
+
+def _geraet_laden(gid):
+    g = dbm.get_db().execute("SELECT * FROM leihgeraete WHERE id=?", (gid,)).fetchone()
+    if not g:
+        abort(404)
+    return g
+
+
+def _geraet_felder():
+    datum = _f("anschaffung_am")
+    if datum:
+        try:
+            date.fromisoformat(datum)
+        except ValueError:
+            raise EingabeFehler("Bitte ein gültiges Anschaffungsdatum angeben.")
+    return {
+        "bezeichnung": _f("bezeichnung"), "geraetetyp": _f("geraetetyp"), "hersteller": _f("hersteller"),
+        "modell": _f("modell"), "seriennummer": _f("seriennummer"), "inventarnr": _f("inventarnr"),
+        "zubehoer": json.dumps(lg.zubehoer_aus_text(request.form.get("zubehoer", "")), ensure_ascii=False),
+        "zustand": _f("zustand"), "anschaffung_am": datum or None,
+        "anschaffungswert": cent_aus_text(_f("anschaffungswert")), "zeitwert": cent_aus_text(_f("zeitwert")),
+        "gebuehr_art": _f("gebuehr_art", "kostenlos"), "gebuehr_betrag": cent_aus_text(_f("gebuehr_betrag")),
+        "frei_tage": int(zahl_aus_text(_f("frei_tage"), 0)), "kaution": cent_aus_text(_f("kaution")),
+    }
+
+
+@bp.route("/leihgeraete")
+def leihgeraete():
+    con = dbm.get_db()
+    status = request.args.get("status", "")
+    suche = request.args.get("q", "").strip()
+    sql = ("SELECT g.*, l.id AS leihe_id, l.leihnr, l.ausgabe_am, l.rueckgabe_geplant, l.auftrag_id, l.auftragsnr, "
+           "k.id AS kunde_id, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM leihgeraete g "
+           "LEFT JOIN leihen l ON l.geraet_id=g.id AND l.rueckgabe_am IS NULL AND l.storniert_am IS NULL "
+           "LEFT JOIN kunden k ON k.id=l.kunde_id WHERE 1=1 ")
+    args = []
+    if status in lg.STATUS:
+        sql += "AND g.status=? "
+        args.append(status)
+    elif status != "alle":
+        sql += "AND g.status<>'ausgemustert' "
+    if suche:
+        sql += ("AND (g.bezeichnung LIKE ? OR g.seriennummer LIKE ? OR g.inventarnr LIKE ? OR g.hersteller LIKE ? "
+                "OR g.modell LIKE ? OR g.geraetetyp LIKE ? OR k.nachname LIKE ? OR k.firma LIKE ? OR l.auftragsnr LIKE ?) ")
+        args += [f"%{suche}%"] * 9
+    geraete = con.execute(sql + "ORDER BY g.bezeichnung", args).fetchall()
+    zahlen = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM leihgeraete GROUP BY status")}
+    return render_template("leihgeraete.html", geraete=geraete, status=status, suche=suche, status_namen=lg.STATUS,
+                           zahlen=zahlen, heute=date.today().isoformat(), gebuehr=lg.gebuehr_beschreibung)
+
+
+@bp.route("/leihgeraete/neu", methods=["GET", "POST"])
+@bp.route("/leihgeraete/<int:gid>", methods=["GET", "POST"])
+def leihgeraet(gid=None):
+    con = dbm.get_db()
+    g = _geraet_laden(gid) if gid else None
+    if request.method == "POST":
+        felder = _geraet_felder()
+        with dbm.Transaktion(con):
+            gid = lg.geraet_speichern(con, gid, felder)
+        flash("Leihgerät gespeichert.", "ok")
+        return redirect(url_for("main.leihgeraet", gid=gid))
+    leihen_liste, verlauf, alle_schaeden, aktiv = [], [], [], None
+    if g:
+        leihen_liste = con.execute(LEIHE_SQL + "WHERE l.geraet_id=? ORDER BY l.ausgabe_am DESC", (gid,)).fetchall()
+        aktiv = next((le for le in leihen_liste if not le["rueckgabe_am"] and not le["storniert_am"]), None)
+        verlauf = con.execute("SELECT * FROM leihgeraet_verlauf WHERE geraet_id=? ORDER BY zeitpunkt DESC, id DESC",
+                              (gid,)).fetchall()
+        alle_schaeden = con.execute("SELECT s.*, l.leihnr FROM schadensfaelle s JOIN leihen l ON l.id=s.leihe_id "
+                                    "WHERE s.geraet_id=? ORDER BY s.id DESC", (gid,)).fetchall()
+    return render_template("leihgeraet.html", g=g, status_namen=lg.STATUS, gebuehr_arten=lg.GEBUEHR_ARTEN,
+                           zubehoer=lg.liste_aus_json(g["zubehoer"]) if g else [], leihen=leihen_liste, aktiv=aktiv,
+                           verlauf=verlauf, schaeden=alle_schaeden, kostenarten=lg.KOSTENARTEN,
+                           fotos=fot.liste(con, leihgeraet_id=gid) if g else [], heute=date.today().isoformat(),
+                           gebuehr=lg.gebuehr_beschreibung)
+
+
+@bp.route("/leihgeraete/<int:gid>/status", methods=["POST"])
+def leihgeraet_status(gid):
+    con = dbm.get_db()
+    _geraet_laden(gid)
+    with dbm.Transaktion(con):
+        lg.status_setzen(con, gid, _f("status"), _f("grund"))
+    flash("Status geändert.", "ok")
+    return redirect(url_for("main.leihgeraet", gid=gid))
+
+
+@bp.route("/leihgeraete/<int:gid>/fotos", methods=["POST"])
+def leihgeraet_fotos(gid):
+    _geraet_laden(gid)
+    return _foto_hochladen(kategorien=["Leihgerät"], leihgeraet_id=gid)
+
+
+# ---------------------------------------------------------------------- Ausgabe
+
+@bp.route("/auftraege/<int:aid>/leihgeraet-ausgeben", methods=["GET", "POST"])
+def leihe_ausgeben(aid):
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    token = _upload_token(schluessel="leihe_ausgabe_token")
+    werte = {}
+    if request.method == "POST":
+        werte = request.form.to_dict()
+        try:
+            gid = request.form.get("geraet_id", type=int)
+            art = _f("gebuehr_art")
+            with dbm.Transaktion(con):
+                lid = lg.ausgeben(
+                    con, aid, gid, lg.zeit_aus_eingabe(_f("ausgabe_am")), _f("rueckgabe_geplant"),
+                    request.form.getlist("zubehoer"), _f("zustand_ausgabe"), art,
+                    cent_aus_text(_f("gebuehr_betrag")), int(zahl_aus_text(_f("frei_tage"), 0)),
+                    bool(request.form.get("kaution_erhalten")), cent_aus_text(_f("kaution_betrag")),
+                    _f("kaution_zahlart"))
+                g = con.execute("SELECT * FROM leihgeraete WHERE id=?", (gid,)).fetchone()
+                anzahl = fot.zuordnen(con, request.form.get("upload_token") or token, auftrag_id=aid,
+                                      leihgeraet_id=gid, leihe_id=lid, text=f"bei Ausgabe von {g['bezeichnung']}")
+        except EingabeFehler as e:
+            flash(f"Das Leihgerät wurde NICHT ausgegeben: {e} Ihre Eingaben und Fotos sind noch da.", "fehler")
+        else:
+            _upload_token(neu=True, schluessel="leihe_ausgabe_token")
+            flash("Leihgerät ausgegeben" + (f" – {anzahl} Foto(s) zugeordnet." if anzahl else ".")
+                  + " Bitte das Übergabeprotokoll drucken und unterschreiben lassen.", "ok")
+            return redirect(url_for("main.leihe", lid=lid))
+    geraete = con.execute("SELECT * FROM leihgeraete WHERE status='verfuegbar' ORDER BY bezeichnung").fetchall()
+    geraete_json = {g["id"]: {"zubehoer": lg.liste_aus_json(g["zubehoer"]), "gebuehr_art": g["gebuehr_art"],
+                              "gebuehr_betrag": euro(g["gebuehr_betrag"]).replace(" €", ""),
+                              "frei_tage": g["frei_tage"], "kaution": euro(g["kaution"]).replace(" €", ""),
+                              "zustand": g["zustand"] or ""} for g in geraete}
+    jetzt = dbm.jetzt_berlin()[:19]
+    return render_template("leihe_ausgabe.html", a=a, geraete=geraete, geraete_json=geraete_json, werte=werte,
+                           zubehoer_auswahl=request.form.getlist("zubehoer") if request.method == "POST" else None,
+                           token=token, jetzt=jetzt, rueckgabe_vorschlag=plus_tage(heute(), 7),
+                           gebuehr_arten=lg.LEIHE_GEBUEHR_ARTEN, zahlarten=lg.ZAHLARTEN,
+                           fotos=fot.liste(con, upload_token=token, mit_geloeschten=False))
+
+
+@bp.route("/leihen/fotos/vorab", methods=["POST"])
+def leihe_fotos_vorab():
+    token = request.form.get("upload_token") or ""
+    if not token or token not in (session.get("leihe_ausgabe_token"), session.get("leihe_rueckgabe_token")):
+        return jsonify(ok=False, meldung="Sitzung abgelaufen – bitte die Seite neu laden."), 400
+    return _foto_hochladen(token=token, kategorien=fot.LEIH_KATEGORIEN)
+
+
+# ---------------------------------------------------------------------- Leihvorgang
+
+@bp.route("/leihen/<int:lid>")
+def leihe(lid):
+    con = dbm.get_db()
+    le = _leihe_laden(lid)
+    fotos = fot.liste(con, leihe_id=lid)
+    rechnung = con.execute("SELECT id, nummer, status FROM dokumente WHERE id=?", (le["rechnung_id"],)).fetchone() \
+        if le["rechnung_id"] else None
+    auftrag_re = con.execute("SELECT d.id, d.status, d.nummer FROM auftraege a JOIN dokumente d ON d.id=a.rechnung_id "
+                             "WHERE a.id=?", (le["auftrag_id"],)).fetchone() if le["auftrag_id"] else None
+    alle = lg.schaeden(con, lid, mit_stornierten=True)
+    interne = {s["id"]: con.execute("SELECT id, auftragsnr, status FROM auftraege WHERE id=?",
+                                    (s["interner_auftrag_id"],)).fetchone() for s in alle if s["interner_auftrag_id"]}
+    return render_template("leihe.html", le=le, fotos=fotos, schaeden=alle, verrechnung=lg.kaution_verrechnung(con, le),
+                           rechnung=rechnung, auftrag_re=auftrag_re, offen_abzurechnen=lg.offen_abzurechnen(con, le),
+                           ziel=lg.abrechnungsziel(con, le)[0],
+                           ueberfaellig=lg.ist_ueberfaellig(le), zubehoer_aus=lg.liste_aus_json(le["zubehoer_ausgabe"]),
+                           zubehoer_zurueck=lg.liste_aus_json(le["zubehoer_rueckgabe"]) if le["rueckgabe_am"] else None,
+                           gebuehr=lg.gebuehr_beschreibung(le["gebuehr_art"], le["gebuehr_betrag"], le["frei_tage"]),
+                           kostenarten=lg.KOSTENARTEN, kaution_status=lg.KAUTION_STATUS, interne=interne,
+                           leih_kategorien=fot.LEIH_KATEGORIEN)
+
+
+@bp.route("/leihen/<int:lid>/fotos", methods=["POST"])
+def leihe_fotos(lid):
+    le = _leihe_laden(lid)
+    return _foto_hochladen(auftrag_id=le["auftrag_id"], kategorien=fot.LEIH_KATEGORIEN,
+                           leihgeraet_id=le["geraet_id"], leihe_id=lid)
+
+
+@bp.route("/leihen/<int:lid>/rueckgabe", methods=["GET", "POST"])
+def leihe_rueckgabe(lid):
+    con = dbm.get_db()
+    le = _leihe_laden(lid)
+    if le["rueckgabe_am"] or le["storniert_am"]:
+        flash("Dieses Leihgerät wurde bereits zurückgenommen.", "warnung")
+        return redirect(url_for("main.leihe", lid=lid))
+    token = _upload_token(schluessel="leihe_rueckgabe_token")
+    werte = {}
+    if request.method == "POST":
+        werte = request.form.to_dict()
+        try:
+            zustand = _f("zustand")
+            zurueck = request.form.getlist("zubehoer")
+            fehlt = [z for z in lg.liste_aus_json(le["zubehoer_ausgabe"]) if z not in zurueck]
+            schaden = None
+            if zustand == "schaden" or fehlt:
+                schaden = {"beschreibung": _f("schaden_beschreibung"), "kostenart": _f("kostenart"),
+                           "betrag": cent_aus_text(_f("schaden_betrag"))}
+            gebuehr = _f("gebuehr")
+            with dbm.Transaktion(con):
+                sid = lg.zuruecknehmen(con, lid, lg.zeit_aus_eingabe(_f("rueckgabe_am")), zurueck, zustand,
+                                       _f("rueckgabe_notiz"), cent_aus_text(gebuehr) if gebuehr else None, schaden)
+                fot.zuordnen(con, request.form.get("upload_token") or token, auftrag_id=le["auftrag_id"],
+                             leihgeraet_id=le["geraet_id"], leihe_id=lid, schadensfall_id=sid,
+                             text=f"bei Rückgabe von {le['bezeichnung']}")
+                if sid and request.form.get("interner_auftrag"):
+                    lg.interner_auftrag(con, sid)
+                neue_rechnung = None
+                if request.form.get("abrechnen"):
+                    neue_rechnung = _leihe_abrechnen(con, lid)
+        except EingabeFehler as e:
+            flash(f"Die Rückgabe wurde NICHT gespeichert: {e} Ihre Eingaben und Fotos sind noch da.", "fehler")
+        else:
+            _upload_token(neu=True, schluessel="leihe_rueckgabe_token")
+            flash("Leihgerät zurückgenommen." + (" Schadensfall angelegt." if sid else ""), "ok")
+            if neue_rechnung:
+                return redirect(url_for("main.dokument", did=neue_rechnung))
+            return redirect(url_for("main.leihe", lid=lid))
+    jetzt = dbm.jetzt_berlin()[:19]
+    tage, berechnet, vorschlag, text = lg.gebuehr_berechnen(le, dbm.jetzt_berlin())
+    return render_template("leihe_rueckgabe.html", le=le, werte=werte, token=token, jetzt=jetzt,
+                           zubehoer_auswahl=request.form.getlist("zubehoer") if request.method == "POST" else None,
+                           tage=tage, berechnet=berechnet, ziel=lg.abrechnungsziel(con, le)[0],
+                           zubehoer_aus=lg.liste_aus_json(le["zubehoer_ausgabe"]), vorschlag=vorschlag, text=text,
+                           kostenarten=lg.KOSTENARTEN, gebuehr=lg.gebuehr_beschreibung(
+                               le["gebuehr_art"], le["gebuehr_betrag"], le["frei_tage"]),
+                           ausgabe_fotos=fot.liste(con, leihe_id=lid, kategorie="Leihgerät Ausgabe",
+                                                   mit_geloeschten=False),
+                           fotos=fot.liste(con, upload_token=token, mit_geloeschten=False))
+
+
+def _leihe_abrechnen(con, lid, separat_erzwingen=False):
+    """In den Rechnungsentwurf des Auftrags übernehmen – oder eigene Rechnung. Gibt die Dokument-ID zurück.
+
+    Läuft der Auftrag noch (ohne Rechnungsentwurf), wird nichts abgerechnet (None): die Übernahme erfolgt dann
+    automatisch beim Erledigen – außer separat_erzwingen.
+    """
+    le = con.execute("SELECT * FROM leihen WHERE id=?", (lid,)).fetchone()
+    ziel, did = lg.abrechnungsziel(con, le)
+    if ziel == "entwurf":
+        lg.in_rechnung_uebernehmen(con, lid, did)
+        return did
+    if ziel == "warten" and not separat_erzwingen:
+        return None
+    if ziel == "warten":
+        con.execute("UPDATE leihen SET separat_abrechnen=1 WHERE id=?", (lid,))
+    return lg.separat_abrechnen(con, lid)
+
+
+@bp.route("/leihen/<int:lid>/abrechnen", methods=["POST"])
+def leihe_abrechnen(lid):
+    con = dbm.get_db()
+    _leihe_laden(lid)
+    with dbm.Transaktion(con):
+        did = _leihe_abrechnen(con, lid, separat_erzwingen=True)
+    flash("Leihgebühr/Schaden in den Rechnungsentwurf übernommen. Bitte prüfen und festschreiben.", "ok")
+    return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/leihen/<int:lid>/schaden", methods=["POST"])
+def leihe_schaden(lid):
+    con = dbm.get_db()
+    le = _leihe_laden(lid)
+    if not le["rueckgabe_am"]:
+        raise EingabeFehler("Schäden bitte bei der Rücknahme erfassen.")
+    with dbm.Transaktion(con):
+        sid = lg.schadensfall_anlegen(con, lid, _f("beschreibung"), _f("kostenart"), cent_aus_text(_f("betrag")))
+        if request.form.get("interner_auftrag"):
+            lg.interner_auftrag(con, sid)
+    flash("Schadensfall angelegt.", "ok")
+    return redirect(url_for("main.leihe", lid=lid) + "#schaden")
+
+
+@bp.route("/schaeden/<int:sid>/stornieren", methods=["POST"])
+def schaden_stornieren(sid):
+    con = dbm.get_db()
+    s = con.execute("SELECT * FROM schadensfaelle WHERE id=?", (sid,)).fetchone() or abort(404)
+    with dbm.Transaktion(con):
+        lg.schaden_stornieren(con, sid, _f("grund"))
+    flash("Schadensfall storniert (bleibt markiert gespeichert).", "ok")
+    return redirect(url_for("main.leihe", lid=s["leihe_id"]) + "#schaden")
+
+
+@bp.route("/schaeden/<int:sid>/interner-auftrag", methods=["POST"])
+def schaden_interner_auftrag(sid):
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        aid = lg.interner_auftrag(con, sid)
+    flash("Interner Reparaturauftrag für das Leihgerät angelegt.", "ok")
+    return redirect(url_for("main.auftrag", aid=aid))
+
+
+@bp.route("/leihen/<int:lid>/stornieren", methods=["POST"])
+def leihe_stornieren(lid):
+    con = dbm.get_db()
+    _leihe_laden(lid)
+    with dbm.Transaktion(con):
+        lg.leihe_stornieren(con, lid, _f("grund"))
+    flash("Ausgabe storniert. Das Leihgerät ist wieder verfügbar; der Vorgang bleibt markiert gespeichert.", "ok")
+    return redirect(url_for("main.leihe", lid=lid))
+
+
+@bp.route("/leihen/<int:lid>/kaution-zurueck", methods=["POST"])
+def leihe_kaution_zurueck(lid):
+    con = dbm.get_db()
+    _leihe_laden(lid)
+    with dbm.Transaktion(con):
+        lg.kaution_zurueckgezahlt(con, lid)
+    flash("Rückzahlung der Kaution vermerkt.", "ok")
+    return redirect(url_for("main.leihe", lid=lid))
+
+
+@bp.route("/leihen/<int:lid>/<art>.pdf")
+def leihe_pdf(lid, art):
+    if art not in lpdf.TITEL:
+        abort(404)
+    le = _leihe_laden(lid)
+    if art != "ausgabe" and not le["rueckgabe_am"]:
+        raise EingabeFehler("Das Leihgerät ist noch nicht zurückgenommen.")
+    from io import BytesIO
+    pdf = lpdf.protokoll_pdf(dbm.get_db(), lid, art, daten_dir())
+    return send_file(BytesIO(pdf), mimetype="application/pdf", download_name=lpdf.dateiname(le, art),
+                     as_attachment=request.args.get("download") == "1")
+
+
+@bp.route("/leihen/<int:lid>/email", methods=["GET", "POST"])
+def leihe_email(lid):
+    con = dbm.get_db()
+    le = _leihe_laden(lid)
+    art = request.values.get("art", "ausgabe")
+    if art not in lpdf.TITEL or (art != "ausgabe" and not le["rueckgabe_am"]):
+        abort(404)
+    einst = dbm.einstellungen(con)
+    if request.method == "POST":
+        an = _f("an")
+        if "@" not in an:
+            raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
+        pdf = lpdf.protokoll_pdf(con, lid, art, daten_dir())
+        try:
+            hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""), pdf, lpdf.dateiname(le, art))
+        except MailFehler as e:
+            flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+            return redirect(url_for("main.leihe_email", lid=lid, art=art))
+        with dbm.Transaktion(con):
+            text = f"{lpdf.TITEL[art]} {le['leihnr']} an {an}"
+            lg.verlauf(con, le["geraet_id"], "Protokoll per E-Mail versendet", text)
+            if le["auftrag_id"]:
+                auf.verlauf(con, le["auftrag_id"], "Leihgerät-Protokoll per E-Mail versendet", text)
+        flash(f"E-Mail an {an} wurde gesendet.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
+        return redirect(url_for("main.leihe", lid=lid))
+    name = kunde_name({**dict(le), "typ": le["ktyp"]})
+    titel = lpdf.TITEL[art]
+    text = (f"Guten Tag {name},\n\nanbei erhalten Sie {('den ' + titel) if art == 'ausgabe' else ('das ' + titel)} "
+            f"{le['leihnr']} zum Leihgerät {le['bezeichnung']}"
+            + (f" (Reparaturauftrag {le['auftragsnr']})" if le["auftragsnr"] else "") + ".\n\n"
+            + ("Bitte denken Sie daran, vor der Rückgabe Ihre persönlichen Daten vom Gerät zu löschen.\n\n"
+               if art == "ausgabe" else "")
+            + f"Mit freundlichen Grüßen\n{einst.get('inhaber') or ''}\n{einst.get('firma_name') or ''}")
+    return render_template("leihe_email.html", le=le, art=art, titel=titel, an=le["kemail"] or "",
+                           betreff=f"{titel} {le['leihnr']} – {einst.get('firma_name') or ''}", text=text,
+                           smtp_ok=bool(einst.get("smtp_host")))
 
 
 # ====================================================================== Programm-Version & Updates

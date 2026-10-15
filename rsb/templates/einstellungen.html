@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('leihgeraete','Leihgeräte'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -191,6 +191,14 @@
     <div class="s4"><label>Erinnerung vor Ablauf (Tage)</label><input type="number" min="0" name="vertrag_erinnerung_tage" value="{{ einst.vertrag_erinnerung_tage }}"></div>
   </div>
   <p class="klein">Letzter Abrechnungslauf: {{ einst.abo_letzter_lauf|zeit if einst.abo_letzter_lauf else 'noch nie' }}</p>
+  <button>Speichern</button>
+</form>
+
+{% elif bereich == 'leihgeraete' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Leihbedingungen</h2>
+  <p class="klein">Dieser Text steht im Leihvertrag / Übergabeprotokoll, das der Kunde bei der Ausgabe eines Leihgeräts unterschreibt. <code>{firma}</code> wird durch Ihren Firmennamen ersetzt. Lassen Sie die Bedingungen im Zweifel einmal rechtlich prüfen.</p>
+  <textarea name="leihbedingungen" style="min-height:360px">{{ einst.leihbedingungen or '' }}</textarea><br><br>
   <button>Speichern</button>
 </form>
 

@@ -65,6 +65,21 @@ STANDARD_EINSTELLUNGEN = {
     "praefix_mahnung": "MA",
     "praefix_kunde": "K",
     "leistungsarten": "Smartphone, Kaffeemaschine, PC/Laptop, Sonstiges",
+    # Leihgeräte
+    "leihbedingungen": (
+        "1. Das Leihgerät bleibt Eigentum von {firma}. Es wird für die Dauer der Reparatur überlassen und ist "
+        "spätestens am vereinbarten Rückgabetag zurückzugeben.\n"
+        "2. Das Gerät ist vollständig (mit dem oben aufgeführten Zubehör), sauber und im gleichen Zustand wie bei der "
+        "Ausgabe zurückzugeben. Normale Gebrauchsspuren sind kein Schaden.\n"
+        "3. Der Entleiher haftet für Beschädigung, Verlust und Diebstahl ab Übergabe bis zur Rückgabe. Reparaturkosten "
+        "bzw. fehlendes Zubehör werden in Rechnung gestellt, bei Verlust oder Totalschaden der Zeitwert. Eine erhaltene "
+        "Kaution wird damit verrechnet.\n"
+        "4. Wird das Gerät nach dem vereinbarten Rückgabetag zurückgegeben, wird für jeden weiteren Tag die vereinbarte "
+        "Tagesgebühr berechnet; ist keine vereinbart, behalten wir uns eine angemessene Nutzungsentschädigung vor.\n"
+        "5. Das Gerät darf nicht an Dritte weitergegeben, verändert oder geöffnet werden. Störungen sind uns sofort zu "
+        "melden.\n"
+        "6. Datenschutz: Bitte löschen Sie vor der Rückgabe alle eigenen Daten, Konten und Passwörter. Wir setzen das "
+        "Gerät nach der Rückgabe zurück; für dann noch vorhandene Daten übernehmen wir keine Haftung."),
     # E-Mail
     "smtp_host": "",
     "smtp_port": 587,
@@ -171,7 +186,10 @@ def schliessen(_exc=None):
 
 def initialisieren(pfad):
     con = verbinden(pfad)
-    _migrieren(con, pfad)  # zuerst: Indizes/Trigger im Schema dürfen sich auf neue Spalten beziehen
+    gesichert = bool(_migrieren(con, pfad))  # zuerst: Indizes/Trigger im Schema dürfen sich auf neue Spalten beziehen
+    tabellen = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    if not gesichert and "kunden" in tabellen and set(NEUE_TABELLEN) - tabellen:
+        _sicherung_vor_migration(con, pfad)
     con.executescript(SCHEMA.read_text(encoding="utf-8"))
     _migrieren(con, pfad)
     vorhanden = {r["schluessel"] for r in con.execute("SELECT schluessel FROM einstellungen")}
@@ -188,6 +206,7 @@ def initialisieren(pfad):
                         "mindestlaufzeit_monate, preis, einkauf, auto_verlaengern, erstellt_am) "
                         "VALUES (?,?,?,?,?,?,?,?,?,?)", (*va, jetzt()))
     _verlauf_nachtragen(con)
+    _leih_artikel_anlegen(con)
     from .textbausteine_standard import STANDARD_TEXTBAUSTEINE
     vorhandene_typen = {r[0] for r in con.execute("SELECT DISTINCT dokumenttyp FROM textbausteine")}
     leer = not vorhandene_typen
@@ -209,7 +228,13 @@ MIGRATIONEN = [
     ("versandprotokoll", "ablage", "TEXT"),
     ("artikel", "ek_unbekannt", "INTEGER NOT NULL DEFAULT 0"),
     ("dokumente", "kva_status", "TEXT"),
+    ("auftrag_fotos", "leihgeraet_id", "INTEGER"),
+    ("auftrag_fotos", "leihe_id", "INTEGER"),
+    ("auftrag_fotos", "schadensfall_id", "INTEGER"),
 ]
+
+# Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
+NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf"]
 
 
 def _migrieren(con, pfad=None):
@@ -229,6 +254,26 @@ def _migrieren(con, pfad=None):
     for tabelle, spalte, definition in fehlend:
         con.execute(f"ALTER TABLE {tabelle} ADD COLUMN {spalte} {definition}")
     return fehlend
+
+
+LEIH_ARTIKEL = [  # (Name, Einheit, Beschreibung) – einheitliche Positionen für Rechnungen
+    ("Leihgebühr pauschal", "pauschal", "Leihgerät für die Dauer der Reparatur"),
+    ("Leihgebühr pro Tag", "Tag", "Leihgerät je angefangenem Kalendertag"),
+    ("Schadenersatz Leihgerät", "pauschal", "Schaden oder fehlendes Zubehör am Leihgerät"),
+]
+
+
+def _leih_artikel_anlegen(con):
+    """Einmalig die Katalog-Positionen für Leihgebühr und Schadenersatz anlegen (Steuersatz wie übrige Leistungen)."""
+    if con.execute("SELECT 1 FROM einstellungen WHERE schluessel='leih_artikel_angelegt'").fetchone():
+        return
+    satz = json.loads(con.execute("SELECT wert FROM einstellungen WHERE schluessel='regel_steuersatz'").fetchone()[0])
+    for name, einheit, beschreibung in LEIH_ARTIKEL:
+        if not con.execute("SELECT 1 FROM artikel WHERE lower(name)=lower(?)", (name,)).fetchone():
+            con.execute("INSERT INTO artikel (name, beschreibung, leistungsart, typ, einheit, preis, teilekosten, "
+                        "steuersatz, ek_unbekannt, erstellt_am, geaendert_am) VALUES (?,?,?,'leistung',?,0,0,?,1,?,?)",
+                        (name, beschreibung, "Sonstiges", einheit, satz, jetzt(), jetzt()))
+    con.execute("INSERT INTO einstellungen VALUES ('leih_artikel_angelegt', ?)", (json.dumps(jetzt()),))
 
 
 def _verlauf_nachtragen(con):

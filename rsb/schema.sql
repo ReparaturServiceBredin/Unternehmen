@@ -368,18 +368,26 @@ CREATE TABLE IF NOT EXISTS auftrag_fotos (
     benutzer       TEXT,
     geloescht_am   TEXT,
     geloescht_von  TEXT,
-    loeschgrund    TEXT
+    loeschgrund    TEXT,
+    leihgeraet_id  INTEGER,                            -- Fotos eines Leihgeräts (Stammdaten, Ausgabe, Rückgabe)
+    leihe_id       INTEGER,
+    schadensfall_id INTEGER
 );
 CREATE INDEX IF NOT EXISTS ix_fotos_auftrag ON auftrag_fotos(auftrag_id);
 CREATE INDEX IF NOT EXISTS ix_fotos_token ON auftrag_fotos(upload_token);
 
-CREATE TRIGGER IF NOT EXISTS foto_schutz_update
+-- Zuordnungen (Auftrag, Leihgerät, Leihe, Schadensfall) dürfen nur einmalig von leer auf einen Wert gesetzt werden
+DROP TRIGGER IF EXISTS foto_schutz_update;
+CREATE TRIGGER foto_schutz_update
 BEFORE UPDATE ON auftrag_fotos
 WHEN NEW.id IS NOT OLD.id OR NEW.kategorie IS NOT OLD.kategorie OR NEW.dateiname IS NOT OLD.dateiname
   OR NEW.pfad IS NOT OLD.pfad OR NEW.groesse IS NOT OLD.groesse OR NEW.sha256 IS NOT OLD.sha256
   OR NEW.exif_zeit IS NOT OLD.exif_zeit OR NEW.hochgeladen_am IS NOT OLD.hochgeladen_am
   OR NEW.benutzer IS NOT OLD.benutzer OR NEW.mime IS NOT OLD.mime
   OR (OLD.auftrag_id IS NOT NULL AND NEW.auftrag_id IS NOT OLD.auftrag_id)
+  OR (OLD.leihgeraet_id IS NOT NULL AND NEW.leihgeraet_id IS NOT OLD.leihgeraet_id)
+  OR (OLD.leihe_id IS NOT NULL AND NEW.leihe_id IS NOT OLD.leihe_id)
+  OR (OLD.schadensfall_id IS NOT NULL AND NEW.schadensfall_id IS NOT OLD.schadensfall_id)
   OR (OLD.geloescht_am IS NOT NULL AND (NEW.geloescht_am IS NOT OLD.geloescht_am
       OR NEW.geloescht_von IS NOT OLD.geloescht_von OR NEW.loeschgrund IS NOT OLD.loeschgrund))
 BEGIN
@@ -413,4 +421,156 @@ CREATE TRIGGER IF NOT EXISTS verlauf_schutz_delete
 BEFORE DELETE ON auftrag_verlauf
 BEGIN
     SELECT RAISE(ABORT, 'Der Verlauf kann nicht gelöscht werden.');
+END;
+
+-- ====================================================================== Leihgeräte
+CREATE TABLE IF NOT EXISTS leihgeraete (
+    id                INTEGER PRIMARY KEY,
+    bezeichnung       TEXT NOT NULL,                  -- z. B. „Lenovo ThinkPad T14 #1“
+    geraetetyp        TEXT,
+    hersteller        TEXT,
+    modell            TEXT,
+    seriennummer      TEXT,
+    inventarnr        TEXT,
+    zubehoer          TEXT NOT NULL DEFAULT '[]',     -- JSON-Liste: Standardzubehör
+    zustand           TEXT,                           -- Zustand / Bemerkungen
+    anschaffung_am    TEXT,
+    anschaffungswert  INTEGER NOT NULL DEFAULT 0,     -- Cent
+    zeitwert          INTEGER NOT NULL DEFAULT 0,     -- Cent, für Schadensfälle
+    gebuehr_art       TEXT NOT NULL DEFAULT 'kostenlos' CHECK (gebuehr_art IN ('kostenlos', 'pauschal', 'tag')),
+    gebuehr_betrag    INTEGER NOT NULL DEFAULT 0,     -- Cent (pauschal oder je Tag)
+    frei_tage         INTEGER NOT NULL DEFAULT 0,     -- nur bei „pro Tag“: so viele Tage kostenlos
+    kaution           INTEGER NOT NULL DEFAULT 0,     -- Cent, 0 = keine
+    status            TEXT NOT NULL DEFAULT 'verfuegbar'
+                      CHECK (status IN ('verfuegbar', 'verliehen', 'defekt', 'ausgemustert')),
+    erstellt_am       TEXT NOT NULL,
+    geaendert_am      TEXT NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS leihgeraet_schutz_delete
+BEFORE DELETE ON leihgeraete
+BEGIN
+    SELECT RAISE(ABORT, 'Leihgeräte können nicht gelöscht werden – bitte auf „Ausgemustert“ setzen.');
+END;
+
+-- Eine Leihe = Ausgabe eines Leihgeräts an einen Kunden zu einem Reparaturauftrag (Leihvertrag)
+CREATE TABLE IF NOT EXISTS leihen (
+    id                 INTEGER PRIMARY KEY,
+    leihnr             TEXT UNIQUE NOT NULL,          -- LV-2026-0001
+    geraet_id          INTEGER NOT NULL REFERENCES leihgeraete(id),
+    auftrag_id         INTEGER REFERENCES auftraege(id) ON DELETE SET NULL,
+    auftragsnr         TEXT,                          -- bleibt lesbar, auch falls der Auftrag gelöscht würde
+    kunde_id           INTEGER NOT NULL REFERENCES kunden(id),
+    -- Ausgabe
+    ausgabe_am         TEXT NOT NULL,                 -- Europe/Berlin mit Sekunden
+    rueckgabe_geplant  TEXT,                          -- Datum
+    zubehoer_ausgabe   TEXT NOT NULL DEFAULT '[]',    -- JSON-Liste: mitgegeben
+    zustand_ausgabe    TEXT,
+    gebuehr_art        TEXT NOT NULL CHECK (gebuehr_art IN ('kostenlos', 'kulanz', 'pauschal', 'tag')),
+    gebuehr_betrag     INTEGER NOT NULL DEFAULT 0,
+    frei_tage          INTEGER NOT NULL DEFAULT 0,
+    kaution_erhalten   INTEGER NOT NULL DEFAULT 0,
+    kaution_betrag     INTEGER NOT NULL DEFAULT 0,
+    kaution_zahlart    TEXT,
+    ausgegeben_von     TEXT,
+    erfasst_am         TEXT NOT NULL,                 -- Server-Zeit der Erfassung
+    -- Rückgabe
+    rueckgabe_am       TEXT,
+    zubehoer_rueckgabe TEXT,                          -- JSON-Liste: zurückgekommen
+    zustand_rueckgabe  TEXT CHECK (zustand_rueckgabe IS NULL OR zustand_rueckgabe IN ('einwandfrei', 'schaden')),
+    rueckgabe_notiz    TEXT,
+    zurueckgenommen_von TEXT,
+    rueckgabe_erfasst_am TEXT,
+    tage               INTEGER,                       -- berechnete Leihtage
+    gebuehr_berechnet  INTEGER,                       -- Cent, nach Prüfung übernommen
+    gebuehr_text       TEXT,
+    -- Kaution: keine / gehalten / zurueckzuzahlen / zurueckgezahlt / verrechnet
+    kaution_status     TEXT NOT NULL DEFAULT 'keine',
+    kaution_erledigt_am TEXT,
+    -- Abrechnung
+    separat_abrechnen  INTEGER NOT NULL DEFAULT 0,
+    rechnung_id        INTEGER REFERENCES dokumente(id),
+    -- Markierung statt Löschen
+    storniert_am       TEXT,
+    storniert_von      TEXT,
+    storno_grund       TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_leihen_geraet ON leihen(geraet_id);
+CREATE INDEX IF NOT EXISTS ix_leihen_auftrag ON leihen(auftrag_id);
+CREATE INDEX IF NOT EXISTS ix_leihen_kunde ON leihen(kunde_id);
+
+CREATE TRIGGER IF NOT EXISTS leihe_schutz_update
+BEFORE UPDATE ON leihen
+WHEN NEW.leihnr IS NOT OLD.leihnr OR NEW.geraet_id IS NOT OLD.geraet_id OR NEW.kunde_id IS NOT OLD.kunde_id
+  OR NEW.ausgabe_am IS NOT OLD.ausgabe_am OR NEW.zubehoer_ausgabe IS NOT OLD.zubehoer_ausgabe
+  OR NEW.zustand_ausgabe IS NOT OLD.zustand_ausgabe OR NEW.erfasst_am IS NOT OLD.erfasst_am
+  OR NEW.kaution_betrag IS NOT OLD.kaution_betrag OR NEW.kaution_erhalten IS NOT OLD.kaution_erhalten
+  OR (OLD.rueckgabe_am IS NOT NULL AND (NEW.rueckgabe_am IS NOT OLD.rueckgabe_am
+      OR NEW.zustand_rueckgabe IS NOT OLD.zustand_rueckgabe OR NEW.zubehoer_rueckgabe IS NOT OLD.zubehoer_rueckgabe
+      OR NEW.rueckgabe_notiz IS NOT OLD.rueckgabe_notiz))
+  OR (OLD.storniert_am IS NOT NULL AND (NEW.storniert_am IS NOT OLD.storniert_am OR NEW.storno_grund IS NOT OLD.storno_grund))
+BEGIN
+    SELECT RAISE(ABORT, 'Ausgabe- und Rückgabeprotokolle können nicht nachträglich geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS leihe_schutz_delete
+BEFORE DELETE ON leihen
+BEGIN
+    SELECT RAISE(ABORT, 'Leihvorgänge können nicht gelöscht werden – bitte mit Begründung stornieren.');
+END;
+
+CREATE TABLE IF NOT EXISTS schadensfaelle (
+    id                  INTEGER PRIMARY KEY,
+    leihe_id            INTEGER NOT NULL REFERENCES leihen(id),
+    geraet_id           INTEGER NOT NULL REFERENCES leihgeraete(id),
+    beschreibung        TEXT NOT NULL,
+    kostenart           TEXT NOT NULL CHECK (kostenart IN ('reparatur', 'zubehoer', 'totalschaden')),
+    betrag              INTEGER NOT NULL DEFAULT 0,   -- Cent
+    erstellt_am         TEXT NOT NULL,
+    benutzer            TEXT,
+    interner_auftrag_id INTEGER REFERENCES auftraege(id) ON DELETE SET NULL,
+    rechnung_id         INTEGER REFERENCES dokumente(id),
+    storniert_am        TEXT,
+    storniert_von       TEXT,
+    storno_grund        TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_schaden_leihe ON schadensfaelle(leihe_id);
+
+CREATE TRIGGER IF NOT EXISTS schaden_schutz_update
+BEFORE UPDATE ON schadensfaelle
+WHEN NEW.leihe_id IS NOT OLD.leihe_id OR NEW.geraet_id IS NOT OLD.geraet_id
+  OR NEW.beschreibung IS NOT OLD.beschreibung OR NEW.kostenart IS NOT OLD.kostenart OR NEW.betrag IS NOT OLD.betrag
+  OR NEW.erstellt_am IS NOT OLD.erstellt_am OR NEW.benutzer IS NOT OLD.benutzer
+  OR (OLD.storniert_am IS NOT NULL AND (NEW.storniert_am IS NOT OLD.storniert_am OR NEW.storno_grund IS NOT OLD.storno_grund))
+BEGIN
+    SELECT RAISE(ABORT, 'Schadensfälle können nicht geändert werden – bei Fehlern stornieren und neu anlegen.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS schaden_schutz_delete
+BEFORE DELETE ON schadensfaelle
+BEGIN
+    SELECT RAISE(ABORT, 'Schadensfälle können nicht gelöscht werden – bitte mit Begründung stornieren.');
+END;
+
+-- Historie je Leihgerät (nur anhängen)
+CREATE TABLE IF NOT EXISTS leihgeraet_verlauf (
+    id          INTEGER PRIMARY KEY,
+    geraet_id   INTEGER NOT NULL,
+    zeitpunkt   TEXT NOT NULL,
+    benutzer    TEXT,
+    ereignis    TEXT NOT NULL,
+    details     TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_lgverlauf_geraet ON leihgeraet_verlauf(geraet_id);
+
+CREATE TRIGGER IF NOT EXISTS lgverlauf_schutz_update
+BEFORE UPDATE ON leihgeraet_verlauf
+BEGIN
+    SELECT RAISE(ABORT, 'Die Historie kann nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS lgverlauf_schutz_delete
+BEFORE DELETE ON leihgeraet_verlauf
+BEGIN
+    SELECT RAISE(ABORT, 'Die Historie kann nicht gelöscht werden.');
 END;

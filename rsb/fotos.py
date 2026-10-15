@@ -15,6 +15,8 @@ from . import db as dbm
 from .hilfen import EingabeFehler
 
 KATEGORIEN = ["Geräteeingang", "Vorschaden", "Während der Reparatur", "Nach der Reparatur", "Geräteausgabe"]
+LEIH_KATEGORIEN = ["Leihgerät", "Leihgerät Ausgabe", "Leihgerät Rückgabe", "Leihgerät Schaden"]
+ALLE_KATEGORIEN = KATEGORIEN + LEIH_KATEGORIEN
 ENDUNGEN = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp",
             "heic": "image/heic", "heif": "image/heif", "gif": "image/gif"}
 VORSCHAU_PX = 480
@@ -65,9 +67,10 @@ def vorschau_erzeugen(daten_dir, sha, daten):
     return ziel
 
 
-def speichern(con, daten_dir, daten, dateiname, kategorie, auftrag_id=None, upload_token=None):
+def speichern(con, daten_dir, daten, dateiname, kategorie, auftrag_id=None, upload_token=None, leihgeraet_id=None,
+              leihe_id=None, schadensfall_id=None):
     """Speichert ein hochgeladenes Foto. Muss in einer Transaktion laufen. Gibt die Foto-ID zurück."""
-    if kategorie not in KATEGORIEN:
+    if kategorie not in ALLE_KATEGORIEN:
         raise EingabeFehler("Bitte eine Foto-Kategorie auswählen.")
     if not daten:
         raise EingabeFehler("Die Datei ist leer.")
@@ -89,31 +92,42 @@ def speichern(con, daten_dir, daten, dateiname, kategorie, auftrag_id=None, uplo
     vorschau_erzeugen(daten_dir, sha, daten)
     cur = con.execute(
         "INSERT INTO auftrag_fotos (auftrag_id, upload_token, kategorie, dateiname, pfad, mime, groesse, sha256, "
-        "exif_zeit, hochgeladen_am, benutzer) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "exif_zeit, hochgeladen_am, benutzer, leihgeraet_id, leihe_id, schadensfall_id) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (auftrag_id, upload_token, kategorie, dateiname or f"foto.{endung}", rel.as_posix(),
          ENDUNGEN.get(endung, "application/octet-stream"), len(daten), sha, exif_zeit(daten), jetzt,
-         dbm.aktueller_benutzer()))
+         dbm.aktueller_benutzer(), leihgeraet_id, leihe_id, schadensfall_id))
     fid = cur.lastrowid
     dbm.protokollieren("foto_hochgeladen", "auftrag" if auftrag_id else "foto", auftrag_id or fid,
                        {"foto": fid, "datei": dateiname, "kategorie": kategorie, "sha256": sha}, con=con)
     if auftrag_id:
         from .auftraege import verlauf
         verlauf(con, auftrag_id, "Foto hochgeladen", f"{kategorie}: {dateiname} (SHA-256 {sha[:12]}…)")
+    if leihgeraet_id:
+        from .leihgeraete import verlauf as lg_verlauf
+        lg_verlauf(con, leihgeraet_id, "Foto hochgeladen", f"{kategorie}: {dateiname} (SHA-256 {sha[:12]}…)")
     return fid
 
 
-def zuordnen(con, upload_token, auftrag_id):
-    """Beim Anlegen hochgeladene Fotos dem neuen Auftrag zuordnen. Gibt die Anzahl zurück."""
+def zuordnen(con, upload_token, auftrag_id=None, leihgeraet_id=None, leihe_id=None, schadensfall_id=None,
+             text="beim Anlegen des Auftrags"):
+    """Vorab (vor dem Speichern eines Formulars) hochgeladene Fotos zuordnen. Gibt die Anzahl zurück."""
     if not upload_token:
         return 0
-    fotos = con.execute("SELECT * FROM auftrag_fotos WHERE upload_token=? AND auftrag_id IS NULL ORDER BY id",
-                        (upload_token,)).fetchall()
+    fotos = con.execute("SELECT * FROM auftrag_fotos WHERE upload_token=? AND auftrag_id IS NULL "
+                        "AND leihgeraet_id IS NULL ORDER BY id", (upload_token,)).fetchall()
     for f in fotos:
-        con.execute("UPDATE auftrag_fotos SET auftrag_id=? WHERE id=?", (auftrag_id, f["id"]))
+        con.execute("UPDATE auftrag_fotos SET auftrag_id=?, leihgeraet_id=?, leihe_id=?, schadensfall_id=? WHERE id=?",
+                    (auftrag_id, leihgeraet_id, leihe_id, schadensfall_id, f["id"]))
     if fotos:
-        from .auftraege import verlauf
-        verlauf(con, auftrag_id, "Fotos hochgeladen", f"{len(fotos)} Foto(s) beim Anlegen des Auftrags")
-        dbm.protokollieren("fotos_zugeordnet", "auftrag", auftrag_id, {"fotos": [f["id"] for f in fotos]}, con=con)
+        if auftrag_id:
+            from .auftraege import verlauf
+            verlauf(con, auftrag_id, "Fotos hochgeladen", f"{len(fotos)} Foto(s) {text}")
+        if leihgeraet_id:
+            from .leihgeraete import verlauf as lg_verlauf
+            lg_verlauf(con, leihgeraet_id, "Fotos hochgeladen", f"{len(fotos)} Foto(s) {text}")
+        dbm.protokollieren("fotos_zugeordnet", "auftrag" if auftrag_id else "leihgeraet", auftrag_id or leihgeraet_id,
+                           {"fotos": [f["id"] for f in fotos], "leihe": leihe_id}, con=con)
     return len(fotos)
 
 
@@ -133,16 +147,46 @@ def als_geloescht_markieren(con, foto_id, grund):
     if f["auftrag_id"]:
         from .auftraege import verlauf
         verlauf(con, f["auftrag_id"], "Foto als gelöscht markiert", f"{f['dateiname']} – Grund: {grund}")
+    if f["leihgeraet_id"]:
+        from .leihgeraete import verlauf as lg_verlauf
+        lg_verlauf(con, f["leihgeraet_id"], "Foto als gelöscht markiert", f"{f['dateiname']} – Grund: {grund}")
 
 
-def liste(con, auftrag_id=None, upload_token=None, mit_geloeschten=True):
-    if auftrag_id:
+def liste(con, auftrag_id=None, upload_token=None, mit_geloeschten=True, leihgeraet_id=None, leihe_id=None,
+          kategorie=None):
+    if leihe_id:
+        sql, arg = "SELECT * FROM auftrag_fotos WHERE leihe_id=?", leihe_id
+    elif leihgeraet_id:
+        sql, arg = "SELECT * FROM auftrag_fotos WHERE leihgeraet_id=? AND leihe_id IS NULL", leihgeraet_id
+    elif auftrag_id:
         sql, arg = "SELECT * FROM auftrag_fotos WHERE auftrag_id=?", auftrag_id
     else:
         sql, arg = "SELECT * FROM auftrag_fotos WHERE upload_token=? AND auftrag_id IS NULL", upload_token
+    args = [arg]
     if not mit_geloeschten:
         sql += " AND geloescht_am IS NULL"
-    return con.execute(sql + " ORDER BY hochgeladen_am, id", (arg,)).fetchall()
+    if kategorie:
+        sql += " AND kategorie=?"
+        args.append(kategorie)
+    return con.execute(sql + " ORDER BY hochgeladen_am, id", args).fetchall()
+
+
+def bild_flowable(daten_dir, f, breite_mm=70, max_hoehe_mm=90):
+    """ReportLab-Bild aus dem Vorschaubild eines Fotos (oder None, wenn keine Vorschau möglich ist)."""
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Image
+    vorschau = vorschau_pfad(daten_dir, f["sha256"])
+    original = Path(daten_dir) / f["pfad"]
+    if not vorschau.exists() and original.exists():
+        vorschau = vorschau_erzeugen(daten_dir, f["sha256"], original.read_bytes()) or vorschau
+    if not vorschau or not vorschau.exists():
+        return None
+    from PIL import Image as PILImage
+    with PILImage.open(vorschau) as b:
+        w, h = b.size
+    breite = breite_mm * mm
+    hoehe = min(breite * h / w, max_hoehe_mm * mm)
+    return Image(str(vorschau), width=hoehe * w / h, height=hoehe)
 
 
 def zeit_de(iso):
@@ -162,7 +206,7 @@ def pdf_dokumentation(con, auftrag, daten_dir):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.units import mm
-    from reportlab.platypus import (Image, KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
+    from reportlab.platypus import (KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table,
                                     TableStyle)
 
     from .hilfen import kunde_name
@@ -202,24 +246,14 @@ def pdf_dokumentation(con, auftrag, daten_dir):
                for a, b in kopf], colWidths=[35 * mm, 135 * mm])
     t.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LINEBELOW", (0, 0), (-1, -1), 0.3, colors.HexColor("#D5D9DE"))]))
     inhalt += [t, Spacer(1, 6 * mm)]
-    for kat in KATEGORIEN:
+    for kat in ALLE_KATEGORIEN:
         gruppe = [f for f in fotos if f["kategorie"] == kat]
         if not gruppe:
             continue
         inhalt.append(Paragraph(escape(kat), st_h))
         for f in gruppe:
-            vorschau = vorschau_pfad(daten_dir, f["sha256"])
-            if not vorschau.exists() and (Path(daten_dir) / f["pfad"]).exists():
-                vorschau = vorschau_erzeugen(daten_dir, f["sha256"], (Path(daten_dir) / f["pfad"]).read_bytes()) or vorschau
-            if vorschau and vorschau.exists():
-                from PIL import Image as PILImage
-                with PILImage.open(vorschau) as b:
-                    w, h = b.size
-                breite = 70 * mm
-                hoehe = min(breite * h / w, 90 * mm)
-                breite = hoehe * w / h
-                bild = Image(str(vorschau), width=breite, height=hoehe)
-            else:
+            bild = bild_flowable(daten_dir, f)
+            if bild is None:
                 bild = Paragraph("(keine Vorschau – Format wird im PDF nicht angezeigt)", st_klein)
             angaben = [f"<b>{escape(f['dateiname'])}</b>",
                        f"Hochgeladen: {zeit_de(f['hochgeladen_am'])} (Server, Europe/Berlin) von {escape(f['benutzer'] or '')}",

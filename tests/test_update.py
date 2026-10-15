@@ -14,14 +14,14 @@ from conftest import post
 @pytest.fixture
 def server(tmp_path):
     """Kleiner lokaler Webserver, der wie die GitHub-Releases-API antwortet."""
-    inhalt = {"exe": b"NEUE-EXE-VERSION-0.9.0" * 1000}
+    inhalt = {"exe": b"NEUE-EXE-VERSION-9.9.0" * 1000}
     inhalt["sha"] = (hashlib.sha256(inhalt["exe"]).hexdigest() + "  RSB-Buchhaltung.exe\n").encode()
 
     class Handler(http.server.BaseHTTPRequestHandler):
         def do_GET(self):
             port = self.server.server_address[1]
             if self.path == "/latest":
-                body = json.dumps({"tag_name": "v0.9.0", "body": "- Neu: Test", "assets": [
+                body = json.dumps({"tag_name": "v9.9.0", "body": "- Neu: Test", "assets": [
                     {"name": "RSB-Buchhaltung.exe", "browser_download_url": f"http://127.0.0.1:{port}/exe"},
                     {"name": "RSB-Buchhaltung.exe.sha256", "browser_download_url": f"http://127.0.0.1:{port}/sha"},
                 ]}).encode()
@@ -64,7 +64,7 @@ def test_installieren_tauscht_exe(server, tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "frozen", True, raising=False)
     monkeypatch.setattr(sys, "executable", str(exe))
     info = update.neueste_version()
-    assert info["version"] == "0.9.0" and info["hinweise"] == "- Neu: Test"
+    assert info["version"] == "9.9.0" and info["hinweise"] == "- Neu: Test"
     backup = []
     update.installieren(info, vor_austausch=lambda: backup.append(True))
     assert exe.read_bytes() == inhalt["exe"]
@@ -100,8 +100,8 @@ def test_oberflaeche_update_pruefen(client, server, monkeypatch):
     monkeypatch.setattr(update, "API_URL", url + "/latest")
     post(client, "/update/pruefen")
     seite = client.get("/einstellungen?bereich=programm").get_data(as_text=True)
-    assert "Neue Version 0.9.0" in seite
-    assert "Neue Programmversion 0.9.0" in client.get("/kunden").get_data(as_text=True)
+    assert "Neue Version 9.9.0" in seite
+    assert "Neue Programmversion 9.9.0" in client.get("/kunden").get_data(as_text=True)
     assert client.get("/version").get_json()["version"]
     # ohne EXE: Installieren wird freundlich abgelehnt
     r = post(client, "/update/installieren")
