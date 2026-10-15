@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_status.html" import status, csrf %}
+{% from "_aenderungen.html" import aenderungen_karte %}
 {% block titel %}{{ snap.titel }} {{ d.nummer }}{% endblock %}
 {% block inhalt %}
 <div class="kopf">
@@ -30,8 +31,11 @@
         {% endif %}
         {% if d.typ == 'rechnung' %}<tr><td>Fällig am</td><td>{{ snap.faellig_am|datum }}</td></tr>{% endif %}
         <tr><td>Betrag</td><td><b>{{ snap.summen.brutto|euro }}</b></td></tr>
-        <tr><td>Festgeschrieben</td><td>{{ d.festgeschrieben_am|zeit }}</td></tr>
-        <tr><td>Prüfsumme (SHA-256)</td><td class="klein" style="word-break:break-all">{{ d.pdf_sha256 }}</td></tr>
+        <tr><td>Festgeschrieben</td><td>{{ d.festgeschrieben_am|zeit_sek }}</td></tr>
+        <tr><td>Prüfsumme PDF (SHA-256)</td><td class="klein" style="word-break:break-all">{{ d.pdf_sha256 }}</td></tr>
+        {% if d.snapshot_sha256 %}<tr><td>Prüfsumme Rechnungsdaten</td><td class="klein" style="word-break:break-all">{{ d.snapshot_sha256 }}</td></tr>{% endif %}
+        {% if aufbewahren_bis %}<tr><td>Aufbewahren bis</td><td>{{ aufbewahren_bis|datum }} <span class="klein">({{ 'Buchungsbeleg' if d.typ != 'kva' else 'Geschäftsbrief' }}, nicht löschbar)</span></td></tr>{% endif %}
+        {% if gutschriften %}<tr><td>Gutschriften</td><td>{% for gs in gutschriften %}<a href="{{ url_for('main.dokument', did=gs.id) }}">{{ gs.nummer or 'Entwurf' }}</a>{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endif %}
       </table>
     </div>
     <div class="karte">
@@ -52,7 +56,7 @@
     {% else %}
     <div class="karte">
       <h2>Korrektur</h2>
-      <p class="klein">Festgeschriebene Rechnungen können nicht geändert oder gelöscht werden (GoBD). Für eine Korrektur stornieren Sie die Rechnung und erstellen anschließend eine neue (Kopie).</p>
+      <p class="klein">Festgeschriebene Rechnungen können nicht geändert oder gelöscht werden (GoBD). Für eine Korrektur stornieren Sie die Rechnung (Stornorechnung mit eigener Nummer) und erstellen anschließend eine neue (Kopie). Für eine teilweise Erstattung oder einen Preisnachlass gibt es die Gutschrift mit eigenem Nummernkreis.</p>
       <div class="leiste">
         {% if d.typ == 'rechnung' and d.status == 'festgeschrieben' %}
         <form method="post" action="{{ url_for('main.dokument_stornieren', did=d.id) }}" class="leiste" onsubmit="return confirm('Rechnung {{ d.nummer }} wirklich stornieren? Es wird eine Stornorechnung mit eigener Nummer erstellt.')">
@@ -60,10 +64,13 @@
         </form>
         {% endif %}
         <form method="post" action="{{ url_for('main.dokument_kopieren', did=d.id) }}">{{ csrf() }}<button class="zweit">Als neue Rechnung kopieren</button></form>
+        {% if d.typ == 'rechnung' and d.status == 'festgeschrieben' %}<form method="post" action="{{ url_for('main.dokument_gutschrift', did=d.id) }}">{{ csrf() }}<button class="zweit">Gutschrift erstellen</button></form>{% endif %}
       </div>
     </div>
     {% endif %}
   </div>
-  <div class="karte"><iframe class="pdfrahmen" src="{{ url_for('main.dokument_pdf', did=d.id) }}"></iframe></div>
+  <div class="karte"><iframe class="pdfrahmen" src="{{ url_for('main.dokument_pdf', did=d.id) }}"></iframe>
+    <p class="klein">Angezeigt wird das beim Festschreiben archivierte Original-PDF (Prüfsumme wird bei jedem Öffnen kontrolliert).</p></div>
 </div>
+{{ aenderungen_karte(aenderungen) }}
 {% endblock %}

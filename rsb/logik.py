@@ -13,7 +13,9 @@ DOKUMENTTYPEN = {
     "rechnung": ("Rechnung", "praefix_rechnung"),
     "storno": ("Stornorechnung", "praefix_rechnung"),
     "kva": ("Kostenvoranschlag", "praefix_angebot"),
+    "gutschrift": ("Gutschrift", "praefix_gutschrift"),  # Rechnungskorrektur zugunsten des Kunden, eigener Nummernkreis
 }
+RECHNUNGSARTIGE = ("rechnung", "storno", "gutschrift")  # Buchungsbelege mit voller Pflichtangaben-Prüfung
 
 FIRMA_FELDER = ["firma_name", "firma_zusatz", "inhaber", "strasse", "plz", "ort", "land", "telefon", "email",
                 "web", "steuernummer", "ust_idnr", "bank_name", "kontoinhaber", "iban", "bic"]
@@ -210,18 +212,76 @@ def snapshot_bauen(con, dok_id, nummer=None):
 
 # ---------------------------------------------------------------- Festschreiben
 
+KLEINBETRAG_GRENZE = 25000  # § 33 UStDV: Rechnungen bis 250 € brutto (Kleinbetragsrechnung)
+
+
+def pflichtangaben_pruefen(con, dok, einst=None):
+    """Prüft die Pflichtangaben (§ 14 Abs. 4 UStG, § 33 UStDV). Gibt (fehler, hinweise) als Listen zurück.
+
+    Fehler verhindern das Festschreiben, Hinweise nicht.
+    """
+    einst = einst or dbm.einstellungen(con)
+    fehler, hinweise = [], []
+    ist_beleg = dok["typ"] in RECHNUNGSARTIGE
+    # Eigene Angaben
+    if not (einst.get("inhaber") or "").strip():
+        fehler.append("Ihr vollständiger Name (Inhaber) fehlt – Einstellungen → Firmendaten.")
+    if not (einst.get("firma_name") or "").strip():
+        hinweise.append("Kein Firmenname eingetragen (Einstellungen → Firmendaten).")
+    if not all((einst.get(f) or "").strip() for f in ("strasse", "plz", "ort")):
+        fehler.append("Ihre vollständige Anschrift (Straße, PLZ, Ort) fehlt – Einstellungen → Firmendaten.")
+    if ist_beleg and not ((einst.get("steuernummer") or "").strip() or (einst.get("ust_idnr") or "").strip()):
+        fehler.append("Steuernummer oder USt-IdNr. fehlt – Einstellungen → Firmendaten.")
+    # Kunde
+    kunde = con.execute("SELECT * FROM kunden WHERE id=?", (dok["kunde_id"],)).fetchone() if dok["kunde_id"] else None
+    if not kunde:
+        fehler.append("Kein Kunde ausgewählt.")
+    else:
+        if not kunde_name(kunde).strip():
+            fehler.append("Name des Kunden fehlt.")
+        if not all((kunde[f] or "").strip() for f in ("strasse", "plz", "ort")):
+            brutto = abs(summen_berechnen(con.execute("SELECT * FROM positionen WHERE dokument_id=?",
+                                                      (dok["id"],)).fetchall(), dok["steuer_modus"])["brutto"])
+            if ist_beleg and brutto > KLEINBETRAG_GRENZE:
+                fehler.append("Vollständige Anschrift des Kunden (Straße, PLZ, Ort) fehlt.")
+            elif ist_beleg:
+                hinweise.append("Anschrift des Kunden fehlt – bei Rechnungen bis 250 € brutto (Kleinbetragsrechnung, "
+                                "§ 33 UStDV) nicht vorgeschrieben.")
+    # Datum, Leistungszeitpunkt
+    if not dok["datum"]:
+        fehler.append("Rechnungsdatum fehlt.")
+    if dok["typ"] in ("rechnung", "gutschrift") and not dok["leistungsdatum"]:
+        fehler.append("Leistungsdatum bzw. Leistungszeitraum (Datum der Reparatur) fehlt.")
+    # Positionen
+    positionen = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (dok["id"],)).fetchall()
+    if not positionen:
+        fehler.append("Das Dokument hat keine Positionen.")
+    for p in positionen:
+        if not (p["bezeichnung"] or "").strip():
+            fehler.append(f"Position {p['pos']}: Bezeichnung fehlt.")
+        if not p["menge"]:
+            fehler.append(f"Position {p['pos']}: Menge fehlt.")
+    # Steuer
+    if dok["steuer_modus"] == "kleinunternehmer":
+        if ist_beleg and not (einst.get("kleinunternehmer_hinweis") or "").strip():
+            fehler.append("Hinweis auf die Kleinunternehmerregelung (§ 19 UStG) fehlt – Einstellungen → Rechnung & "
+                          "Steuer.")
+    elif ist_beleg:
+        if any(p["steuersatz"] is None for p in positionen):
+            fehler.append("Bei mindestens einer Position fehlt der Steuersatz.")
+        if any(p["steuersatz"] == 0 for p in positionen):
+            hinweise.append("Position mit 0 % Steuer: Bitte im Hinweistext den Grund der Steuerbefreiung angeben.")
+    return fehler, hinweise
+
+
 def _pruefen_vor_festschreiben(con, dok, einst):
     if dok["status"] != "entwurf":
         raise EingabeFehler("Das Dokument ist bereits festgeschrieben.")
     if not dok["kunde_id"]:
         raise EingabeFehler("Bitte zuerst einen Kunden auswählen.")
-    anzahl = con.execute("SELECT COUNT(*) FROM positionen WHERE dokument_id=?", (dok["id"],)).fetchone()[0]
-    if anzahl == 0:
-        raise EingabeFehler("Das Dokument hat keine Positionen.")
-    if not dok["datum"]:
-        raise EingabeFehler("Bitte ein Rechnungsdatum angeben.")
-    if dok["typ"] in ("rechnung",) and not dok["leistungsdatum"]:
-        raise EingabeFehler("Bitte das Leistungsdatum (Datum der Reparatur) angeben.")
+    fehler, _ = pflichtangaben_pruefen(con, dok, einst)
+    if fehler:
+        raise EingabeFehler("Festschreiben nicht möglich – Pflichtangaben fehlen: " + " · ".join(fehler))
     if date.fromisoformat(dok["datum"]) > date.today():
         raise EingabeFehler("Das Rechnungsdatum darf nicht in der Zukunft liegen.")
     praefix = einst[DOKUMENTTYPEN[dok["typ"]][1]]
@@ -265,11 +325,18 @@ def festschreiben(con, dok_id, daten_dir):
         ziel = Path(daten_dir) / rel
         ziel.parent.mkdir(parents=True, exist_ok=True)
         ziel.write_bytes(pdf)
+        # Rechnungsdaten (alle Inhalte, wie sie im PDF stehen) unverändert neben dem PDF archivieren
+        daten = json.dumps(snap, ensure_ascii=False, sort_keys=True, indent=1).encode("utf-8")
+        snap_sha = hashlib.sha256(daten).hexdigest()
+        ziel.with_suffix(".json").write_bytes(daten)
         con.execute(
             "UPDATE dokumente SET status='festgeschrieben', nummer=?, snapshot_json=?, pdf_pfad=?, pdf_sha256=?, "
-            "festgeschrieben_am=?, geaendert_am=? WHERE id=?",
-            (nummer, json.dumps(snap, ensure_ascii=False), rel.as_posix(), sha, dbm.jetzt(), dbm.jetzt(), dok_id),
+            "snapshot_sha256=?, festgeschrieben_am=?, geaendert_am=? WHERE id=?",
+            (nummer, json.dumps(snap, ensure_ascii=False), rel.as_posix(), sha, snap_sha, dbm.jetzt_berlin(),
+             dbm.jetzt(), dok_id),
         )
+        dbm.ereignis_erfassen(con, "dokument", dok_id, "festgeschrieben",
+                              f"Nummer {nummer}, Betrag {euro(snap['summen']['brutto'])}, PDF SHA-256 {sha}")
         con.execute("UPDATE kunden SET interessent=0 WHERE id=?", (dok["kunde_id"],))  # jetzt echter Kunde
         dbm.protokollieren("festgeschrieben", "dokument", dok_id,
                            {"nummer": nummer, "betrag": snap["summen"]["brutto"], "pdf_sha256": sha}, con=con)
@@ -316,7 +383,42 @@ def stornieren(con, dok_id, daten_dir, grund=""):
         con.execute("UPDATE dokumente SET status='storniert', storniert_durch=?, geaendert_am=? WHERE id=?",
                     (neu_id, dbm.jetzt(), dok_id))
         dbm.protokollieren("storniert", "dokument", dok_id, {"durch": nummer}, con=con)
+        dbm.ereignis_erfassen(con, "dokument", dok_id, "storniert", f"durch Stornorechnung {nummer}"
+                              + (f" – Grund: {grund}" if grund else ""))
     return neu_id, nummer
+
+
+def gutschrift_entwurf(con, dok_id):
+    """Gutschrift-Entwurf (eigener Nummernkreis) zu einer festgeschriebenen Rechnung, Positionen vorbelegt."""
+    orig = con.execute("SELECT * FROM dokumente WHERE id=?", (dok_id,)).fetchone()
+    if orig is None or orig["typ"] != "rechnung" or orig["status"] == "entwurf":
+        raise EingabeFehler("Eine Gutschrift kann nur zu einer festgeschriebenen Rechnung erstellt werden.")
+    einst = dbm.einstellungen(con)
+    positionen = [dict(p, einzelpreis=-abs(p["einzelpreis"]), teilekosten=0)
+                  for p in con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (dok_id,))]
+    did = neuer_entwurf(con, einst, "gutschrift", orig["kunde_id"], f"Gutschrift zu Rechnung {orig['nummer']}",
+                        leistungsdatum=orig["leistungsdatum"])
+    for i, p in enumerate(positionen, 1):  # negative Beträge (neuer_entwurf übernimmt nur Beträge > 0)
+        con.execute("INSERT INTO positionen (dokument_id, pos, artikel_id, bezeichnung, beschreibung, menge, einheit, "
+                    "einzelpreis, teilekosten, steuersatz, leistungsart) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                    (did, i, p["artikel_id"], p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"],
+                     p["einzelpreis"], 0, p["steuersatz"], p["leistungsart"]))
+    con.execute("UPDATE dokumente SET bezug_id=?, leistungsdatum_bis=? WHERE id=?",
+                (dok_id, orig["leistungsdatum_bis"], did))
+    summen_speichern(con, did)
+    dbm.protokollieren("gutschrift_angelegt", "dokument", did, {"zu": orig["nummer"]}, con=con)
+    return did
+
+
+# ---------------------------------------------------------------- Aufbewahrung
+
+def aufbewahren_bis(dok, einst):
+    """Ende der Aufbewahrungsfrist: Schluss des Kalenderjahres des Belegs + Frist (§ 147 Abs. 4 AO)."""
+    if not dok["datum"] or dok["status"] == "entwurf":
+        return None
+    jahre = int(einst.get("aufbewahrung_belege_jahre") or 8) if dok["typ"] in RECHNUNGSARTIGE \
+        else int(einst.get("aufbewahrung_briefe_jahre") or 6)
+    return f"{int(dok['datum'][:4]) + jahre}-12-31"
 
 
 def standard_texte(con, dokumenttyp):
@@ -334,13 +436,20 @@ def standard_texte(con, dokumenttyp):
 def integritaet_pruefen(con, daten_dir):
     """Prüft PDF-Prüfsummen, Lückenlosigkeit der Nummern und die Protokollkette."""
     ergebnisse = {"pdf": [], "nummern": [], "protokoll": dbm.protokoll_pruefen(con), "anzahl_dokumente": 0}
-    for d in con.execute("SELECT id, nummer, pdf_pfad, pdf_sha256 FROM dokumente WHERE status<>'entwurf'"):
+    for d in con.execute("SELECT id, nummer, pdf_pfad, pdf_sha256, snapshot_sha256 FROM dokumente "
+                         "WHERE status<>'entwurf'"):
         ergebnisse["anzahl_dokumente"] += 1
         pfad = Path(daten_dir) / (d["pdf_pfad"] or "")
         if not d["pdf_pfad"] or not pfad.is_file():
             ergebnisse["pdf"].append(f"{d['nummer']}: PDF-Datei fehlt.")
         elif hashlib.sha256(pfad.read_bytes()).hexdigest() != d["pdf_sha256"]:
             ergebnisse["pdf"].append(f"{d['nummer']}: PDF-Datei wurde verändert (Prüfsumme stimmt nicht).")
+        if d["snapshot_sha256"]:  # archivierte Rechnungsdaten (ab Version 0.11)
+            json_pfad = pfad.with_suffix(".json")
+            if not json_pfad.is_file():
+                ergebnisse["pdf"].append(f"{d['nummer']}: archivierte Rechnungsdaten (JSON) fehlen.")
+            elif hashlib.sha256(json_pfad.read_bytes()).hexdigest() != d["snapshot_sha256"]:
+                ergebnisse["pdf"].append(f"{d['nummer']}: archivierte Rechnungsdaten wurden verändert.")
     vergeben = {r["nummer"] for r in con.execute("SELECT nummer FROM dokumente WHERE nummer IS NOT NULL")}
     for k in con.execute("SELECT * FROM nummernkreise ORDER BY praefix, jahr"):
         for n in range(1, k["letzte_nummer"] + 1):

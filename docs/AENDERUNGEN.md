@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.11.0 | 15.10.2026 | GoBD-Grundlagen: Gutschrift, Pflichtangaben, Änderungsprotokoll, Aufbewahrung |
 | 0.10.0 | 15.10.2026 | Automatische E-Mail-Historie je Kunde |
 | 0.9.1 | 15.10.2026 | IMAP-Abruf auch mit STARTTLS (Port 143), Verbindungstest |
 | 0.9.0 | 15.10.2026 | Leihgeräte: Ausgabe, Rückgabe, Schadensfall, Abrechnung |
@@ -29,6 +30,50 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.11.0 – 15.10.2026
+GoBD-Grundlagen für Rechnungen und Belege (Ausbaustufe 1 von 10).
+
+### Neu
+- **Gutschrift mit eigenem Nummernkreis** (Standard „GS-2026-0001“): bei einer festgeschriebenen Rechnung über
+  „Gutschrift erstellen“. Positionen sind vorbelegt, Beträge werden positiv eingegeben und als Minderung gebucht.
+  Mit Bezug auf die Rechnung und eigenen Textbausteinen.
+- **Pflichtangaben-Prüfung vor dem Festschreiben** (§ 14 Abs. 4 UStG):
+  - Ihr vollständiger Name und Ihre Anschrift, Steuernummer oder USt-IdNr.
+  - Name und Anschrift des Kunden (bei Kleinbetragsrechnungen bis 250 € nur Hinweis)
+  - Rechnungsdatum, Leistungsdatum, Bezeichnung und Menge je Position
+  - Steuersatz bzw. Hinweis nach § 19 UStG
+  - Was fehlt, steht schon im Entwurf oben mit Link zu den Firmendaten.
+- **Feldgenaues Änderungsprotokoll** für Rechnungen und KVA (Entwürfe), Kunden und Artikel: wer, wann (mit
+  Sekunden), welches Feld, alter und neuer Wert, dazu Festschreiben und Storno als Ereignis. Nicht änderbar,
+  aufklappbar auf den jeweiligen Seiten.
+- **Archiv der Rechnungsdaten:** Beim Festschreiben werden neben dem PDF auch alle Rechnungsdaten als JSON-Datei mit
+  eigener SHA-256-Prüfsumme archiviert.
+- **Prüfsummenkontrolle beim Öffnen:** Angezeigt wird immer das archivierte Original-PDF. Wurde es verändert oder
+  fehlt es, erscheint ein deutlicher Hinweis statt eines neu erzeugten PDFs.
+- **Aufbewahrungsfristen** unter *Einstellungen → Rechnung & Steuer*: Belege 8 Jahre, Geschäftsbriefe 6 Jahre. Die
+  gesetzlichen Mindestfristen können nicht unterschritten werden. Jede festgeschriebene Rechnung zeigt
+  „Aufbewahren bis“.
+- **Kunden löschen mit Fristprüfung:** Vorschau, was gelöscht und was bis wann aufbewahrt wird.
+  - Bei Aufbewahrungspflicht werden die Stammdaten anonymisiert; Name und Anschrift bleiben nur in den
+    archivierten Belegen.
+  - Sonst wird der Kunde vollständig gelöscht.
+- **Verfahrensdokumentation** (Menü *Verwaltung*): aus den tatsächlichen Einstellungen erzeugte Vorlage für den
+  Steuerberater, als Seite und PDF.
+
+### Geändert
+- Festschreiben ist erst möglich, wenn alle Pflichtangaben vorhanden sind. **Bitte unter Einstellungen →
+  Firmendaten Straße, PLZ und Steuernummer (oder USt-IdNr.) prüfen.**
+- Datenbank-Schutz erweitert: Auch Zahlungsziel und Daten-Prüfsumme festgeschriebener Belege sind gesperrt.
+- Datenprüfung kontrolliert zusätzlich die archivierten Rechnungsdaten.
+- Zeitpunkt des Festschreibens in deutscher Zeit mit Sekunden.
+
+### Technik
+- Neue Tabelle `feldaenderungen` (nur anhängen, Trigger gegen Ändern und Löschen), neue Felder
+  `dokumente.snapshot_sha256` und `kunden.anonymisiert_am`. Vorher automatische Sicherung `vor_update_….db`.
+- Neue Module `rsb/aufbewahrung.py` und `rsb/verfahrensdoku.py`. 119 automatische Tests.
 
 ---
 

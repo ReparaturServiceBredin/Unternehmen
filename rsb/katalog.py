@@ -57,6 +57,8 @@ def anlegen(con, daten):
          float(daten.get("steuersatz") if daten.get("steuersatz") is not None else 19),
          0 if ek_bekannt else 1, dbm.jetzt(), dbm.jetzt()))
     dbm.protokollieren("artikel_aus_position", "artikel", cur.lastrowid, {"name": daten["bezeichnung"]}, con=con)
+    neu = con.execute("SELECT * FROM artikel WHERE id=?", (cur.lastrowid,)).fetchone()
+    dbm.aenderungen_erfassen(con, "artikel", cur.lastrowid, None, dict(neu), aktion="angelegt (aus Position)")
     return cur.lastrowid
 
 
@@ -89,9 +91,11 @@ def preise_aktualisieren(con, artikel_id, preis, einkauf):
         return
     ek = a["teilekosten"] if einkauf is None else int(einkauf)
     ek_unbekannt = a["ek_unbekannt"] if einkauf is None else 0
+    neu = {"preis": int(preis), "teilekosten": ek, "ek_unbekannt": ek_unbekannt,
+           "aufschlag_prozent": None if ek_unbekannt else aufschlag(int(preis), ek)}
     con.execute("UPDATE artikel SET preis=?, teilekosten=?, ek_unbekannt=?, aufschlag_prozent=?, geaendert_am=? "
-                "WHERE id=?", (int(preis), ek, ek_unbekannt, None if ek_unbekannt else aufschlag(int(preis), ek),
-                               dbm.jetzt(), artikel_id))
+                "WHERE id=?", (*neu.values(), dbm.jetzt(), artikel_id))
+    dbm.aenderungen_erfassen(con, "artikel", artikel_id, a, neu, aktion="Preise aktualisiert")
     dbm.protokollieren("artikel_preise_aktualisiert", "artikel", artikel_id,
                        {"preis": preis, "einkauf": einkauf}, con=con)
 

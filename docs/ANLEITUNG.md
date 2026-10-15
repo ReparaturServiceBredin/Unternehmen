@@ -366,3 +366,26 @@ gelöscht. Anhänge bleiben im Postfach; beim Kunden stehen nur ihre Namen.
 
 **Neu abgleichen:** Wenn Sie den Importzeitraum vergrößern, klicken Sie auf „Alle Ordner neu abgleichen“. Doppelte
 Einträge entstehen dabei nicht.
+
+## 16. GoBD: Belege, Gutschrift, Aufbewahrung
+
+**Festschreiben:** Eine Rechnung ist zunächst ein Entwurf ohne Nummer. Beim Festschreiben vergibt das Programm die
+nächste fortlaufende Nummer, archiviert PDF und Rechnungsdaten mit Prüfsumme und sperrt den Beleg dauerhaft. Fehlen
+Pflichtangaben (z. B. Ihre Steuernummer oder die Anschrift des Kunden), steht das rot oben im Entwurf, und
+Festschreiben ist noch nicht möglich. Entwürfe können nur mit Wasserzeichen „ENTWURF“ angesehen und nicht per E-Mail
+versendet werden.
+
+**Korrigieren:** Eine festgeschriebene Rechnung lässt sich nicht ändern. Sie haben zwei Möglichkeiten:
+- **Stornieren** erzeugt eine Stornorechnung (eigene Nummer, negative Beträge). Danach „Als neue Rechnung kopieren“ und
+  die korrigierte Rechnung festschreiben.
+- **Gutschrift erstellen** für eine Teil-Erstattung oder einen Preisnachlass. Sie bekommt einen eigenen Nummernkreis
+  (GS-…). Beträge geben Sie positiv ein.
+
+**Änderungsprotokoll:** Unten auf den Seiten von Rechnungen, Kunden und Artikeln steht aufklappbar, wer wann welches Feld
+von welchem auf welchen Wert geändert hat.
+
+**Kunden löschen:** Unter „Datenschutz“ beim Kunden auf „Löschen …“ klicken. Sie sehen vorher, was gelöscht und was
+wegen Aufbewahrungspflicht bis wann behalten wird. Bei Aufbewahrungspflicht werden die Stammdaten anonymisiert.
+
+**Verfahrensdokumentation:** Menü *Verwaltung → Verfahrensdoku*. Ausdrucken, die markierten Stellen ergänzen und mit
+dem Steuerberater durchgehen.

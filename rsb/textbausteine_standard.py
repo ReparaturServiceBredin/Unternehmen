@@ -91,6 +91,28 @@ STANDARD_TEXTBAUSTEINE = [
         "text": "{anrede_brief}\n\nanbei erhalten Sie die Stornorechnung {nummer} zur Rechnung {bezug_nummer}.\n\n"
                 "Mit freundlichen Grüßen\n{inhaber}\n{firma_name}",
     },
+    {
+        "kategorie": "einleitung", "dokumenttyp": "gutschrift", "standard": 1,
+        "name": "Gutschrift – Standard",
+        "text": "{anrede_brief}\n\nzur Rechnung {bezug_nummer} vom {bezug_datum} schreibe ich Ihnen folgenden Betrag gut:",
+    },
+    {
+        "kategorie": "schluss", "dokumenttyp": "gutschrift", "standard": 1,
+        "name": "Gutschrift – Schluss",
+        "text": "Der Betrag von {betrag} wird Ihnen erstattet bzw. mit offenen Beträgen verrechnet.\n\n"
+                "Mit freundlichen Grüßen\n{inhaber}",
+    },
+    {
+        "kategorie": "email_betreff", "dokumenttyp": "gutschrift", "standard": 1,
+        "name": "E-Mail Gutschrift – Betreff",
+        "text": "Gutschrift {nummer} – {firma_name}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": "gutschrift", "standard": 1,
+        "name": "E-Mail Gutschrift – Text",
+        "text": "{anrede_brief}\n\nanbei erhalten Sie die Gutschrift {nummer} zur Rechnung {bezug_nummer}.\n\n"
+                "Mit freundlichen Grüßen\n{inhaber}\n{firma_name}",
+    },
 ]
 
 PLATZHALTER_HILFE = [

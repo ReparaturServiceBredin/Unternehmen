@@ -65,6 +65,9 @@ STANDARD_EINSTELLUNGEN = {
     "praefix_mahnung": "MA",
     "praefix_kunde": "K",
     "leistungsarten": "Smartphone, Kaffeemaschine, PC/Laptop, Sonstiges",
+    # Aufbewahrung (§ 147 AO / § 257 HGB): Frist beginnt mit Ende des Kalenderjahres des Belegs
+    "aufbewahrung_belege_jahre": 8,         # Rechnungen, Stornos, Gutschriften, Buchungsbelege
+    "aufbewahrung_briefe_jahre": 6,         # Handels- und Geschäftsbriefe (z. B. Kostenvoranschläge, versandte Mails)
     # Leihgeräte
     "leihbedingungen": (
         "1. Das Leihgerät bleibt Eigentum von {firma}. Es wird für die Dauer der Reparatur überlassen und ist "
@@ -245,11 +248,13 @@ MIGRATIONEN = [
     ("auftrag_fotos", "leihe_id", "INTEGER"),
     ("auftrag_fotos", "schadensfall_id", "INTEGER"),
     ("kunden", "email_weitere", "TEXT"),
+    ("dokumente", "snapshot_sha256", "TEXT"),
+    ("kunden", "anonymisiert_am", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
 NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
-                 "email_nachrichten", "email_kunden", "imap_ordner_status"]
+                 "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen"]
 
 
 def _migrieren(con, pfad=None):
@@ -357,6 +362,47 @@ def einstellungen_speichern(werte: dict, con=None):
 def _hash(vorher, zeitpunkt, benutzer, aktion, objekt, objekt_id, details):
     roh = json.dumps([vorher, zeitpunkt, benutzer, aktion, objekt, objekt_id, details], ensure_ascii=False)
     return hashlib.sha256(roh.encode("utf-8")).hexdigest()
+
+
+def _als_text(wert):
+    if wert is None:
+        return ""
+    if isinstance(wert, float) and wert.is_integer():
+        wert = int(wert)
+    return str(wert)
+
+
+def aenderungen_erfassen(con, objekt, objekt_id, alt, neu, aktion="geaendert", namen=None):
+    """Feldgenaues Änderungsprotokoll: schreibt je geändertem Feld eine Zeile (alt → neu).
+
+    alt/neu: dict oder sqlite3.Row (alt=None bei Neuanlage). Gibt die Liste der geänderten Felder zurück.
+    """
+    alt = dict(alt) if alt is not None else {}
+    geaendert = []
+    zeit, benutzer = jetzt_berlin(), aktueller_benutzer()
+    for feld, wert in neu.items():
+        if feld in ("geaendert_am", "erstellt_am"):
+            continue
+        a, n = _als_text(alt.get(feld)), _als_text(wert)
+        if a == n:
+            continue
+        geaendert.append(feld)
+        con.execute("INSERT INTO feldaenderungen (zeitpunkt, benutzer, objekt, objekt_id, aktion, feld, alt, neu) "
+                    "VALUES (?,?,?,?,?,?,?,?)",
+                    (zeit, benutzer, objekt, objekt_id, aktion, (namen or {}).get(feld, feld), a, n))
+    return geaendert
+
+
+def ereignis_erfassen(con, objekt, objekt_id, aktion, text=""):
+    """Ereignis ohne Feldbezug (z. B. festgeschrieben, storniert, gelöscht) im Änderungsprotokoll."""
+    con.execute("INSERT INTO feldaenderungen (zeitpunkt, benutzer, objekt, objekt_id, aktion, feld, alt, neu) "
+                "VALUES (?,?,?,?,?,?,?,?)", (jetzt_berlin(), aktueller_benutzer(), objekt, objekt_id, aktion, None,
+                                            None, text))
+
+
+def aenderungen_liste(con, objekt, objekt_id):
+    return con.execute("SELECT * FROM feldaenderungen WHERE objekt=? AND objekt_id=? ORDER BY id DESC",
+                       (objekt, objekt_id)).fetchall()
 
 
 def protokollieren(aktion, objekt=None, objekt_id=None, details=None, con=None):

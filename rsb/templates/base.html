@@ -26,6 +26,7 @@
     <a href="{{ url_for('main.textbausteine') }}" class="{{ 'aktiv' if ep.startswith('main.textbaustein') }}">Textbausteine</a>
     <a href="{{ url_for('main.protokoll') }}" class="{{ 'aktiv' if ep == 'main.protokoll' }}">Protokoll</a>
     <a href="{{ url_for('main.pruefung') }}" class="{{ 'aktiv' if ep == 'main.pruefung' }}">Datenprüfung</a>
+    <a href="{{ url_for('main.verfahrensdokumentation') }}" class="{{ 'aktiv' if ep == 'main.verfahrensdokumentation' }}">Verfahrensdoku</a>
   </nav>
   <div class="fuss">
     <a href="{{ url_for('main.versionen') }}" title="Versionsprotokoll">Version {{ version }}</a>

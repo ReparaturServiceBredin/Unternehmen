@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% from "_status.html" import status, csrf %}
+{% from "_aenderungen.html" import aenderungen_karte %}
 {% block titel %}{{ k|kname if k else 'Neuer Kunde' }}{% endblock %}
 {% block inhalt %}
+{% if k and k.anonymisiert_am %}<div class="meldung warnung">Dieser Kunde wurde am {{ k.anonymisiert_am|zeit_sek }} auf Wunsch gelöscht und wegen gesetzlicher Aufbewahrungspflichten anonymisiert. Name und Anschrift stehen nur noch in den archivierten Belegen.</div>{% endif %}
 <div class="kopf">
   <h1>{{ (k.kundennr ~ ' · ' ~ (k|kname)) if k else 'Neuer Kunde' }}</h1>
   {% if k %}<div class="leiste">
@@ -132,16 +134,15 @@
 {% endif %}
 <div class="karte">
   <h2>Datenschutz</h2>
-  <p class="klein">Kunden mit festgeschriebenen Rechnungen dürfen wegen der Aufbewahrungspflicht nicht gelöscht werden – sie können archiviert werden. Kunden ohne Rechnungen können vollständig gelöscht werden – dabei wird auch ihr E-Mail-Verlauf im Programm gelöscht (das Postfach bleibt unverändert).</p>
+  <p class="klein">Beim Löschen prüft das Programm die Aufbewahrungsfristen ({{ einst.aufbewahrung_belege_jahre }} Jahre für Rechnungen/Buchungsbelege, {{ einst.aufbewahrung_briefe_jahre }} Jahre für Geschäftsbriefe). Gibt es aufbewahrungspflichtige Unterlagen, werden die Stammdaten anonymisiert – Name und Anschrift bleiben dann nur in den archivierten Belegen. Sonst wird der Kunde vollständig gelöscht. Vorher sehen Sie genau, was gelöscht und was behalten wird.</p>
   <div class="leiste">
     <form method="post" action="{{ url_for('main.kunde_archivieren', kid=k.id) }}" class="inline">{{ csrf() }}
       {% if k.archiviert %}<input type="hidden" name="zurueck" value="1"><button class="zweit">Wieder aktivieren</button>
       {% else %}<button class="zweit">Archivieren</button>{% endif %}
     </form>
-    <form method="post" action="{{ url_for('main.kunde_loeschen', kid=k.id) }}" class="inline" onsubmit="return confirm('Kunden wirklich endgültig löschen?')">{{ csrf() }}
-      <button class="gefahr">Löschen</button>
-    </form>
+    {% if not k.anonymisiert_am %}<a class="knopf gefahr" href="{{ url_for('main.kunde_loeschen', kid=k.id) }}">Löschen …</a>{% endif %}
   </div>
 </div>
+{{ aenderungen_karte(aenderungen) }}
 {% endif %}
 {% endblock %}

@@ -54,8 +54,14 @@
   <br><h2>Nummern &amp; Listen</h2>
   <div class="felder">
     {{ feld('nummern_format', 'Nummernformat', span='s4', hilfe='{praefix}, {jahr}, {nummer:04d} → RE-2026-0001. Gilt ab dem nächsten Jahr bzw. neuen Nummernkreis.') }}
-    {{ feld('praefix_rechnung', 'Präfix Rechnungen', span='s2') }}{{ feld('praefix_angebot', 'Präfix KVA', span='s2') }}{{ feld('praefix_kunde', 'Präfix Kunden', span='s2') }}
-    {{ feld('leistungsarten', 'Leistungsarten (mit Komma getrennt)', span='s2') }}
+    {{ feld('praefix_rechnung', 'Präfix Rechnungen/Stornos', span='s2') }}{{ feld('praefix_gutschrift', 'Präfix Gutschriften', span='s2') }}{{ feld('praefix_angebot', 'Präfix KVA', span='s2') }}{{ feld('praefix_kunde', 'Präfix Kunden', span='s2') }}
+    {{ feld('leistungsarten', 'Leistungsarten (mit Komma getrennt)', span='s12') }}
+  </div>
+  <br><h2>Aufbewahrung (GoBD)</h2>
+  <div class="felder">
+    {{ feld('aufbewahrung_belege_jahre', 'Rechnungen / Buchungsbelege (Jahre)', 'number', 's4', hilfe='gesetzlich mindestens 8 Jahre (§ 147 AO)') }}
+    {{ feld('aufbewahrung_briefe_jahre', 'Handels- und Geschäftsbriefe (Jahre)', 'number', 's4', hilfe='gesetzlich mindestens 6 Jahre, z. B. Kostenvoranschläge, Leihverträge, versandte Belege') }}
+    <div class="s4 klein" style="align-self:center">Die Frist beginnt mit dem Ende des Kalenderjahres des Belegs. Festgeschriebene Belege sind nie löschbar.</div>
   </div><br><button>Speichern</button>
 </form>
 

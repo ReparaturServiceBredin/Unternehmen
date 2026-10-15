@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_status.html" import csrf, bausteinauswahl %}
+{% from "_aenderungen.html" import aenderungen_karte %}
 {% block titel %}{{ titel }} (Entwurf){% endblock %}
 {% block inhalt %}
 <div class="kopf">
@@ -9,6 +10,14 @@
     <a class="knopf zweit" href="{{ url_for('main.dokument_pdf', did=d.id) }}" target="_blank">PDF-Vorschau öffnen</a>
   </div>
 </div>
+{% if d.typ == 'gutschrift' %}<div class="meldung info">Gutschrift{% if bezug %} zu Rechnung <a href="{{ url_for('main.dokument', did=bezug.id) }}">{{ bezug.nummer }}</a>{% endif %}: Beträge bitte <b>positiv</b> eingeben – sie werden als Minderung (negativ) gebucht. Die Gutschrift erhält beim Festschreiben eine Nummer aus dem eigenen Nummernkreis ({{ einst.praefix_gutschrift }}).</div>{% endif %}
+{% if pflicht[0] or pflicht[1] %}
+<div class="meldung {{ 'fehler' if pflicht[0] else 'info' }}">
+  {% if pflicht[0] %}<b>Vor dem Festschreiben fehlen noch Pflichtangaben:</b>{% else %}<b>Hinweise:</b>{% endif %}
+  <ul style="margin:6px 0 0;padding-left:20px">{% for f in pflicht[0] %}<li>{{ f }}</li>{% endfor %}{% for h in pflicht[1] %}<li class="klein">{{ h }}</li>{% endfor %}</ul>
+  {% if pflicht[0] %}<div class="klein" style="margin-top:6px"><a href="{{ url_for('main.einstellungen', bereich='firma') }}">Firmendaten ergänzen</a>{% if d.kunde_id %} · <a href="{{ url_for('main.kunde', kid=d.kunde_id) }}">Kunde bearbeiten</a>{% endif %} (danach Seite neu laden)</div>{% endif %}
+</div>
+{% endif %}
 {% if einst.steuer_modus == 'kleinunternehmer' %}
 <div class="meldung info">Kleinunternehmer-Modus: Es wird keine Umsatzsteuer berechnet, der Hinweis nach § 19 UStG wird automatisch gedruckt.</div>
 {% endif %}
@@ -84,7 +93,7 @@
     <div class="leiste">
       <button name="aktion" value="speichern" class="zweit">Entwurf speichern</button>
       <button name="aktion" value="vorschau" class="zweit">Speichern &amp; Vorschau</button>
-      <button name="aktion" value="festschreiben" class="gruen" onclick='return confirm({{ ('Kostenvoranschlag jetzt festschreiben?\n\nEr erhält eine fortlaufende Nummer und kann danach nicht mehr geändert werden. Für Änderungen einfach einen neuen KVA erstellen.' if d.typ == 'kva' else 'Rechnung jetzt festschreiben?\n\nDie Rechnung erhält eine fortlaufende Nummer und kann danach NICHT mehr geändert oder gelöscht werden (nur noch Storno).')|tojson }})'>Festschreiben &amp; Nummer vergeben</button>
+      <button name="aktion" value="festschreiben" class="gruen" onclick='return confirm({{ ('Kostenvoranschlag jetzt festschreiben?\n\nEr erhält eine fortlaufende Nummer und kann danach nicht mehr geändert werden. Für Änderungen einfach einen neuen KVA erstellen.' if d.typ == 'kva' else titel ~ ' jetzt festschreiben?\n\nSie erhält eine fortlaufende Nummer und kann danach NICHT mehr geändert oder gelöscht werden (nur noch Storno).')|tojson }})'>Festschreiben &amp; Nummer vergeben</button>
     </div>
     <p class="hilfe">Entwürfe haben noch keine Nummer und können beliebig geändert oder gelöscht werden.</p>
   </div>
@@ -95,6 +104,7 @@
 <div class="karte" style="margin-top:18px"><h2>Vorschau</h2>
   <iframe class="pdfrahmen" src="{{ url_for('main.dokument_pdf', did=d.id) }}"></iframe></div>
 {% endif %}
+{{ aenderungen_karte(aenderungen) }}
 {% endblock %}
 
 
@@ -125,7 +135,7 @@ function zeile(p) {
     <td><input type="text" name="p_menge" value="${esc(String(p.menge ?? 1).replace('.', ','))}"></td>
     <td><input type="text" name="p_einheit" value="${esc(p.einheit)}"></td>
     <td><input type="text" name="p_teilekosten" value="${p.teilekosten ? euroText(p.teilekosten / 100) : ''}" placeholder="unbekannt"></td>
-    <td><input type="text" name="p_preis" value="${euroText((p.einzelpreis || 0) / 100)}"></td>
+    <td><input type="text" name="p_preis" value="${euroText({{ 'Math.abs' if d.typ == 'gutschrift' }}(p.einzelpreis || 0) / 100)}"></td>
     ${MIT_UST ? `<td><input type="text" name="p_steuersatz" value="${esc(p.steuersatz ?? 19)}"></td>` : `<input type="hidden" name="p_steuersatz" value="${esc(p.steuersatz ?? 19)}">`}
     <td class="zahl"><b class="ges"></b><div class="marge"></div></td>
     <td><button type="button" class="gefahr klein" title="Position entfernen">✕</button></td>`;

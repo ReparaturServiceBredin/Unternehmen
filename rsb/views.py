@@ -12,7 +12,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db as dbm
 from . import katalog, logik
 from .backup import backup_erstellen
-from .hilfen import (EingabeFehler, cent_aus_text, datum_de, euro, heute, kunde_name, platzhalter_ersetzen, plus_tage,
+from .hilfen import (EingabeFehler, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
                      zahl_aus_text)
 from .mail import MailFehler, senden
 from .pdf import SCHRIFTEN, pdf_erzeugen
@@ -159,9 +159,12 @@ def kunde(kid=None):
         felder["interessent"] = 1 if request.form.get("interessent") else 0
         with dbm.Transaktion(con):
             if k:
+                if k["anonymisiert_am"]:
+                    raise EingabeFehler("Dieser Kunde wurde anonymisiert und kann nicht mehr bearbeitet werden.")
                 con.execute(f"UPDATE kunden SET {', '.join(f'{f}=?' for f in felder)}, geaendert_am=? WHERE id=?",
                             [*felder.values(), dbm.jetzt(), kid])
                 dbm.protokollieren("kunde_geaendert", "kunde", kid, con=con)
+                dbm.aenderungen_erfassen(con, "kunde", kid, k, felder, namen=KUNDE_FELDNAMEN)
             else:
                 nr = logik.naechste_kundennr(con, dbm.einstellungen(con))
                 cur = con.execute(
@@ -170,6 +173,8 @@ def kunde(kid=None):
                     [nr, *felder.values(), dbm.jetzt(), dbm.jetzt()])
                 kid = cur.lastrowid
                 dbm.protokollieren("kunde_angelegt", "kunde", kid, {"kundennr": nr}, con=con)
+                dbm.aenderungen_erfassen(con, "kunde", kid, None, {"kundennr": nr, **felder}, aktion="angelegt",
+                                         namen=KUNDE_FELDNAMEN)
         flash("Kunde gespeichert.", "ok")
         _historie_nachholen(k, felder)
         if request.form.get("danach") == "rechnung":
@@ -190,6 +195,7 @@ def kunde(kid=None):
         "JOIN leihgeraete g ON g.id=l.geraet_id WHERE l.kunde_id=? ORDER BY l.ausgabe_am DESC", (kid,)).fetchall() \
         if kid else []
     return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen,
+                           aenderungen=dbm.aenderungen_liste(con, "kunde", kid) if kid else [],
                            auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG,
                            leihen=kunden_leihen, heute=date.today().isoformat(),
                            emails=_kunden_emails(con, kid, request.args.get("mails") == "alle"),
@@ -219,46 +225,43 @@ def _historie_nachholen(alt, felder):
         flash(f"Das Postfach wird im Hintergrund nach E-Mails von/an {', '.join(neu)} durchsucht.", "info")
 
 
+KUNDE_FELDNAMEN = {"kundennr": "Kundennummer", "typ": "Typ", "firma": "Firma", "anrede": "Anrede", "vorname": "Vorname",
+                   "nachname": "Nachname", "strasse": "Straße", "plz": "PLZ", "ort": "Ort", "land": "Land",
+                   "email": "E-Mail", "telefon": "Telefon", "ust_idnr": "USt-IdNr.", "notizen": "Notizen",
+                   "email_weitere": "Weitere E-Mail-Adressen", "zahlungsziel_tage": "Zahlungsziel (Tage)",
+                   "interessent": "Interessent"}
+
+
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
 def kunde_archivieren(kid):
     con = dbm.get_db()
     wert = 0 if request.form.get("zurueck") else 1
     with dbm.Transaktion(con):
         con.execute("UPDATE kunden SET archiviert=?, geaendert_am=? WHERE id=?", (wert, dbm.jetzt(), kid))
+        dbm.aenderungen_erfassen(con, "kunde", kid, {"archiviert": 1 - wert}, {"archiviert": wert},
+                                 namen={"archiviert": "archiviert"})
         dbm.protokollieren("kunde_archiviert" if wert else "kunde_reaktiviert", "kunde", kid, con=con)
     flash("Kunde archiviert." if wert else "Kunde wieder aktiv.", "ok")
     return redirect(url_for("main.kunde", kid=kid))
 
 
-@bp.route("/kunden/<int:kid>/loeschen", methods=["POST"])
+@bp.route("/kunden/<int:kid>/loeschen", methods=["GET", "POST"])
 def kunde_loeschen(kid):
+    """Löschen mit Prüfung der Aufbewahrungsfristen: vollständig löschen oder anonymisieren."""
+    from . import aufbewahrung
     con = dbm.get_db()
-    if con.execute("SELECT 1 FROM dokumente WHERE kunde_id=? AND status<>'entwurf'", (kid,)).fetchone():
-        raise EingabeFehler("Dieser Kunde hat festgeschriebene Dokumente und muss wegen der Aufbewahrungspflicht "
-                            "erhalten bleiben. Sie können ihn stattdessen archivieren.")
-    if con.execute("SELECT 1 FROM auftrag_fotos f JOIN auftraege a ON a.id=f.auftrag_id WHERE a.kunde_id=?",
-                   (kid,)).fetchone():
-        raise EingabeFehler("Zu Aufträgen dieses Kunden gibt es Fotodokumentation – der Kunde kann nicht gelöscht "
-                            "werden. Sie können ihn stattdessen archivieren.")
-    if con.execute("SELECT 1 FROM leihen WHERE kunde_id=?", (kid,)).fetchone():
-        raise EingabeFehler("Dieser Kunde hatte Leihgeräte – die Leihprotokolle müssen erhalten bleiben. "
-                            "Sie können ihn stattdessen archivieren.")
+    k = con.execute("SELECT * FROM kunden WHERE id=?", (kid,)).fetchone() or abort(404)
+    if k["anonymisiert_am"]:
+        raise EingabeFehler("Dieser Kunde wurde bereits anonymisiert.")
+    if request.method == "GET":
+        return render_template("kunde_loeschen.html", k=k, bericht=aufbewahrung.pruefen(con, kid))
     with dbm.Transaktion(con):
-        from .email_historie import kunde_entfernen
-        kunde_entfernen(con, kid)  # E-Mail-Historie dieses Kunden (Datenschutz)
-        for a in con.execute("SELECT id, auftragsnr FROM auftraege WHERE kunde_id=?", (kid,)).fetchall():
-            auf.verlauf(con, a["id"], "Auftrag gelöscht", a["auftragsnr"])
-        con.execute("DELETE FROM auftraege WHERE kunde_id=?", (kid,))
-        con.execute("DELETE FROM vertraege WHERE kunde_id=?", (kid,))
-        for d in con.execute("SELECT id FROM dokumente WHERE kunde_id=?", (kid,)).fetchall():
-            con.execute("UPDATE auftraege SET kva_id=NULL WHERE kva_id=?", (d["id"],))
-            con.execute("UPDATE auftraege SET rechnung_id=NULL WHERE rechnung_id=?", (d["id"],))
-            con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
-            con.execute("DELETE FROM dokumente WHERE id=?", (d["id"],))
-        con.execute("DELETE FROM anfragen WHERE kunde_id=?", (kid,))
-        con.execute("DELETE FROM kunden WHERE id=?", (kid,))
-        dbm.protokollieren("kunde_geloescht", "kunde", kid, con=con)
-    flash("Kunde gelöscht.", "ok")
+        bericht = aufbewahrung.kunde_loeschen(con, kid)
+    if bericht["anonymisieren"]:
+        flash(f"Kunde anonymisiert. Wegen Aufbewahrungspflichten bleiben die Belege bis "
+              f"{datum_de(bericht['bis'])} erhalten; Name und Anschrift stehen nur noch darin.", "ok")
+        return redirect(url_for("main.kunde", kid=kid))
+    flash("Kunde vollständig gelöscht.", "ok")
     return redirect(url_for("main.kunden"))
 
 
@@ -312,15 +315,25 @@ def artikel(aid=None):
                 con.execute(f"UPDATE artikel SET {', '.join(f'{f}=?' for f in felder)}, geaendert_am=? WHERE id=?",
                             [*felder.values(), dbm.jetzt(), aid])
                 dbm.protokollieren("artikel_geaendert", "artikel", aid, con=con)
+                dbm.aenderungen_erfassen(con, "artikel", aid, a, felder, namen=ARTIKEL_FELDNAMEN)
             else:
                 cur = con.execute(f"INSERT INTO artikel ({', '.join(felder)}, erstellt_am, geaendert_am) "
                                   f"VALUES ({', '.join('?' * len(felder))}, ?, ?)",
                                   [*felder.values(), dbm.jetzt(), dbm.jetzt()])
                 aid = cur.lastrowid
                 dbm.protokollieren("artikel_angelegt", "artikel", aid, con=con)
+                dbm.aenderungen_erfassen(con, "artikel", aid, None, felder, aktion="angelegt",
+                                         namen=ARTIKEL_FELDNAMEN)
         flash("Leistung/Artikel gespeichert.", "ok")
         return redirect(url_for("main.artikel_liste"))
-    return render_template("artikel.html", a=a, leistungsarten=_leistungsarten())
+    return render_template("artikel.html", a=a, leistungsarten=_leistungsarten(),
+                           aenderungen=dbm.aenderungen_liste(con, "artikel", aid) if aid else [])
+
+
+ARTIKEL_FELDNAMEN = {"artikelnr": "Artikelnummer", "name": "Bezeichnung", "beschreibung": "Beschreibung",
+                     "leistungsart": "Leistungsart", "typ": "Typ", "einheit": "Einheit", "preis": "Preis (Cent)",
+                     "teilekosten": "Einkauf (Cent)", "aufschlag_prozent": "Aufschlag %", "steuersatz": "Steuersatz",
+                     "aktiv": "aktiv", "ek_unbekannt": "Einkauf unbekannt"}
 
 
 @bp.route("/artikel/<int:aid>/loeschen", methods=["POST"])
@@ -329,8 +342,11 @@ def artikel_loeschen(aid):
     with dbm.Transaktion(con):
         if con.execute("SELECT 1 FROM positionen WHERE artikel_id=?", (aid,)).fetchone():
             con.execute("UPDATE artikel SET aktiv=0, geaendert_am=? WHERE id=?", (dbm.jetzt(), aid))
+            dbm.aenderungen_erfassen(con, "artikel", aid, {"aktiv": 1}, {"aktiv": 0}, namen=ARTIKEL_FELDNAMEN)
             flash("Der Artikel wird in Dokumenten verwendet und wurde deshalb nur deaktiviert.", "info")
         else:
+            alt = con.execute("SELECT name FROM artikel WHERE id=?", (aid,)).fetchone()
+            dbm.ereignis_erfassen(con, "artikel", aid, "gelöscht", alt["name"] if alt else "")
             con.execute("DELETE FROM artikel WHERE id=?", (aid,))
             flash("Artikel gelöscht.", "ok")
         dbm.protokollieren("artikel_geloescht", "artikel", aid, con=con)
@@ -412,8 +428,12 @@ def dokument(did):
         versand = con.execute("SELECT * FROM versandprotokoll WHERE dokument_id=? ORDER BY id DESC", (did,)).fetchall()
         bezug = con.execute("SELECT id, nummer FROM dokumente WHERE id=?", (d["bezug_id"],)).fetchone()
         storno = con.execute("SELECT id, nummer FROM dokumente WHERE id=?", (d["storniert_durch"],)).fetchone()
+        gutschriften = con.execute("SELECT id, nummer, status FROM dokumente WHERE bezug_id=? AND typ='gutschrift'",
+                                   (did,)).fetchall()
         return render_template("dokument_ansicht.html", d=d, snap=snap, kunde=kunde, versand=versand,
-                               bezug=bezug, storno=storno)
+                               bezug=bezug, storno=storno, gutschriften=gutschriften,
+                               aufbewahren_bis=logik.aufbewahren_bis(d, einst),
+                               aenderungen=dbm.aenderungen_liste(con, "dokument", did))
     positionen = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (did,)).fetchall()
     kunden_liste = con.execute("SELECT * FROM kunden WHERE archiviert=0 OR id=? "
                                "ORDER BY COALESCE(NULLIF(firma,''), nachname), vorname", (d["kunde_id"],)).fetchall()
@@ -428,7 +448,24 @@ def dokument(did):
     return render_template("dokument_bearbeiten.html", d=d, kunde=kunde, positionen=positionen, konflikte=konflikte,
                            kunden=kunden_liste, artikel=artikel_liste, bausteine=bausteine, summen=summen,
                            leistungsarten=_leistungsarten(), titel=logik.titel(d["typ"]),
-                           vorschau=request.args.get("vorschau"))
+                           vorschau=request.args.get("vorschau"), pflicht=logik.pflichtangaben_pruefen(con, d, einst),
+                           aenderungen=dbm.aenderungen_liste(con, "dokument", did),
+                           bezug=con.execute("SELECT id, nummer FROM dokumente WHERE id=?", (d["bezug_id"],)).fetchone()
+                           if d["bezug_id"] else None)
+
+
+DOKUMENT_FELDNAMEN = {"kunde_id": "Kunde (ID)", "datum": "Datum", "leistungsdatum": "Leistungsdatum",
+                      "leistungsdatum_bis": "Leistungsdatum bis", "zahlungsziel_tage": "Zahlungsziel (Tage)",
+                      "faellig_am": "Fällig am", "betreff": "Betreff", "einleitung": "Einleitung",
+                      "schlusstext": "Schlusstext", "hinweise": "Hinweise", "steuer_modus": "Steuermodus",
+                      "summe_netto": "Summe netto (Cent)", "summe_steuer": "Steuer (Cent)",
+                      "summe_brutto": "Summe brutto (Cent)", "positionen": "Positionen"}
+
+
+def _positionen_text(positionen):
+    """Positionen als lesbarer Text für das Änderungsprotokoll."""
+    return "\n".join(f"{p['pos']}. {p['bezeichnung']} | {menge_text(p['menge'])} {p['einheit'] or ''} × "
+                     f"{euro(p['einzelpreis'])} | {p['steuersatz']:g} %" for p in positionen)
 
 
 def _entwurf_speichern(con, d, einst):
@@ -470,6 +507,12 @@ def _entwurf_speichern(con, d, einst):
             "leistungsart": art.strip(), "artikel_id": int(aid) if aid.isdigit() else None,
             "katalog": katalog_flag == "1", "typ": typ,
         })
+    if d["typ"] == "gutschrift":  # Gutschrift: Eingabe positiv, gespeichert als Minderung (negativ)
+        for p in positionen:
+            p["preis"], p["teilekosten"], p["katalog"] = -abs(p["preis"]), 0, False
+    alt_kopf = dict(d)
+    alt_pos = _positionen_text(con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos",
+                                           (d["id"],)).fetchall())
     konflikte = []
     with dbm.Transaktion(con):
         con.execute(
@@ -492,6 +535,12 @@ def _entwurf_speichern(con, d, einst):
                 (d["id"], i, p["bezeichnung"], p["beschreibung"], p["menge"], p["einheit"], p["preis"],
                  p["teilekosten"] or 0, p["steuersatz"], p["leistungsart"], p["artikel_id"]))
         logik.summen_speichern(con, d["id"])
+        neu_kopf = dict(con.execute("SELECT * FROM dokumente WHERE id=?", (d["id"],)).fetchone())
+        neu_pos = _positionen_text(con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos",
+                                               (d["id"],)).fetchall())
+        dbm.aenderungen_erfassen(con, "dokument", d["id"], {**alt_kopf, "positionen": alt_pos},
+                                 {**{f: neu_kopf[f] for f in DOKUMENT_FELDNAMEN if f in neu_kopf}, "positionen": neu_pos},
+                                 namen=DOKUMENT_FELDNAMEN)
     if konflikte:
         session["preis_konflikte"] = {"dokument_id": d["id"], "liste": konflikte}
 
@@ -536,8 +585,12 @@ def dokument_pdf(did):
         from io import BytesIO
         return send_file(BytesIO(pdf), mimetype="application/pdf", download_name=f"Entwurf_{did}.pdf",
                          as_attachment=herunterladen)
-    return send_file(Path(daten_dir()) / d["pdf_pfad"], mimetype="application/pdf",
-                     download_name=f"{d['nummer']}.pdf", as_attachment=herunterladen)
+    pfad = Path(daten_dir()) / d["pdf_pfad"]
+    import hashlib
+    if not pfad.is_file() or hashlib.sha256(pfad.read_bytes()).hexdigest() != d["pdf_sha256"]:
+        dbm.protokollieren("pdf_pruefsumme_fehler", "dokument", did, {"nummer": d["nummer"]})
+        return render_template("pdf_fehler.html", d=d, fehlt=not pfad.is_file()), 409
+    return send_file(pfad, mimetype="application/pdf", download_name=f"{d['nummer']}.pdf", as_attachment=herunterladen)
 
 
 @bp.route("/dokumente/<int:did>/drucken")
@@ -571,6 +624,17 @@ def dokument_stornieren(did):
     neu_id, nummer = logik.stornieren(dbm.get_db(), did, daten_dir(), _f("grund"))
     flash(f"Stornorechnung {nummer} wurde erstellt.", "ok")
     return redirect(url_for("main.dokument", did=neu_id))
+
+
+@bp.route("/dokumente/<int:did>/gutschrift", methods=["POST"])
+def dokument_gutschrift(did):
+    con = dbm.get_db()
+    _dokument_laden(did)
+    with dbm.Transaktion(con):
+        neu = logik.gutschrift_entwurf(con, did)
+    flash("Gutschrift-Entwurf angelegt. Positionen/Beträge anpassen (Beträge positiv eingeben) und festschreiben.",
+          "ok")
+    return redirect(url_for("main.dokument", did=neu))
 
 
 @bp.route("/dokumente/<int:did>/kopieren", methods=["POST"])
@@ -636,7 +700,8 @@ EINSTELLUNGS_BEREICHE = {
               "steuernummer", "ust_idnr", "bank_name", "kontoinhaber", "iban", "bic"],
     "rechnung": ["steuer_modus", "regel_steuersatz", "kleinunternehmer_hinweis", "zahlungsziel_privat",
                  "zahlungsziel_firma", "zahlungsarten_text", "kva_gueltig_tage", "anzahlung_prozent", "mahngebuehr_cent", "mahnstufen",
-                 "nummern_format", "praefix_rechnung", "praefix_angebot", "praefix_kunde", "leistungsarten"],
+                 "nummern_format", "praefix_rechnung", "praefix_gutschrift", "praefix_angebot", "praefix_kunde",
+                 "leistungsarten", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre"],
     "layout": ["farbe_primaer", "farbe_sekundaer", "schrift", "schriftgroesse", "logo_breite_mm", "logo_position",
                "kopfzeile_text", "fusszeile_text", "faltmarken", "girocode"],
     "email": ["smtp_host", "smtp_port", "smtp_sicherheit", "smtp_benutzer", "absender_name", "absender_email",
@@ -655,7 +720,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {"historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
+GANZZAHL = {"aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
@@ -710,6 +775,12 @@ def einstellungen():
         if bereich == "anfragen" and neu["anfrage_schwelle_spam"] <= neu["anfrage_schwelle_unsicher"]:
             raise EingabeFehler("Die Spam-Schwelle muss größer sein als die Schwelle für „unsicher“.")
         if bereich == "rechnung":
+            if neu["aufbewahrung_belege_jahre"] < 8 or neu["aufbewahrung_briefe_jahre"] < 6:
+                raise EingabeFehler("Die Aufbewahrungsfristen dürfen die gesetzlichen Mindestfristen nicht unterschreiten "
+                                    "(Rechnungen/Buchungsbelege 8 Jahre, Geschäftsbriefe 6 Jahre).")
+            if neu["praefix_gutschrift"].strip().upper() in (neu["praefix_rechnung"].strip().upper(),
+                                                           neu["praefix_angebot"].strip().upper()):
+                raise EingabeFehler("Gutschriften brauchen einen eigenen Nummernkreis – bitte ein anderes Präfix wählen.")
             if neu["steuer_modus"] not in ("kleinunternehmer", "regel"):
                 neu["steuer_modus"] = "kleinunternehmer"
             try:
@@ -937,6 +1008,19 @@ def protokoll():
 def pruefung():
     ergebnis = logik.integritaet_pruefen(dbm.get_db(), daten_dir())
     return render_template("pruefung.html", e=ergebnis)
+
+
+@bp.route("/verfahrensdokumentation")
+def verfahrensdokumentation():
+    from . import VERSION_NUMMER
+    from . import verfahrensdoku as vd
+    abschnitte = vd.inhalt(dbm.get_db(), daten_dir(), VERSION_NUMMER)
+    if request.args.get("pdf"):
+        from io import BytesIO
+        return send_file(BytesIO(vd.pdf(abschnitte, dbm.einstellung("firma_name") or "")), mimetype="application/pdf",
+                         download_name=f"Verfahrensdokumentation_{date.today().isoformat()}.pdf",
+                         as_attachment=request.args.get("download") == "1")
+    return render_template("verfahrensdoku.html", abschnitte=abschnitte, ergaenzen=vd.ERGAENZEN, markiert=vd.markiert)
 
 
 @bp.app_template_filter("kname")

@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS kunden (
     interessent      INTEGER NOT NULL DEFAULT 0,
     quelle           TEXT,
     archiviert       INTEGER NOT NULL DEFAULT 0,
+    anonymisiert_am  TEXT,            -- gesetzt, wenn der Kunde auf Wunsch gelöscht, wegen Aufbewahrungspflicht aber anonymisiert wurde
     erstellt_am      TEXT NOT NULL,
     geaendert_am     TEXT NOT NULL
 );
@@ -97,6 +98,7 @@ CREATE TABLE IF NOT EXISTS dokumente (
     versendet_am     TEXT,
     bezahlt_betrag   INTEGER NOT NULL DEFAULT 0,
     kva_status       TEXT,            -- nur Kostenvoranschlag: offen / angenommen / abgelehnt
+    snapshot_sha256  TEXT,            -- Prüfsumme der beim Festschreiben archivierten Rechnungsdaten (JSON)
     erstellt_am      TEXT NOT NULL,
     geaendert_am     TEXT NOT NULL
 );
@@ -152,7 +154,8 @@ CREATE INDEX IF NOT EXISTS ix_pos_dok ON positionen(dokument_id);
 -- Schutzregeln (Trigger): festgeschriebene Dokumente sind unveränderbar
 -- ------------------------------------------------------------------
 
-CREATE TRIGGER IF NOT EXISTS dok_schutz_update
+DROP TRIGGER IF EXISTS dok_schutz_update;
+CREATE TRIGGER dok_schutz_update
 BEFORE UPDATE ON dokumente
 WHEN OLD.status <> 'entwurf' AND (
        NEW.status = 'entwurf'
@@ -176,6 +179,8 @@ WHEN OLD.status <> 'entwurf' AND (
     OR NEW.pdf_pfad IS NOT OLD.pdf_pfad
     OR NEW.pdf_sha256 IS NOT OLD.pdf_sha256
     OR NEW.festgeschrieben_am IS NOT OLD.festgeschrieben_am
+    OR NEW.snapshot_sha256 IS NOT OLD.snapshot_sha256
+    OR NEW.zahlungsziel_tage IS NOT OLD.zahlungsziel_tage
     OR (OLD.storniert_durch IS NOT NULL AND NEW.storniert_durch IS NOT OLD.storniert_durch)
 )
 BEGIN
@@ -613,3 +618,30 @@ CREATE TABLE IF NOT EXISTS imap_ordner_status (
     letzte_uid      INTEGER NOT NULL DEFAULT 0,
     aktualisiert_am TEXT
 );
+
+-- ====================================================================== Änderungsprotokoll (feldgenau, GoBD)
+-- Wer hat wann welches Feld von welchem alten auf welchen neuen Wert geändert – nur anhängen.
+CREATE TABLE IF NOT EXISTS feldaenderungen (
+    id          INTEGER PRIMARY KEY,
+    zeitpunkt   TEXT NOT NULL,                      -- Europe/Berlin mit Sekunden
+    benutzer    TEXT,
+    objekt      TEXT NOT NULL,                      -- dokument / kunde / artikel
+    objekt_id   INTEGER NOT NULL,
+    aktion      TEXT NOT NULL,                      -- angelegt / geaendert / festgeschrieben / storniert / geloescht …
+    feld        TEXT,
+    alt         TEXT,
+    neu         TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_feldaenderungen_objekt ON feldaenderungen(objekt, objekt_id);
+
+CREATE TRIGGER IF NOT EXISTS feldaenderungen_schutz_update
+BEFORE UPDATE ON feldaenderungen
+BEGIN
+    SELECT RAISE(ABORT, 'Das Änderungsprotokoll kann nicht geändert werden.');
+END;
+
+CREATE TRIGGER IF NOT EXISTS feldaenderungen_schutz_delete
+BEFORE DELETE ON feldaenderungen
+BEGIN
+    SELECT RAISE(ABORT, 'Das Änderungsprotokoll kann nicht gelöscht werden.');
+END;

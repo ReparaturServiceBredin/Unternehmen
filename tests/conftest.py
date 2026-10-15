@@ -6,9 +6,18 @@ from rsb import create_app
 from rsb import db as dbm
 
 
+VOLLSTAENDIGE_FIRMA = {"inhaber": "Dennis Bredin", "firma_name": "Reparatur Service Bredin", "strasse": "Hauptstraße 1",
+                       "plz": "74219", "ort": "Möckmühl", "steuernummer": "65001/12345"}
+
+
 @pytest.fixture
 def app(tmp_path):
-    return create_app(tmp_path / "Daten", testing=True)
+    app = create_app(tmp_path / "Daten", testing=True)
+    con = dbm.verbinden(app.config["DB_PFAD"])
+    with dbm.Transaktion(con):  # Pflichtangaben für Rechnungen (§ 14 UStG) – wie bei einer eingerichteten Firma
+        dbm.einstellungen_speichern(VOLLSTAENDIGE_FIRMA, con)
+    con.close()
+    return app
 
 
 @pytest.fixture

@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% from "_status.html" import csrf %}
-{% block titel %}{{ a.name if a else 'Neue Leistung' }}{% endblock %}
+{% from "_aenderungen.html" import aenderungen_karte %}
+{% block titel %}{{ a.name if a else 'Neue Leistung' }}{% if a %}{{ aenderungen_karte(aenderungen) }}{% endif %}
+{% endblock %}
 {% block inhalt %}
 <h1>{{ a.name if a else 'Neue Leistung / neuer Artikel' }}</h1>
 <form method="post" class="karte">

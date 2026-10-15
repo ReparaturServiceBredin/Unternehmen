@@ -125,6 +125,8 @@ def kva_status_setzen(con, kva_id, status):
     if not d:
         raise EingabeFehler("Kostenvoranschlag nicht gefunden.")
     con.execute("UPDATE dokumente SET kva_status=? WHERE id=?", (status, kva_id))
+    dbm.aenderungen_erfassen(con, "dokument", kva_id, {"kva_status": d["kva_status"] or "offen"}, {"kva_status": status},
+                             namen={"kva_status": "KVA-Status"})
     dbm.protokollieren("kva_status", "dokument", kva_id, {"status": status}, con=con)
     for a in con.execute("SELECT id FROM auftraege WHERE kva_id=?", (kva_id,)).fetchall():
         verlauf(con, a["id"], f"KVA {status}", _kva_text(d))
