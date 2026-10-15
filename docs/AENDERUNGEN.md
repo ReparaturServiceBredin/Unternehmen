@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.9.1 | 15.10.2026 | IMAP-Abruf auch mit STARTTLS (Port 143), Verbindungstest |
 | 0.9.0 | 15.10.2026 | Leihgeräte: Ausgabe, Rückgabe, Schadensfall, Abrechnung |
 | 0.8.0 | 15.10.2026 | Auftrags-Detailansicht: KVA verknüpfen, Fotodokumentation, Verlauf |
 | 0.7.0 | 15.10.2026 | Gesendet-Ordner per IMAP, Katalog-Übernahme, ausführliche Beschreibungen |
@@ -27,6 +28,35 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.9.1 – 15.10.2026
+Anfragen-Abruf funktioniert jetzt auch, wenn Port 993 gesperrt ist.
+
+### Neu
+- **Verschlüsselung für den Anfragen-Abruf (IMAP):** In *Einstellungen → Anfragen* wählen Sie jetzt
+  „SSL/TLS (meist Port 993)“ oder „STARTTLS (meist Port 143)“, wie beim E-Mail-Versand. Beim Wechsel wird der
+  passende Port vorgeschlagen, solange noch der Standardport eingetragen ist.
+- **„Verbindung testen“** im IMAP-Bereich der Anfragen: prüft Verbindung, Anmeldung und ob die Ordner „INBOX“ und
+  „Anfragen erledigt“ existieren, auch vor dem Speichern.
+
+### Geändert
+- Kontaktformular-Abruf und Ablage im Gesendet-Ordner nutzen denselben, gemeinsamen Verbindungsaufbau.
+- STARTTLS: Anmeldung erst nach erfolgreicher Verschlüsselung. Bietet der Server kein STARTTLS an oder schlägt es
+  fehl, bricht das Programm mit klarer Meldung ab – **nie Anmeldung ohne Verschlüsselung**.
+- Verständliche deutsche Fehlermeldungen, z. B. bei „WRONG_VERSION_NUMBER“: *„Port und Verschlüsselung passen nicht
+  zusammen (993 = SSL, 143 = STARTTLS).“*, außerdem bei unbekanntem Server, gesperrtem Port, Zeitüberschreitung,
+  Zertifikatsproblemen und falschem Passwort.
+- Ordnernamen mit Umlauten werden beim Abruf korrekt kodiert.
+
+### Fehlerbehebung
+- Port 143 führte zu „[SSL: WRONG_VERSION_NUMBER] wrong version number“, weil der Abruf immer direkt SSL verwendete.
+
+### Technik
+- Bestehende Einstellungen werden beim Start einmalig umgestellt: Port 993 → SSL/TLS, sonst STARTTLS.
+- Neues Modul `rsb/imap_verbindung.py`. 102 automatische Tests, darunter echte Verbindungstests gegen einen lokalen
+  Test-Server (SSL auf einem Klartext-Port, Server ohne STARTTLS: es wird kein Passwort gesendet).
 
 ---
 

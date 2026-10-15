@@ -451,27 +451,74 @@ class AbrufFehler(Exception):
 
 
 def _imap_ordnername(name):
-    return '"' + name.replace('"', '') + '"'
+    from .imap_ablage import _quote, utf7_kodieren
+    return _quote(utf7_kodieren(name))
 
 
-def abrufen(con, einst, imap_klasse=imaplib.IMAP4_SSL):
-    """Holt Formular-E-Mails aus dem Postfach. Gibt eine Zusammenfassung zurück."""
-    host = (einst.get("imap_host") or "").strip()
-    benutzer = (einst.get("imap_benutzer") or einst.get("smtp_benutzer") or "").strip()
-    passwort = entschluesseln(einst.get("imap_passwort_enc")) or entschluesseln(einst.get("smtp_passwort_enc"))
-    if not host or not benutzer or not passwort:
+def imap_zugang(einst, ueberschreiben=None):
+    """IMAP-Zugang für den Abruf (Formularwerte dürfen gespeicherte Werte überschreiben, z. B. beim Test)."""
+    w = {**einst, **{k: v for k, v in (ueberschreiben or {}).items() if v not in (None, "")}}
+    passwort = w.get("imap_passwort_klartext") or entschluesseln(w.get("imap_passwort_enc")) \
+        or entschluesseln(w.get("smtp_passwort_enc"))
+    sicherheit = w.get("imap_sicherheit")
+    if sicherheit not in ("ssl", "starttls"):
+        from .imap_verbindung import sicherheit_aus_port
+        sicherheit = sicherheit_aus_port(w.get("imap_port"))
+    return {"host": (w.get("imap_host") or "").strip(), "port": w.get("imap_port") or 993, "sicherheit": sicherheit,
+            "benutzer": (w.get("imap_benutzer") or w.get("smtp_benutzer") or "").strip(), "passwort": passwort or ""}
+
+
+def imap_anmelden(zugang, imap_klasse=None, imap_plain=None):
+    from .imap_verbindung import ImapFehler, verbinden
+    if not zugang["host"] or not zugang["benutzer"] or not zugang["passwort"]:
         raise AbrufFehler("Bitte unter Einstellungen → Anfragen den Posteingang (IMAP) einrichten.")
+    try:
+        return verbinden(zugang["host"], zugang["port"], zugang["sicherheit"], zugang["benutzer"], zugang["passwort"],
+                         imap_ssl=imap_klasse, imap_plain=imap_plain)
+    except ImapFehler as e:
+        raise AbrufFehler(str(e))
+
+
+def verbindung_testen(einst, ueberschreiben=None, imap_klasse=None, imap_plain=None):
+    """Prüft Verbindung, Anmeldung und die Ordner. Gibt (ok, [Zeilen]) zurück."""
+    zugang = imap_zugang(einst, ueberschreiben)
+    w = {**einst, **(ueberschreiben or {})}
+    from .imap_verbindung import IMAP_FEHLER, SICHERHEIT
+    imap = imap_anmelden(zugang, imap_klasse, imap_plain)
+    zeilen = [f"✓ Verbindung zu {zugang['host']}:{zugang['port']} mit {SICHERHEIT[zugang['sicherheit']]} "
+              f"und Anmeldung als {zugang['benutzer']} erfolgreich."]
+    ok = True
+    try:
+        for name, zweck in [((w.get("imap_ordner") or "INBOX").strip(), "Anfragen-Ordner"),
+                            ((w.get("imap_zielordner") or "Anfragen erledigt").strip(), "Ordner für erledigte")]:
+            try:
+                typ, _ = imap.select(_imap_ordnername(name), readonly=True)
+            except IMAP_FEHLER:
+                typ = "NO"
+            if typ == "OK":
+                zeilen.append(f"✓ {zweck} „{name}“ ist vorhanden.")
+            elif zweck == "Ordner für erledigte" and w.get("imap_verschieben"):
+                zeilen.append(f"• {zweck} „{name}“ gibt es noch nicht – er wird beim ersten Verschieben "
+                              "automatisch angelegt.")
+            else:
+                ok = False
+                zeilen.append(f"✗ {zweck} „{name}“ wurde nicht gefunden. Bitte den Namen prüfen.")
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+    return ok, zeilen
+
+
+def abrufen(con, einst, imap_klasse=None, imap_plain=None):
+    """Holt Formular-E-Mails aus dem Postfach. Gibt eine Zusammenfassung zurück."""
+    zugang = imap_zugang(einst)
+    host = zugang["host"]
     erkennung = (einst.get("anfrage_erkennung") or "").strip().lower()
     ergebnis = {"gelesen": 0, "neu": 0, "echt": 0, "unsicher": 0, "spam": 0, "verschoben": 0}
+    imap = imap_anmelden(zugang, imap_klasse, imap_plain)
     try:
-        imap = imap_klasse(host, int(einst.get("imap_port") or 993), timeout=20)
-    except OSError as e:
-        raise AbrufFehler(f"Verbindung zu {host} fehlgeschlagen: {e}")
-    try:
-        try:
-            imap.login(benutzer, passwort)
-        except imaplib.IMAP4.error:
-            raise AbrufFehler("Anmeldung am Postfach fehlgeschlagen. Bitte Benutzername und Passwort prüfen.")
         typ, _ = imap.select(_imap_ordnername(einst.get("imap_ordner") or "INBOX"))
         if typ != "OK":
             raise AbrufFehler(f"Ordner „{einst.get('imap_ordner')}“ nicht gefunden.")

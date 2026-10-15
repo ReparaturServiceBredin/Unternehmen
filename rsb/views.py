@@ -618,7 +618,7 @@ EINSTELLUNGS_BEREICHE = {
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
     "leihgeraete": ["leihbedingungen"],
-    "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_benutzer",
+    "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_sicherheit", "imap_benutzer",
                  "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
@@ -663,6 +663,8 @@ def einstellungen():
                 raise EingabeFehler("Bitte einen gültigen SMTP-Port angeben (587 für STARTTLS, 465 für SSL/TLS).")
             if neu["gesendet_aktiv"] and not neu["gesendet_imap_host"]:
                 raise EingabeFehler("Für die Ablage im Gesendet-Ordner bitte einen IMAP-Server angeben.")
+        if bereich == "anfragen" and neu["imap_sicherheit"] not in ("ssl", "starttls"):
+            neu["imap_sicherheit"] = "ssl"
         if bereich == "anfragen" and request.form.get("imap_passwort"):
             neu["imap_passwort_enc"] = verschluesseln(request.form["imap_passwort"])
         if bereich == "vertraege" and neu["abo_modus"] not in ("entwurf", "automatisch"):
@@ -2154,6 +2156,22 @@ def imap_ordner_abrufen():
     return jsonify(ok=True, ordner=ordner,
                    meldung=f"{len(ordner)} Ordner gefunden." + (" Der Gesendet-Ordner ist vorausgewählt."
                                                                  if any(o["gesendet"] for o in ordner) else ""))
+
+
+@bp.route("/einstellungen/anfragen/imap-test", methods=["POST"])
+def anfragen_imap_testen():
+    """„Verbindung testen“ im Bereich Anfragen – mit den (evtl. noch nicht gespeicherten) Formularwerten."""
+    f = request.form
+    werte = {"imap_host": f.get("imap_host", "").strip(), "imap_port": f.get("imap_port", "").strip(),
+             "imap_sicherheit": f.get("imap_sicherheit", ""), "imap_benutzer": f.get("imap_benutzer", "").strip(),
+             "imap_passwort_klartext": f.get("imap_passwort", ""), "imap_ordner": f.get("imap_ordner", "").strip(),
+             "imap_zielordner": f.get("imap_zielordner", "").strip(),
+             "imap_verschieben": bool(f.get("imap_verschieben"))}
+    try:
+        ok, zeilen = anf.verbindung_testen(dbm.einstellungen(), werte)
+    except anf.AbrufFehler as e:
+        return jsonify(ok=False, meldung=str(e))
+    return jsonify(ok=ok, meldung="\n".join(zeilen))
 
 
 @bp.route("/einstellungen/imap-test", methods=["POST"])

@@ -108,6 +108,7 @@ STANDARD_EINSTELLUNGEN = {
     "anfragen_intervall_min": 5,
     "imap_host": "imap.ionos.de",
     "imap_port": 993,
+    "imap_sicherheit": "ssl",               # ssl (Port 993) / starttls (Port 143)
     "imap_benutzer": "",
     "imap_passwort_enc": "",
     "imap_ordner": "INBOX",
@@ -193,6 +194,12 @@ def initialisieren(pfad):
     con.executescript(SCHEMA.read_text(encoding="utf-8"))
     _migrieren(con, pfad)
     vorhanden = {r["schluessel"] for r in con.execute("SELECT schluessel FROM einstellungen")}
+    if "imap_sicherheit" not in vorhanden and "imap_port" in vorhanden:
+        # Umstellung (0.9.1): bisher immer SSL – vorhandener Port 993 → SSL/TLS, sonst STARTTLS
+        from .imap_verbindung import sicherheit_aus_port
+        port = json.loads(con.execute("SELECT wert FROM einstellungen WHERE schluessel='imap_port'").fetchone()[0])
+        con.execute("INSERT INTO einstellungen VALUES ('imap_sicherheit', ?)", (json.dumps(sicherheit_aus_port(port)),))
+        vorhanden.add("imap_sicherheit")
     for k, v in STANDARD_EINSTELLUNGEN.items():
         if k not in vorhanden:
             con.execute("INSERT INTO einstellungen VALUES (?, ?)", (k, json.dumps(v)))

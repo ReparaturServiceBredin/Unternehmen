@@ -8,8 +8,6 @@ Wichtig: Schlägt die Ablage fehl, gilt die Mail trotzdem als gesendet – sie w
 import base64
 import imaplib
 import re
-import socket
-import ssl
 import time
 
 from .sicherheit import entschluesseln
@@ -81,7 +79,8 @@ def konfiguration(einst, ueberschreiben=None):
     return {
         "host": (w.get("gesendet_imap_host") or "").strip(),
         "port": port,
-        "sicherheit": w.get("gesendet_imap_sicherheit") or "ssl",
+        "sicherheit": w.get("gesendet_imap_sicherheit") if w.get("gesendet_imap_sicherheit") in ("ssl", "starttls")
+        else "ssl",
         "benutzer": benutzer.strip(),
         "passwort": passwort or "",
         "ordner": (w.get("gesendet_ordner") or "").strip(),
@@ -101,35 +100,14 @@ def _pruefen(cfg):
 
 def verbinden(cfg, imap_ssl=None, imap_plain=None):
     """Baut die Verbindung auf und meldet sich an. Fehler werden in verständliche Meldungen übersetzt."""
+    from .imap_verbindung import ImapFehler
+    from .imap_verbindung import verbinden as imap_verbinden
     _pruefen(cfg)
-    imap_ssl = imap_ssl or imaplib.IMAP4_SSL
-    imap_plain = imap_plain or imaplib.IMAP4
-    ziel = f"{cfg['host']}:{cfg['port']}"
     try:
-        if cfg["sicherheit"] == "starttls":
-            imap = imap_plain(cfg["host"], cfg["port"], timeout=TIMEOUT)
-            imap.starttls(ssl_context=ssl.create_default_context())
-        else:
-            imap = imap_ssl(cfg["host"], cfg["port"], ssl_context=ssl.create_default_context(), timeout=TIMEOUT)
-    except socket.gaierror:
-        raise AblageFehler(f"IMAP-Server „{cfg['host']}“ wurde nicht gefunden. Bitte den Servernamen prüfen.")
-    except (ConnectionRefusedError, TimeoutError, socket.timeout):
-        raise AblageFehler(f"IMAP-Server {ziel} ist nicht erreichbar (Verbindung abgelehnt oder Zeitüberschreitung). "
-                           "Bitte Port und Verschlüsselung prüfen.")
-    except ssl.SSLError as e:
-        raise AblageFehler(f"Verschlüsselte Verbindung zu {ziel} fehlgeschlagen ({e.reason or e}). "
-                           "Passen Port und Verschlüsselung zusammen? (993 = SSL/TLS, 143 = STARTTLS)")
-    except (OSError, imaplib.IMAP4.error) as e:
-        raise AblageFehler(f"Verbindung zum IMAP-Server {ziel} fehlgeschlagen: {e}")
-    try:
-        imap.login(cfg["benutzer"], cfg["passwort"])
-    except imaplib.IMAP4.error:
-        _abmelden(imap)
-        raise AblageFehler("Anmeldung am IMAP-Server fehlgeschlagen – Benutzername oder Passwort ist falsch.")
-    except (OSError, socket.timeout) as e:
-        _abmelden(imap)
-        raise AblageFehler(f"Verbindung während der Anmeldung abgebrochen: {e}")
-    return imap
+        return imap_verbinden(cfg["host"], cfg["port"], cfg["sicherheit"], cfg["benutzer"], cfg["passwort"],
+                              imap_ssl=imap_ssl, imap_plain=imap_plain)
+    except ImapFehler as e:
+        raise AblageFehler(str(e))
 
 
 def _abmelden(imap):

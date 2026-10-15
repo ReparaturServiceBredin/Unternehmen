@@ -120,7 +120,7 @@ class FalschesImap:
     verschoben = []
     angemeldet = None
 
-    def __init__(self, host, port, timeout=None):
+    def __init__(self, host, port, ssl_context=None, timeout=None):
         self.host = host
 
     def login(self, user, pw):

@@ -177,11 +177,17 @@ Neue Anfragen sehen Sie in der Navigation an der roten Zahl neben **Anfragen** u
 
 | Feld | Eintrag |
 |---|---|
-| IMAP-Server | `imap.ionos.de`, Port `993` |
+| IMAP-Server | `imap.ionos.de` |
+| Port / Verschlüsselung | `993` mit **SSL/TLS** – oder, falls Port 993 in Ihrem Netz gesperrt ist, `143` mit **STARTTLS** |
 | Benutzername / Passwort | leer lassen, dann werden die Zugangsdaten vom E-Mail-Versand verwendet |
 | Ordner | `INBOX` (Posteingang) |
 | Erledigte verschieben nach | `Anfragen erledigt` (der Ordner wird automatisch angelegt) |
 | Formular-E-Mails erkennen am Text | `A new form has been submitted` |
+
+Mit **„Verbindung testen“** prüfen Sie sofort (auch vor dem Speichern) Verbindung, Anmeldung und ob die Ordner
+„INBOX“ und „Anfragen erledigt“ vorhanden sind. Beim Wechsel der Verschlüsselung schlägt das Programm den passenden Port
+vor. Beide Varianten sind verschlüsselt: Bei STARTTLS meldet sich das Programm erst an, nachdem die Verbindung
+verschlüsselt ist. Klappt das nicht, bricht es ab und sendet das Passwort nie unverschlüsselt.
 
 Dann den Haken **„Postfach automatisch prüfen“** setzen und einmal **„Postfach jetzt prüfen“** klicken.
 Andere E-Mails im Postfach werden **nicht** angefasst.

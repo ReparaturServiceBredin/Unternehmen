@@ -109,7 +109,7 @@
     {{ haken('gesendet_aktiv', 'Gesendete Mails im Postfach ablegen') }}
     {{ feld('gesendet_imap_host', 'IMAP-Server', span='s6') }}{{ feld('gesendet_imap_port', 'Port', 'number', 's2') }}
     <div class="s4"><label>Verschlüsselung</label><select name="gesendet_imap_sicherheit" id="imapsicherheit">
-      {% for k, t in [('ssl','SSL/TLS (Port 993, empfohlen)'),('starttls','STARTTLS (Port 143)')] %}<option value="{{ k }}" {{ 'selected' if einst.gesendet_imap_sicherheit == k }}>{{ t }}</option>{% endfor %}</select></div>
+      {% for k, t in [('ssl','SSL/TLS (meist Port 993)'),('starttls','STARTTLS (meist Port 143)')] %}<option value="{{ k }}" {{ 'selected' if einst.gesendet_imap_sicherheit == k }}>{{ t }}</option>{% endfor %}</select></div>
     <div class="s12"><label class="check"><input type="checkbox" name="gesendet_gleiche_zugangsdaten" id="gleichezugang" {{ 'checked' if einst.gesendet_gleiche_zugangsdaten }}> Gleiche Zugangsdaten wie SMTP verwenden</label></div>
     <div class="imap-eigen"><label>IMAP-Benutzername</label><input type="text" name="gesendet_imap_benutzer" value="{{ einst.gesendet_imap_benutzer or '' }}"></div>
     <div class="imap-eigen"><label>IMAP-Passwort</label><input type="password" name="gesendet_imap_passwort" autocomplete="new-password" placeholder="{{ '•••••••• (gespeichert – nur ausfüllen zum Ändern)' if gesendet_passwort_gesetzt else '' }}">
@@ -134,17 +134,22 @@
 {% elif bereich == 'anfragen' %}
 <form method="post" class="karte">{{ csrf() }}
   <h2>Posteingang (IMAP)</h2>
-  <p class="klein">Das Tool holt Formular-E-Mails aus diesem Postfach ab. IONOS: <code>imap.ionos.de</code>, Port 993 (SSL). Gmail: <code>imap.gmail.com</code>, Port 993, nur mit App-Passwort. Leeres Benutzer-/Passwortfeld = gleiche Zugangsdaten wie beim E-Mail-Versand.</p>
+  <p class="klein">Das Tool holt Formular-E-Mails aus diesem Postfach ab. IONOS: <code>imap.ionos.de</code>, Port 993 mit SSL/TLS – ist Port 993 in Ihrem Netz gesperrt: Port 143 mit STARTTLS (ebenfalls verschlüsselt). Gmail: <code>imap.gmail.com</code>, Port 993, nur mit App-Passwort. Leeres Benutzer-/Passwortfeld = gleiche Zugangsdaten wie beim E-Mail-Versand.</p>
   <div class="felder">
     {{ haken('anfragen_aktiv', 'Postfach automatisch prüfen (solange das Programm läuft)') }}
     {{ feld('anfragen_intervall_min', 'Alle … Minuten', 'number', 's3') }}
-    {{ feld('imap_host', 'IMAP-Server', span='s6') }}{{ feld('imap_port', 'Port', 'number', 's3') }}
+    {{ feld('imap_host', 'IMAP-Server', span='s4') }}{{ feld('imap_port', 'Port', 'number', 's2') }}
+    <div class="s3"><label>Verschlüsselung</label><select name="imap_sicherheit" id="abrufsicherheit">
+      {% for k, t in [('ssl','SSL/TLS (meist Port 993)'),('starttls','STARTTLS (meist Port 143)')] %}<option value="{{ k }}" {{ 'selected' if (einst.imap_sicherheit or 'ssl') == k }}>{{ t }}</option>{% endfor %}</select></div>
     {{ feld('imap_benutzer', 'Benutzername (leer = wie E-Mail-Versand)') }}
     <div><label>Passwort (leer = wie E-Mail-Versand)</label><input type="password" name="imap_passwort" autocomplete="new-password" placeholder="{{ '•••••••• (gespeichert)' if imap_passwort_gesetzt else '' }}"></div>
     {{ feld('imap_ordner', 'Ordner mit den Anfragen', span='s4') }}
     {{ feld('imap_zielordner', 'Erledigte verschieben nach', span='s4') }}
     <div class="s4" style="align-self:end">{{ haken('imap_verschieben', 'verarbeitete Formular-E-Mails verschieben') }}</div>
     {{ feld('anfrage_erkennung', 'Formular-E-Mails erkennen am Text', span='s12', hilfe='Nur E-Mails, die diesen Text enthalten, werden verarbeitet. Alle anderen E-Mails bleiben unberührt.') }}
+    <div class="s12"><button type="button" class="zweit" id="abruftestknopf">Verbindung testen</button>
+      <span class="klein">prüft Verbindung, Anmeldung und die Ordner – auch vor dem Speichern</span></div>
+    <div class="s12"><div id="abrufmeldung" class="meldung" style="display:none;margin:0;white-space:pre-line"></div></div>
   </div>
   <br><h2>Prüfung &amp; Kunden</h2>
   <div class="felder">
@@ -268,6 +273,29 @@
 {% endif %}
 {% endblock %}
 {% block skript %}
+{% if bereich == 'anfragen' %}
+<script>
+(function () {
+  const sel = document.getElementById('abrufsicherheit'), form = sel.closest('form');
+  const port = form.querySelector('[name=imap_port]'), meldung = document.getElementById('abrufmeldung');
+  sel.addEventListener('change', () => {  // Port nur vorschlagen, wenn er noch auf dem Standardwert steht
+    if (sel.value === 'starttls' && ['', '993'].includes(port.value)) port.value = '143';
+    if (sel.value === 'ssl' && ['', '143'].includes(port.value)) port.value = '993';
+  });
+  document.getElementById('abruftestknopf').onclick = async e => {
+    const knopf = e.target, alt = knopf.textContent;
+    knopf.disabled = true; knopf.textContent = 'Bitte warten … (bis zu 20 Sekunden)';
+    let j;
+    try {
+      const r = await fetch('{{ url_for('main.anfragen_imap_testen') }}', { method: 'POST', body: new FormData(form), headers: { 'X-Requested-With': 'fetch' } });
+      j = await r.json();
+    } catch (err) { j = { ok: false, meldung: 'Keine Antwort vom Programm: ' + err }; }
+    finally { knopf.disabled = false; knopf.textContent = alt; }
+    meldung.style.display = ''; meldung.className = 'meldung ' + (j.ok ? 'ok' : 'fehler'); meldung.textContent = j.meldung;
+  };
+})();
+</script>
+{% endif %}
 {% if bereich == 'email' %}
 <script>
 (function () {
@@ -279,8 +307,8 @@
   gleich.addEventListener('change', umschalten); umschalten();
   document.getElementById('imapsicherheit').addEventListener('change', e => {
     const port = form.querySelector('[name=gesendet_imap_port]');
-    if (e.target.value === 'starttls' && port.value === '993') port.value = '143';
-    if (e.target.value === 'ssl' && port.value === '143') port.value = '993';
+    if (e.target.value === 'starttls' && ['', '993'].includes(port.value)) port.value = '143';
+    if (e.target.value === 'ssl' && ['', '143'].includes(port.value)) port.value = '993';
   });
   function zeige(ok, text) { meldung.style.display = ''; meldung.className = 'meldung ' + (ok ? 'ok' : 'fehler'); meldung.textContent = text; }
   async function anfrage(url, knopf) {
