@@ -16,6 +16,7 @@
     <div class="gruppe">Verkauf</div>
     <a href="{{ url_for('main.anfragen_liste') }}" class="{{ 'aktiv' if ep.startswith('main.anfrage') }}">Anfragen{% if offene_anfragen %} <span class="zaehler">{{ offene_anfragen }}</span>{% endif %}</a>
     <a href="{{ url_for('main.auftraege') }}" class="{{ 'aktiv' if ep.startswith('main.auftr') }}">Reparaturaufträge</a>
+    <a href="{{ url_for('main.benachrichtigungen') }}" class="{{ 'aktiv' if ep.startswith('main.benachrichtigung') }}">Benachrichtigungen{% if benachrichtigungen_offen %} <span class="zaehler" title="warten auf Freigabe">{{ benachrichtigungen_offen }}</span>{% endif %}</a>
     <a href="{{ url_for('main.leihgeraete') }}" class="{{ 'aktiv' if ep.startswith('main.leih') }}">Leihgeräte{% if leihen_ueberfaellig %} <span class="zaehler" title="überfällige Rückgaben">{{ leihen_ueberfaellig }}</span>{% endif %}</a>
     <a href="{{ url_for('main.kunden') }}" class="{{ 'aktiv' if ep.startswith('main.kunde') }}">Kunden</a>
     <a href="{{ url_for('main.vertraege_liste') }}" class="{{ 'aktiv' if ep.startswith('main.vertr') }}">Verträge &amp; Lizenzen</a>

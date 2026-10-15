@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.14.0 | 15.10.2026 | Kundenbenachrichtigung, Spalte „Wartet auf Teil“, Abhol-Erinnerungen |
 | 0.13.0 | 15.10.2026 | Annahme- und Abholschein mit digitaler Unterschrift, Handy per QR-Code |
 | 0.12.0 | 15.10.2026 | Zahlungen, offene Posten, Bankabgleich, Mahnwesen |
 | 0.11.0 | 15.10.2026 | GoBD-Grundlagen: Gutschrift, Pflichtangaben, Änderungsprotokoll, Aufbewahrung |
@@ -34,6 +35,40 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.14.0 – 15.10.2026
+Kundenbenachrichtigung (Ausbaustufe 4 von 10).
+
+### Neu
+
+**Nachricht an den Kunden bei Statuswechseln:** Das Programm schlägt bei diesen Ereignissen eine E-Mail vor:
+- Auftrag angenommen
+- Kostenvoranschlag festgeschrieben (entfällt automatisch, wenn Sie den KVA direkt per E-Mail senden)
+- Warten auf Ersatzteil
+- Gerät fertig zur Abholung
+
+**Vorschau vor jedem Versand:** Der Vorschlag erscheint oben im Auftrag, auf der Tafel und unter
+*Verkauf → Benachrichtigungen*. Sie können Empfänger, Betreff und Text ändern, dann **„Jetzt senden“** oder
+**„Diesmal nicht senden“**. Gesendete Mails stehen in der E-Mail-Historie des Kunden und im Verlauf des Auftrags.
+
+**Abhol-Erinnerungen:** Ist ein Gerät fertig, aber nicht abgeholt, schlägt das Programm Erinnerungen vor. Standard ist
+nach 7, 14 und 30 Tagen. Abgeholt gilt ein Gerät durch den Abholschein oder den Knopf **„abgeholt“**.
+
+**Neue Spalte „Wartet auf Teil“** auf der Tafel. Auf der Karte stehen das Ersatzteil und das erwartete Lieferdatum.
+
+**Vorlagen:** Unter *Einstellungen → Benachrichtigungen* stellen Sie je Anlass ein:
+- an/aus
+- Betreff und Text mit Platzhaltern: {Anrede}, {Kundenname}, {Auftragsnummer}, {Gerät}, {Betrag}, {Öffnungszeiten},
+  {Fertig bis}, {Firma}
+
+Dort tragen Sie auch Ihre Öffnungszeiten ein.
+
+**SMS:** Die Schnittstelle ist vorbereitet. Ein Anbieter ist noch nicht angebunden.
+
+### Technisch
+- Neue Tabelle `benachrichtigungen` und neue Spalten `wartet_teil_seit`, `teil_info`, `teil_erwartet` in `auftraege`.
+  Vor der Umstellung wird automatisch gesichert.
+- `rsb/sms.py`: Basisklasse `SmsAnbieter` für einen späteren Anbieter.
 
 ## 0.13.0 – 15.10.2026
 Annahmeschein mit digitaler Unterschrift (Ausbaustufe 3 von 10).

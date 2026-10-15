@@ -245,6 +245,10 @@ def beleg_erstellen(con, auftrag_id, art, daten_url, unterzeichner, daten_dir, q
     if art == "abholung":
         con.execute("UPDATE auftraege SET abgeholt_am=COALESCE(abgeholt_am, ?) WHERE id=?", (zeitpunkt, auftrag_id))
         zugang_loeschen(con, auftrag_id, "Gerät abgeholt")
+        from .benachrichtigung import verwerfen
+        for b in con.execute("SELECT id FROM benachrichtigungen WHERE auftrag_id=? AND anlass='erinnerung' "
+                             "AND status='offen'", (auftrag_id,)).fetchall():
+            verwerfen(con, b["id"], "Gerät wurde abgeholt")
     return cur.lastrowid
 
 

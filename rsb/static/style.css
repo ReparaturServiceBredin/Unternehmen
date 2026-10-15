@@ -149,7 +149,7 @@ table.positionen textarea { min-height: 34px; height: 34px; margin-top: 4px; }
 .st-warnung { background: var(--gelb-hell); color: #7a5b00; }
 
 /* Auftragstafel */
-.tafel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; align-items: start; }
+.tafel { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; align-items: start; }
 .spalte { background: #e9edf2; border-radius: var(--radius); min-height: 300px; display: flex; flex-direction: column; }
 .spalte.ueber { outline: 2px dashed var(--blau); background: var(--blau-hell); }
 .spalte-kopf { padding: 10px 12px; font-weight: 700; display: flex; justify-content: space-between; border-radius: var(--radius) var(--radius) 0 0; color: #fff; }
@@ -157,7 +157,8 @@ table.positionen textarea { min-height: 34px; height: 34px; margin-top: 4px; }
 .s-offen { background: #5D6670; color: #fff; }
 .s-in_arbeit { background: #d98a00; color: #fff; }
 .s-erledigt { background: var(--gruen); color: #fff; }
-span.marke-status.s-offen, span.marke-status.s-in_arbeit, span.marke-status.s-erledigt { color: #fff; }
+.s-wartet_teil { background: #8a4fbf; color: #fff; }
+span.marke-status.s-offen, span.marke-status.s-in_arbeit, span.marke-status.s-erledigt, span.marke-status.s-wartet_teil { color: #fff; }
 .spalte-inhalt { padding: 10px; display: flex; flex-direction: column; gap: 10px; flex: 1; }
 .spalte-inhalt .leer { text-align: center; padding: 14px; border: 1px dashed #c3cad3; border-radius: 6px; }
 .auftrag { background: #fff; border: 1px solid var(--rand); border-radius: 8px; padding: 10px 12px; cursor: grab; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
@@ -273,3 +274,9 @@ button.klein:not(.zweit):not(.gefahr), .knopf.klein:not(.zweit):not(.gefahr) { c
 .schein-text { max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 13px; background: var(--hell, #f5f7fa); padding: 10px 12px; border-radius: 8px; }
 .mobil-seite { max-width: 720px; margin: 0 auto; padding: 14px; }
 .mobil-seite .karte { margin-bottom: 12px; }
+
+/* Kundenbenachrichtigung */
+.benachrichtigung { border-left: 4px solid var(--blau, #1C54A3); }
+.benachrichtigung summary { cursor: pointer; }
+.a-teil { font-size: 12px; color: #6b3d94; margin-top: 4px; }
+@media (max-width: 1250px) and (min-width: 901px) { .tafel { grid-template-columns: repeat(2, 1fr); } }

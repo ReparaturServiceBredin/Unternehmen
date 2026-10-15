@@ -178,6 +178,7 @@ STANDARD_EINSTELLUNGEN = {
                         "zurückerhalten.",
     "handy_im_netz": False,                 # Server im WLAN erreichbar machen (für QR-Code am Handy), Neustart nötig
     "handy_adresse": "",                    # optional: feste Adresse, z. B. 192.168.178.20:5000
+    # Kundenbenachrichtigung: siehe benachrichtigung.einstellungs_standard() (unten ergänzt)
     # Programm-Updates
     "update_auto": True,
     "update_letzte_pruefung": "",
@@ -190,6 +191,10 @@ STANDARD_EINSTELLUNGEN = {
     # Programmfenster
     "fenster_modus": "app",      # app = eigenes Fenster (Edge-App-Modus) / browser = normaler Browser-Tab
 }
+
+from .benachrichtigung import einstellungs_standard as _ben_standard  # noqa: E402
+
+STANDARD_EINSTELLUNGEN.update(_ben_standard())
 
 
 # Mitgelieferte Vertragsarten (Preise bitte anpassen; alles unter Verträge & Lizenzen → Vertragsarten änderbar)
@@ -308,12 +313,15 @@ MIGRATIONEN = [
     ("auftraege", "zugang_geheim", "TEXT"),
     ("auftraege", "zugang_geloescht_am", "TEXT"),
     ("auftraege", "abgeholt_am", "TEXT"),
+    ("auftraege", "wartet_teil_seit", "TEXT"),
+    ("auftraege", "teil_info", "TEXT"),
+    ("auftraege", "teil_erwartet", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
 NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
                  "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen", "zahlungen",
-                 "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge"]
+                 "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge", "benachrichtigungen"]
 
 
 def _migrieren(con, pfad=None):

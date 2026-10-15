@@ -439,3 +439,22 @@ Wenn der Auftrag erledigt ist, löscht das Programm die Daten automatisch.
 
 Handy und PC müssen im selben WLAN sein. Passt die angezeigte Adresse nicht, tragen Sie sie in den Einstellungen
 selbst ein, z. B. `192.168.178.20:5000`.
+
+## 19. Kundenbenachrichtigung
+
+Bei einem Statuswechsel erscheint oben im Auftrag und auf der Tafel ein Kasten
+„✉ Auftrag angenommen“, „✉ Gerät fertig zur Abholung“ usw.:
+
+1. Kasten aufklappen und den Text prüfen. Sie können ihn ändern.
+2. **Jetzt senden** schickt die E-Mail. Mit **Diesmal nicht senden** verwerfen Sie den Vorschlag.
+
+Alle Vorschläge und gesendeten Nachrichten finden Sie unter *Verkauf → Benachrichtigungen*. Dort sehen Sie auch, welche
+fertigen Geräte noch nicht abgeholt sind.
+
+**Eigene Nachricht:** Im Auftrag unter „Kunde benachrichtigen“ einen Anlass wählen und dann „Vorschau erstellen“.
+
+**Wartet auf Teil:** Den Auftrag auf der Tafel in die Spalte „Wartet auf Teil“ ziehen oder im Auftrag den Status
+wählen. Ersatzteil und erwartetes Datum stehen dann auf der Karte.
+
+**Texte und Öffnungszeiten:** Unter *Einstellungen → Benachrichtigungen*. Wollen Sie ohne Vorschau senden, nehmen Sie
+den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das nicht.

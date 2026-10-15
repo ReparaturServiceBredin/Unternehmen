@@ -5,7 +5,8 @@
   <div><label>Kunde</label><select name="kunde_id" id="f_kunde" required><option value="">– bitte wählen –</option>
     {% for k in kunden %}<option value="{{ k.id }}" {{ 'selected' if (w.kunde_id|string) == (k.id|string) }}>{{ k.kundennr }} · {{ k|kname }}{{ (' · ' ~ k.ort) if k.ort }}{{ ' (archiviert)' if k.archiviert }}</option>{% endfor %}</select>
     <div class="hilfe"><a href="{{ url_for('main.kunde') }}" target="_blank">+ neuen Kunden anlegen</a> (danach diese Seite neu laden)</div></div>
-  <div class="s3"><label>Status</label><select name="status" id="f_status">{% for s, n in status_namen.items() %}<option value="{{ s }}" {{ 'selected' if (w.status or 'offen') == s }}>{{ n }}</option>{% endfor %}</select></div>
+  {% set ts = 'wartet_teil' if w.status == 'in_arbeit' and w.wartet_teil_seit else (w.status or 'offen') %}
+  <div class="s3"><label>Status</label><select name="status" id="f_status">{% for s, n in status_namen.items() %}<option value="{{ s }}" {{ 'selected' if ts == s }}>{{ n }}</option>{% endfor %}</select></div>
   <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if w.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
   <div><label>Gerät (Marke, Modell)</label><input type="text" name="geraet" value="{{ w.geraet or '' }}" placeholder="z. B. Xiaomi 14T Pro"></div>
   <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer" value="{{ w.seriennummer or '' }}"></div>
@@ -34,6 +35,8 @@
       <span class="klein">Punkte in der Reihenfolge des Musters antippen (1 = oben links, 9 = unten rechts).</span></div>
     <div class="hilfe">Wird verschlüsselt gespeichert, nie auf dem Annahmeschein gedruckt und nach Abschluss des Auftrags automatisch gelöscht. Jede Anzeige wird im Verlauf vermerkt.{% if w.zugang_geloescht_am %} Zuletzt gelöscht am {{ w.zugang_geloescht_am|zeit_sek }}.{% endif %}</div>
   </div>
+  <div class="s8"><label>Ersatzteil (bei „Wartet auf Teil“)</label><input type="text" name="teil_info" value="{{ w.teil_info or '' }}" placeholder="z. B. Display, bestellt bei …"></div>
+  <div class="s4"><label>Ersatzteil erwartet am</label><input type="date" name="teil_erwartet" value="{{ w.teil_erwartet or '' }}"></div>
   <div class="s12"><label>Interne Notizen (z. B. bestellte Teile, Rücksprache)</label><textarea name="notizen">{{ w.notizen or '' }}</textarea></div>
 </div>
 <input type="hidden" name="annahme_felder" value="1">

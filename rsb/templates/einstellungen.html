@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -265,6 +265,30 @@
   <h2>Leihbedingungen</h2>
   <p class="klein">Dieser Text steht im Leihvertrag / Übergabeprotokoll, das der Kunde bei der Ausgabe eines Leihgeräts unterschreibt. <code>{firma}</code> wird durch Ihren Firmennamen ersetzt. Lassen Sie die Bedingungen im Zweifel einmal rechtlich prüfen.</p>
   <textarea name="leihbedingungen" style="min-height:360px">{{ einst.leihbedingungen or '' }}</textarea><br><br>
+  <button>Speichern</button>
+</form>
+
+{% elif bereich == 'benachrichtigung' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Kundenbenachrichtigung</h2>
+  <p class="klein">Bei diesen Ereignissen schlägt das Programm eine Nachricht an den Kunden vor. Platzhalter: <code>{Anrede}</code> <code>{Kundenname}</code> <code>{Auftragsnummer}</code> <code>{Gerät}</code> <code>{Betrag}</code> <code>{Öffnungszeiten}</code> <code>{Fertig bis}</code> <code>{Firma}</code>. Gesendete Nachrichten landen in der E-Mail-Historie des Kunden.</p>
+  <div class="felder">
+    <div class="s12">{{ haken('benachrichtigung_vorschau', 'Vor jedem Versand Vorschau anzeigen (empfohlen) – sonst wird sofort gesendet') }}</div>
+    <div class="s3"><label>Versandweg</label><select name="benachrichtigung_kanal">
+      <option value="email" {{ 'selected' if einst.benachrichtigung_kanal != 'sms' }}>E-Mail</option>
+      <option value="sms" {{ 'selected' if einst.benachrichtigung_kanal == 'sms' }}>SMS (Anbieter noch nicht eingerichtet)</option></select></div>
+    <div class="s3"><label>Abhol-Erinnerung nach (Tagen)</label><input type="text" name="erinnerung_tage" value="{{ einst.erinnerung_tage }}">
+      <div class="hilfe">z. B. 7, 14, 30 – Tage nach „Erledigt“</div></div>
+    <div class="s6"><label>Öffnungszeiten (für {Öffnungszeiten})</label><textarea name="oeffnungszeiten" style="min-height:60px">{{ einst.oeffnungszeiten or '' }}</textarea></div>
+  </div>
+  {% for a, titel in [('angenommen','Auftrag angenommen'),('kva','Kostenvoranschlag versendet (nach dem Festschreiben; entfällt, wenn der KVA direkt per E-Mail geht)'),('wartet_teil','Warten auf Ersatzteil'),('fertig','Gerät fertig zur Abholung'),('erinnerung','Erinnerung: Gerät noch nicht abgeholt')] %}
+  <h2 style="margin-top:18px">{{ titel }}</h2>
+  <div class="felder">
+    <div class="s12">{{ haken('ben_' ~ a ~ '_aktiv', 'automatisch vorschlagen') }}</div>
+    <div class="s12"><label>Betreff</label><input type="text" name="ben_{{ a }}_betreff" value="{{ einst['ben_' ~ a ~ '_betreff'] or '' }}"></div>
+    <div class="s12"><label>Text</label><textarea name="ben_{{ a }}_text" style="min-height:150px">{{ einst['ben_' ~ a ~ '_text'] or '' }}</textarea></div>
+  </div>
+  {% endfor %}<br>
   <button>Speichern</button>
 </form>
 

@@ -10,7 +10,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.13.0"
+VERSION_NUMMER = "0.14.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -113,13 +113,16 @@ def create_app(daten_dir=None, testing=False):
                 "AND faellig_am < date('now', 'localtime') AND summe_brutto + COALESCE((SELECT SUM(g.summe_brutto) "
                 "FROM dokumente g WHERE g.bezug_id=d.id AND g.typ='gutschrift' AND g.status<>'entwurf'), 0) "
                 "> bezahlt_betrag").fetchone()[0]
+            benachrichtigungen_offen = dbm.get_db().execute(
+                "SELECT COUNT(*) FROM benachrichtigungen WHERE status IN ('offen', 'fehler')").fetchone()[0]
         except Exception:
             einst, offene_anfragen, leihen_ueberfaellig, posten_ueberfaellig = {}, 0, 0, 0
+            benachrichtigungen_offen = 0
         from .update import ist_exe, ist_neuer
         update_da = einst.get("update_verfuegbar") if ist_neuer(einst.get("update_verfuegbar"), VERSION_NUMMER) \
             else None
         return {"einst": einst, "offene_anfragen": offene_anfragen, "leihen_ueberfaellig": leihen_ueberfaellig,
-                "posten_ueberfaellig": posten_ueberfaellig, "update_da": update_da, "ist_exe": ist_exe()}
+                "posten_ueberfaellig": posten_ueberfaellig, "benachrichtigungen_offen": benachrichtigungen_offen, "update_da": update_da, "ist_exe": ist_exe()}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

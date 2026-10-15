@@ -10,6 +10,12 @@ from . import logik
 from .hilfen import EingabeFehler
 
 STATUS = {"offen": "Offen", "in_arbeit": "In Arbeit", "erledigt": "Erledigt"}
+# Spalten der Tafel: „Wartet auf Teil“ ist ein In-Arbeit-Auftrag mit gesetztem wartet_teil_seit
+TAFEL = {"offen": "Offen", "in_arbeit": "In Arbeit", "wartet_teil": "Wartet auf Teil", "erledigt": "Erledigt"}
+
+
+def tafel_status(a):
+    return "wartet_teil" if a["status"] == "in_arbeit" and a["wartet_teil_seit"] else a["status"]
 
 
 def naechste_auftragsnr(con):
@@ -44,11 +50,16 @@ def anlegen(con, kunde_id, geraet="", fehler="", leistungsart="", seriennummer="
         (nr, kunde_id, anfrage_id, geraet, leistungsart, seriennummer, zubehoer, fehler, notizen, reihenfolge,
          dbm.jetzt(), dbm.jetzt(), dbm.jetzt()))
     weitere = {k: v for k, v in annahme.items() if k in ANNAHME_FELDER}
+    for k in ("teil_info", "teil_erwartet"):
+        if annahme.get(k):
+            weitere[k] = annahme[k]
     if weitere:
         con.execute(f"UPDATE auftraege SET {', '.join(f'{k}=?' for k in weitere)} WHERE id=?",
                     (*weitere.values(), cur.lastrowid))
     dbm.protokollieren("auftrag_angelegt", "auftrag", cur.lastrowid, {"auftragsnr": nr}, con=con)
     verlauf(con, cur.lastrowid, "Auftrag angelegt", nr)
+    from .benachrichtigung import vorschlagen
+    vorschlagen(con, cur.lastrowid, "angenommen")
     return cur.lastrowid
 
 
@@ -219,11 +230,21 @@ def status_setzen(con, auftrag_id, status, vor_id=None):
 
     Gibt die ID eines neu erzeugten Rechnungsentwurfs zurück (nur beim Wechsel nach „erledigt“).
     """
-    if status not in STATUS:
+    if status not in TAFEL:
         raise EingabeFehler("Unbekannter Status.")
     a = con.execute("SELECT * FROM auftraege WHERE id=?", (auftrag_id,)).fetchone()
     if not a:
         raise EingabeFehler("Auftrag nicht gefunden.")
+    from .benachrichtigung import vorschlagen
+    if status == "wartet_teil":
+        status = "in_arbeit"
+        if not a["wartet_teil_seit"]:
+            con.execute("UPDATE auftraege SET wartet_teil_seit=? WHERE id=?", (dbm.jetzt(), auftrag_id))
+            verlauf(con, auftrag_id, "Wartet auf Ersatzteil", a["teil_info"] or None)
+            vorschlagen(con, auftrag_id, "wartet_teil")
+    elif a["wartet_teil_seit"]:
+        con.execute("UPDATE auftraege SET wartet_teil_seit=NULL WHERE id=?", (auftrag_id,))
+        verlauf(con, auftrag_id, "Ersatzteil da – Warten beendet", None)
     # Reihenfolge: vor die Karte vor_id, sonst ans Ende der Spalte
     if vor_id:
         ziel = con.execute("SELECT reihenfolge FROM auftraege WHERE id=? AND status=?", (vor_id, status)).fetchone()
@@ -256,4 +277,6 @@ def status_setzen(con, auftrag_id, status, vor_id=None):
             did, neu = rechnung_erstellen(con, auftrag_id)
             if neu:
                 neue_rechnung = did
+        if status == "erledigt":
+            vorschlagen(con, auftrag_id, "fertig")
     return neue_rechnung

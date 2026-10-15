@@ -308,7 +308,11 @@ CREATE TABLE IF NOT EXISTS auftraege (
     zugang_art      TEXT,               -- pin / passwort / muster / telefonisch / keiner
     zugang_geheim   TEXT,               -- verschlüsselt (Fernet), wird nach Abschluss gelöscht
     zugang_geloescht_am TEXT,
-    abgeholt_am     TEXT
+    abgeholt_am     TEXT,
+    -- Warten auf Ersatzteil (Spalte „Wartet auf Teil“ auf der Tafel; Status bleibt in_arbeit)
+    wartet_teil_seit TEXT,
+    teil_info       TEXT,
+    teil_erwartet   TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_auftraege_status ON auftraege(status);
 
@@ -813,3 +817,22 @@ CREATE TABLE IF NOT EXISTS mobil_zugaenge (
     benutzer     TEXT,
     benutzt_am   TEXT
 );
+
+-- Kundenbenachrichtigungen (Vorschlag → gesendet / nicht gesendet); gesendete Mails stehen zusätzlich im Versandprotokoll
+CREATE TABLE IF NOT EXISTS benachrichtigungen (
+    id          INTEGER PRIMARY KEY,
+    auftrag_id  INTEGER NOT NULL REFERENCES auftraege(id) ON DELETE CASCADE,
+    kunde_id    INTEGER NOT NULL REFERENCES kunden(id),
+    anlass      TEXT NOT NULL,
+    stufe       INTEGER,                 -- Erinnerung: nach wie vielen Tagen
+    kanal       TEXT NOT NULL DEFAULT 'email',
+    an          TEXT,
+    betreff     TEXT,
+    text        TEXT,
+    status      TEXT NOT NULL DEFAULT 'offen' CHECK (status IN ('offen', 'gesendet', 'verworfen', 'fehler')),
+    hinweis     TEXT,
+    erstellt_am TEXT NOT NULL,
+    erledigt_am TEXT,
+    benutzer    TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_benachrichtigungen ON benachrichtigungen(auftrag_id, status);

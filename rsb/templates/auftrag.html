@@ -2,12 +2,13 @@
 {% from "_status.html" import csrf, status %}
 {% from "_auftrag_formular.html" import felder, kva_auswahl %}
 {% from "_foto_upload.html" import hochladen %}
+{% from "_benachrichtigung.html" import vorschau %}
 {% block titel %}Auftrag {{ a.auftragsnr }}{% endblock %}
 {% block inhalt %}
 {% set gueltige_fotos = fotos|rejectattr('geloescht_am')|list %}
 <div class="kopf">
   <div>
-    <h1>Auftrag {{ a.auftragsnr }} <span class="marke-status s-{{ a.status }}">{{ status_namen[a.status] }}</span></h1>
+    <h1>Auftrag {{ a.auftragsnr }} <span class="marke-status s-{{ tafel_status }}">{{ status_namen[tafel_status] }}</span></h1>
     <div class="auftrag-kopf" style="margin-top:6px">
       <span>Eingang: <b>{{ a.eingang_am|zeit }}</b></span>
       <span>Kunde: <a href="{{ url_for('main.kunde', kid=a.kunde_id) }}"><b>{{ a.kundennr }} · {{ a.firma if a.ktyp == 'firma' and a.firma else (a.vorname or '') ~ ' ' ~ (a.nachname or '') }}</b></a>{% if a.ktelefon %} · <a href="tel:{{ a.ktelefon }}">{{ a.ktelefon }}</a>{% endif %}</span>
@@ -20,6 +21,8 @@
   <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.auftraege') }}">← Zur Tafel</a></div>
 </div>
 {% if kva_kunde %}<div class="meldung warnung">Achtung: Der verknüpfte Kostenvoranschlag gehört zu einem anderen Kunden ({{ kva_kunde.kundennr }} · {{ kva_kunde|kname }}) als der Auftrag.</div>{% endif %}
+
+{% for b in benachrichtigungen %}{{ vorschau(b, anlaesse, url_for('main.auftrag', aid=a.id), True) }}{% endfor %}
 
 <nav class="reiter">
   <a href="#auftragsdaten" data-reiter="auftragsdaten">Auftragsdaten</a>
@@ -48,6 +51,15 @@
           <p class="klein">Wird automatisch erstellt, wenn der Auftrag auf „Erledigt“ gesetzt wird{{ ' (mit den Positionen aus dem KVA)' if a.kva_id }}.</p>
           <form method="post" action="{{ url_for('main.auftrag_rechnung', aid=a.id) }}">{{ csrf() }}<button class="zweit">Rechnung jetzt erstellen</button></form>
         {% endif %}
+      </div>
+      <div class="karte">
+        <h2>Kunde benachrichtigen</h2>
+        <form method="post" action="{{ url_for('main.auftrag_benachrichtigen', aid=a.id) }}" class="leiste">{{ csrf() }}
+          <select name="anlass" style="width:auto">{% for k, n in anlaesse.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select>
+          <button class="zweit">Vorschau erstellen</button></form>
+        {% if a.status == 'erledigt' and not a.abgeholt_am %}
+        <form method="post" action="{{ url_for('main.auftrag_abgeholt', aid=a.id) }}" style="margin-top:8px" onsubmit="return confirm('Abholung ohne digitalen Abholschein vermerken?')">{{ csrf() }}<button class="zweit klein">Als abgeholt vermerken (ohne Abholschein)</button></form>{% endif %}
+        {% if ben_liste %}<table class="liste" style="margin-top:8px">{% for b in ben_liste %}<tr><td class="klein">{{ b.erstellt_am|zeit_sek }}</td><td>{{ anlaesse[b.anlass] }}</td><td class="klein">{{ {'offen':'wartet auf Freigabe','gesendet':'gesendet','verworfen':'nicht gesendet','fehler':'Fehler'}[b.status] }}</td></tr>{% endfor %}</table>{% endif %}
       </div>
       {% if anfrage %}<div class="karte"><h2>Ursprüngliche Anfrage</h2><p class="klein"><a href="{{ url_for('main.anfrage', aid=anfrage.id) }}">{{ anfrage.eingang_am|zeit }}</a></p><p style="white-space:pre-wrap">{{ anfrage.nachricht }}</p></div>{% endif %}
       {% if not fotos and not belege and a.re_status not in ('festgeschrieben', 'storniert') %}

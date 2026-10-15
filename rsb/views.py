@@ -12,6 +12,7 @@ from PIL import Image
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db as dbm
+from . import benachrichtigung as ben
 from . import katalog, logik
 from .backup import backup_erstellen
 from .hilfen import (EingabeFehler, anrede_brief, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
@@ -30,6 +31,13 @@ def daten_dir():
 
 def _f(name, standard=""):
     return (request.form.get(name) or standard).strip()
+
+
+def _benachrichtigungen_automatisch():
+    """Ist die Vorschau ausgeschaltet, werden neue Benachrichtigungen sofort gesendet."""
+    for ok, text in ben.offene_automatisch_senden(dbm.get_db()):
+        flash(("Kunde benachrichtigt – " if ok else "Benachrichtigung fehlgeschlagen – ") + text,
+              "ok" if ok else "warnung")
 
 
 # ====================================================================== Anmeldung
@@ -429,6 +437,9 @@ def dokument(did):
             nummer = logik.festschreiben(con, did, daten_dir())
             with dbm.Transaktion(con):
                 auf.dokument_ereignis(con, did, "KVA festgeschrieben", "Rechnung festgeschrieben")
+                if d["typ"] == "kva":
+                    ben.kva_ereignis(con, did, "festgeschrieben")
+            _benachrichtigungen_automatisch()
             flash(f"{logik.titel(d['typ'])} {nummer} wurde festgeschrieben und archiviert.", "ok")
             return redirect(url_for("main.dokument", did=did))
         flash("Entwurf gespeichert.", "ok")
@@ -699,6 +710,8 @@ def dokument_email(did):
         flash(f"E-Mail an {an} wurde gesendet.", "ok")
         with dbm.Transaktion(con):
             auf.dokument_ereignis(con, did, "KVA per E-Mail versendet", "Rechnung per E-Mail versendet")
+            if d["typ"] == "kva":
+                ben.kva_ereignis(con, did, "email")
         if hinweis:
             flash(hinweis, "warnung")
         return redirect(url_for("main.dokument", did=did))
@@ -730,6 +743,8 @@ EINSTELLUNGS_BEREICHE = {
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
     "leihgeraete": ["leihbedingungen"],
+    "benachrichtigung": ["benachrichtigung_vorschau", "benachrichtigung_kanal", "erinnerung_tage", "oeffnungszeiten"]
+    + [f"ben_{a}_{t}" for a in ben.ANLAESSE for t in ("aktiv", "betreff", "text")],
     "annahme": ["annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
                 "abholschein_text", "handy_im_netz", "handy_adresse"],
     "mahnwesen": ["mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage", "mahngebuehr_cent",
@@ -743,7 +758,7 @@ EINSTELLUNGS_BEREICHE = {
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {"handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
 GANZZAHL = {"mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
@@ -784,6 +799,8 @@ def einstellungen():
                 raise EingabeFehler("Bitte einen gültigen SMTP-Port angeben (587 für STARTTLS, 465 für SSL/TLS).")
             if neu["gesendet_aktiv"] and not neu["gesendet_imap_host"]:
                 raise EingabeFehler("Für die Ablage im Gesendet-Ordner bitte einen IMAP-Server angeben.")
+        if bereich == "benachrichtigung" and neu["benachrichtigung_kanal"] not in ben.KANAELE:
+            neu["benachrichtigung_kanal"] = "email"
         if bereich == "anfragen" and neu["imap_sicherheit"] not in ("ssl", "starttls"):
             neu["imap_sicherheit"] = "ssl"
         if bereich == "anfragen":
@@ -1065,7 +1082,10 @@ def verfahrensdokumentation():
 
 @bp.app_template_filter("kname")
 def _kname(row):
-    return kunde_name(row)
+    d = dict(row) if row else {}
+    if "ktyp" in d and not d.get("typ"):
+        d["typ"] = d["ktyp"]
+    return kunde_name(d)
 
 
 # ====================================================================== Anfragen (Kontaktformular)
@@ -1224,15 +1244,22 @@ def auftraege():
     con = dbm.get_db()
     alle_erledigten = request.args.get("alle") == "1"
     spalten = {}
-    for status in auf.STATUS:
+    for status in auf.TAFEL:
         sql = AUFTRAG_SQL + "WHERE a.status=? "
-        args = [status]
+        args = ["in_arbeit" if status == "wartet_teil" else status]
+        if status == "in_arbeit":
+            sql += "AND a.wartet_teil_seit IS NULL "
+        if status == "wartet_teil":
+            sql += "AND a.wartet_teil_seit IS NOT NULL "
         if status == "erledigt" and not alle_erledigten:
             sql += "AND a.erledigt_am >= date('now', '-30 day') "
         sql += "ORDER BY a.reihenfolge, a.id"
         spalten[status] = con.execute(sql, args).fetchall()
-    return render_template("auftraege.html", spalten=spalten, status_namen=auf.STATUS, leihe_offen_text=LEIHE_OFFEN_TEXT,
-                           alle_erledigten=alle_erledigten, heute=date.today().isoformat())
+    with dbm.Transaktion(con):
+        ben.erinnerungen_pruefen(con)
+    return render_template("auftraege.html", spalten=spalten, status_namen=auf.TAFEL, leihe_offen_text=LEIHE_OFFEN_TEXT,
+                           alle_erledigten=alle_erledigten, heute=date.today().isoformat(),
+                           benachrichtigungen=ben.offene(con), anlaesse=ben.ANLAESSE)
 
 
 def _auftrag_felder():
@@ -1253,6 +1280,8 @@ def _auftrag_felder():
         except ValueError:
             raise EingabeFehler("Bitte ein gültiges Datum für die voraussichtliche Fertigstellung angeben.")
     felder["fertig_bis"] = fertig or None
+    felder["teil_info"] = _f("teil_info")
+    felder["teil_erwartet"] = _f("teil_erwartet") or None
     return felder
 
 
@@ -1270,7 +1299,8 @@ FELD_NAMEN = {"geraet": "Gerät", "leistungsart": "Leistungsart", "seriennummer"
               "zubehoer": "Zubehör", "fehler": "Fehlerbeschreibung", "notizen": "Notizen", "kunde_id": "Kunde",
               "zustand_eingang": "Zustand bei Eingang", "kosten_obergrenze": "Kosten-Obergrenze",
               "kva_gewuenscht": "KVA gewünscht", "kva_gebuehr": "Gebühr bei abgelehntem KVA",
-              "fertig_bis": "voraussichtliche Fertigstellung"}
+              "fertig_bis": "voraussichtliche Fertigstellung", "teil_info": "Ersatzteil",
+              "teil_erwartet": "Ersatzteil erwartet am"}
 
 
 UPLOAD_SCHLUESSEL = ("auftrag_upload_token", "leihe_ausgabe_token", "leihe_rueckgabe_token")
@@ -1346,6 +1376,7 @@ def auftrag_neu():
             if neue_rechnung:
                 flash("Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
                 return redirect(url_for("main.dokument", did=neue_rechnung))
+            _benachrichtigungen_automatisch()
             flash("Jetzt den Annahmeschein vom Kunden unterschreiben lassen (am PC/Tablet oder per QR-Code am Handy).",
                   "info")
             return redirect(url_for("main.auftrag", aid=aid) + "#annahmeschein")
@@ -1354,7 +1385,7 @@ def auftrag_neu():
     kva_vorauswahl = None
     if werte.get("kva_id"):
         kva_vorauswahl = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (werte["kva_id"],)).fetchone()
-    return render_template("auftrag_neu.html", werte=werte, status_namen=auf.STATUS, leistungsarten=_leistungsarten(),
+    return render_template("auftrag_neu.html", werte=werte, status_namen=auf.TAFEL, leistungsarten=_leistungsarten(),
                            kunden=_kunden_liste(con), token=token, kategorien=fot.KATEGORIEN,
                            fotos=fot.liste(con, upload_token=token, mit_geloeschten=False),
                            kva_vorauswahl=kva_vorauswahl, kein_kva_text=KEIN_KVA_TEXT)
@@ -1374,7 +1405,7 @@ def auftrag(aid):
     if request.method == "POST":
         felder = _auftrag_felder()
         kid = request.form.get("kunde_id", type=int) or a["kunde_id"]
-        status = request.form.get("status") or a["status"]
+        status = request.form.get("status") or auf.tafel_status(a)
         if kid != a["kunde_id"] and not con.execute("SELECT 1 FROM kunden WHERE id=?", (kid,)).fetchone():
             raise EingabeFehler("Bitte einen Kunden auswählen.")
         if status == "erledigt" and a["status"] != "erledigt" and a["leihen_offen"] \
@@ -1395,11 +1426,12 @@ def auftrag(aid):
             if geaendert:
                 dbm.protokollieren("auftrag_geaendert", "auftrag", aid, {"felder": geaendert}, con=con)
                 auf.verlauf(con, aid, "Auftragsdaten geändert", ", ".join(geaendert))
-            if status != a["status"]:
+            if status != auf.tafel_status(a):
                 if status == "erledigt" and a["leihen_offen"]:
                     _leihen_spaeter_abrechnen(con, aid)
                 neue_rechnung = auf.status_setzen(con, aid, status)
         flash("Auftrag gespeichert.", "ok")
+        _benachrichtigungen_automatisch()
         if kid != a["kunde_id"] and a["kva_id"] and a["kva_kunde_id"] != kid:
             flash("Achtung: Der verknüpfte Kostenvoranschlag gehört zu einem anderen Kunden.", "warnung")
         if neue_rechnung:
@@ -1410,7 +1442,9 @@ def auftrag(aid):
         if a["anfrage_id"] else None
     kva_kunde = con.execute("SELECT * FROM kunden WHERE id=?", (a["kva_kunde_id"],)).fetchone() \
         if a["kva_id"] and a["kva_kunde_id"] != a["kunde_id"] else None
-    return render_template("auftrag.html", a=a, status_namen=auf.STATUS, leistungsarten=_leistungsarten(),
+    return render_template("auftrag.html", a=a, status_namen=auf.TAFEL, tafel_status=auf.tafel_status(a),
+                           benachrichtigungen=ben.offene(con, aid), ben_liste=ben.liste(con, aid),
+                           anlaesse=ben.ANLAESSE, leistungsarten=_leistungsarten(),
                            anfrage=anfrage_row, kunden=_kunden_liste(con, a["kunde_id"]), kva_kunde=kva_kunde,
                            fotos=fot.liste(con, aid), kategorien=fot.KATEGORIEN,
                            verlauf=auf.verlauf_liste(con, aid), kva_status_namen=auf.KVA_STATUS,
@@ -1446,6 +1480,7 @@ def auftrag_status(aid):
         if status == "erledigt" and a["leihen_offen"]:
             _leihen_spaeter_abrechnen(con, aid)
         neue_rechnung = auf.status_setzen(con, aid, status, request.form.get("vor_id", type=int))
+    _benachrichtigungen_automatisch()
     ziel = url_for("main.dokument", did=neue_rechnung) if neue_rechnung else None
     if neue_rechnung:
         flash("Auftrag erledigt – Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
@@ -1551,6 +1586,73 @@ def auftrag_loeschen(aid):
         dbm.protokollieren("auftrag_geloescht", "auftrag", aid, {"auftragsnr": a["auftragsnr"]}, con=con)
     flash("Auftrag gelöscht. Ein verknüpfter Kostenvoranschlag bleibt erhalten.", "ok")
     return redirect(url_for("main.auftraege"))
+
+
+# ---------------------------------------------------------------------- Kundenbenachrichtigung
+
+@bp.route("/benachrichtigungen")
+def benachrichtigungen():
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        ben.erinnerungen_pruefen(con)
+    return render_template("benachrichtigungen.html", offene=ben.offene(con), liste=ben.liste(con),
+                           nicht_abgeholt=ben.nicht_abgeholt(con), anlaesse=ben.ANLAESSE, status_namen=ben.STATUS,
+                           kanaele=ben.KANAELE)
+
+
+def _zurueck(standard):
+    ziel = request.form.get("weiter") or ""
+    return redirect(ziel if ziel.startswith("/") and not ziel.startswith("//") else standard)
+
+
+@bp.route("/benachrichtigungen/<int:bid>/senden", methods=["POST"])
+def benachrichtigung_senden(bid):
+    con = dbm.get_db()
+    ok, meldung = ben.senden(con, bid, request.form.get("an"), request.form.get("betreff"), request.form.get("text"))
+    if ok:
+        flash("Benachrichtigung wurde gesendet.", "ok")
+        if meldung:
+            flash(meldung, "warnung")
+    else:
+        flash(f"Benachrichtigung wurde NICHT gesendet: {meldung}", "fehler")
+    return _zurueck(url_for("main.benachrichtigungen"))
+
+
+@bp.route("/benachrichtigungen/<int:bid>/verwerfen", methods=["POST"])
+def benachrichtigung_verwerfen(bid):
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        ben.verwerfen(con, bid)
+    flash("Diesmal nicht gesendet.", "ok")
+    return _zurueck(url_for("main.benachrichtigungen"))
+
+
+@bp.route("/auftraege/<int:aid>/benachrichtigen", methods=["POST"])
+def auftrag_benachrichtigen(aid):
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    with dbm.Transaktion(con):
+        bid = ben.vorschlagen(con, aid, _f("anlass"), manuell=True)
+    if not bid:
+        flash("Für interne Aufträge werden keine Benachrichtigungen erstellt.", "warnung")
+    return redirect(url_for("main.auftrag", aid=aid))
+
+
+@bp.route("/auftraege/<int:aid>/abgeholt", methods=["POST"])
+def auftrag_abgeholt(aid):
+    """Abholung ohne digitalen Abholschein vermerken (z. B. Papier-Unterschrift)."""
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    with dbm.Transaktion(con):
+        if not a["abgeholt_am"]:
+            con.execute("UPDATE auftraege SET abgeholt_am=? WHERE id=?", (dbm.jetzt_berlin(), aid))
+            auf.verlauf(con, aid, "Gerät abgeholt", _f("notiz") or "ohne digitalen Abholschein")
+            ann.zugang_loeschen(con, aid, "Gerät abgeholt")
+        for b in con.execute("SELECT id FROM benachrichtigungen WHERE auftrag_id=? AND anlass='erinnerung' "
+                             "AND status='offen'", (aid,)).fetchall():
+            ben.verwerfen(con, b["id"], "Gerät wurde abgeholt")
+    flash("Abholung vermerkt.", "ok")
+    return _zurueck(url_for("main.auftrag", aid=aid))
 
 
 # ---------------------------------------------------------------------- Annahme-/Abholschein, Handy (QR-Code)
