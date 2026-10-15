@@ -104,3 +104,82 @@ function reiterInit(standard) {
   window.addEventListener('hashchange', zeigen);
   zeigen();
 }
+
+// ---------------------------------------------------------------- Gerätezugang (Auftrag)
+document.querySelectorAll('.zugang-art').forEach(auswahl => {
+  const form = auswahl.closest('form'), feld = form.querySelector('.zugang-feld');
+  if (!feld) return;
+  const eingabe = feld.querySelector('input[name=zugang_wert]'), muster = feld.querySelector('.muster');
+  function anpassen() {
+    feld.hidden = !['pin', 'passwort', 'muster'].includes(auswahl.value);
+    muster.hidden = auswahl.value !== 'muster';
+  }
+  auswahl.addEventListener('change', anpassen); anpassen();
+  feld.querySelector('.zugang-zeigen-eingabe').addEventListener('click', () => {
+    eingabe.type = eingabe.type === 'password' ? 'text' : 'password';
+  });
+  muster.querySelectorAll('[data-punkt]').forEach(b => b.addEventListener('click', () => {
+    const teile = eingabe.value ? eingabe.value.split('-') : [];
+    if (teile.includes(b.dataset.punkt)) return;
+    teile.push(b.dataset.punkt); eingabe.value = teile.join('-'); eingabe.type = 'text';
+    b.classList.add('gewaehlt');
+  }));
+  muster.querySelector('.muster-neu').addEventListener('click', () => {
+    eingabe.value = ''; muster.querySelectorAll('[data-punkt]').forEach(b => b.classList.remove('gewaehlt'));
+  });
+  const anzeigen = feld.querySelector('.zugang-anzeigen');
+  if (anzeigen) anzeigen.addEventListener('click', async () => {
+    if (!confirm('Zugangsdaten anzeigen? Der Zugriff wird im Verlauf des Auftrags vermerkt.')) return;
+    const daten = new FormData(); daten.append('csrf', csrfWert());
+    const r = await fetch(anzeigen.dataset.url, { method: 'POST', body: daten });
+    const j = r.ok ? await r.json() : { wert: '' };
+    feld.querySelector('.zugang-ausgabe').textContent = j.wert || '(nicht lesbar)';
+  });
+});
+
+// ---------------------------------------------------------------- Unterschriftsfeld (Canvas, Maus/Finger/Stift)
+// Die Striche werden als Punktlisten gemerkt und bei jeder Größenänderung (z. B. Handy drehen) neu gezeichnet.
+document.querySelectorAll('.unterschrift').forEach(box => {
+  const canvas = box.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const feld = box.querySelector('input[name=unterschrift]'), form = box.closest('form');
+  let striche = [], aktuell = null, breite = 0;
+  function zeichnen() {
+    const r = canvas.getBoundingClientRect(), v = window.devicePixelRatio || 1;
+    if (!r.width) return;
+    canvas.width = Math.round(r.width * v); canvas.height = Math.round(r.height * v);
+    ctx.setTransform(v, 0, 0, v, 0, 0);
+    ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = ctx.fillStyle = '#0b1f4d';
+    const f = breite ? r.width / breite : 1;   // Striche an neue Breite anpassen
+    striche.forEach(s => {
+      ctx.beginPath();
+      if (s.length === 1) { ctx.arc(s[0][0] * f, s[0][1] * f, 1.2, 0, Math.PI * 2); ctx.fill(); return; }
+      s.forEach(([x, y], i) => i ? ctx.lineTo(x * f, y * f) : ctx.moveTo(x * f, y * f));
+      ctx.stroke();
+    });
+    if (breite && f !== 1) { striche = striche.map(s => s.map(([x, y]) => [x * f, y * f])); }
+    breite = r.width;
+    box.classList.toggle('hat-unterschrift', striche.length > 0);
+  }
+  function punkt(e) { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; }
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    aktuell = [punkt(e)]; striche.push(aktuell); zeichnen();
+  });
+  canvas.addEventListener('pointermove', e => {
+    if (!aktuell) return;
+    e.preventDefault();
+    const p = punkt(e), l = aktuell[aktuell.length - 1];
+    ctx.beginPath(); ctx.moveTo(l[0], l[1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
+    aktuell.push(p);
+  });
+  ['pointerup', 'pointercancel'].forEach(t => canvas.addEventListener(t, () => { aktuell = null; zeichnen(); }));
+  box.querySelector('.unterschrift-loeschen').addEventListener('click', () => { striche = []; zeichnen(); });
+  window.addEventListener('resize', zeichnen); zeichnen();
+  form.addEventListener('submit', e => {
+    if (!striche.length) { e.preventDefault(); alert('Bitte im Feld unterschreiben.'); return; }
+    zeichnen(); feld.value = canvas.toDataURL('image/png');
+    form.querySelectorAll('button[type=submit], button:not([type])').forEach(b => { b.disabled = true; b.textContent = 'Wird gespeichert …'; });
+  });
+});

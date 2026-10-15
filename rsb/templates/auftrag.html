@@ -13,6 +13,8 @@
       <span>Kunde: <a href="{{ url_for('main.kunde', kid=a.kunde_id) }}"><b>{{ a.kundennr }} · {{ a.firma if a.ktyp == 'firma' and a.firma else (a.vorname or '') ~ ' ' ~ (a.nachname or '') }}</b></a>{% if a.ktelefon %} · <a href="tel:{{ a.ktelefon }}">{{ a.ktelefon }}</a>{% endif %}</span>
       {% if a.begonnen_am %}<span>begonnen {{ a.begonnen_am|zeit }}</span>{% endif %}
       {% if a.erledigt_am %}<span>erledigt {{ a.erledigt_am|zeit }}</span>{% endif %}
+      {% if a.fertig_bis and not a.erledigt_am %}<span>fertig bis <b>{{ a.fertig_bis|datum }}</b></span>{% endif %}
+      {% if a.abgeholt_am %}<span>abgeholt {{ a.abgeholt_am|zeit }}</span>{% endif %}
     </div>
   </div>
   <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.auftraege') }}">← Zur Tafel</a></div>
@@ -21,6 +23,7 @@
 
 <nav class="reiter">
   <a href="#auftragsdaten" data-reiter="auftragsdaten">Auftragsdaten</a>
+  <a href="#annahmeschein" data-reiter="annahmeschein">Annahme / Abholung {{ '✓' if belege|selectattr('art', 'equalto', 'annahme')|list else '' }}</a>
   <a href="#kostenvoranschlag" data-reiter="kostenvoranschlag">Kostenvoranschlag {{ '✓' if a.kva_id else '' }}</a>
   <a href="#leihgeraet" data-reiter="leihgeraet">Leihgerät{% if a.leihen_offen %} <span class="zahl" {% if a.leihe_bis and a.leihe_bis < heute %}style="background:var(--rot-hell);color:var(--rot)"{% endif %}>🔁 {{ a.leihen_offen }}</span>{% endif %}</a>
   <a href="#fotos" data-reiter="fotos">Fotos <span class="zahl">{{ gueltige_fotos|length }}</span></a>
@@ -47,10 +50,41 @@
         {% endif %}
       </div>
       {% if anfrage %}<div class="karte"><h2>Ursprüngliche Anfrage</h2><p class="klein"><a href="{{ url_for('main.anfrage', aid=anfrage.id) }}">{{ anfrage.eingang_am|zeit }}</a></p><p style="white-space:pre-wrap">{{ anfrage.nachricht }}</p></div>{% endif %}
-      {% if not fotos and a.re_status not in ('festgeschrieben', 'storniert') %}
+      {% if not fotos and not belege and a.re_status not in ('festgeschrieben', 'storniert') %}
       <form method="post" action="{{ url_for('main.auftrag_loeschen', aid=a.id) }}" onsubmit="return confirm('Auftrag wirklich löschen? Ein verknüpfter Kostenvoranschlag bleibt erhalten.')">{{ csrf() }}<button class="gefahr">Auftrag löschen</button></form>
-      {% else %}<p class="klein">Aufträge mit Fotodokumentation oder festgeschriebener Rechnung können nicht gelöscht werden.</p>{% endif %}
+      {% else %}<p class="klein">Aufträge mit Fotodokumentation, unterschriebenem Schein oder festgeschriebener Rechnung können nicht gelöscht werden.</p>{% endif %}
     </div>
+  </div>
+</section>
+
+<section data-bereich="annahmeschein">
+  {% if geaendert_seit_unterschrift %}<div class="meldung warnung">Die Auftragsdaten wurden nach der letzten Unterschrift geändert. Der archivierte Annahmeschein bleibt unverändert – lassen Sie bei wichtigen Änderungen (z. B. Kosten-Obergrenze) einen neuen Annahmeschein unterschreiben.</div>{% endif %}
+  <div class="zweispaltig">
+    {% for art, titel in belegarten.items() %}
+    <div class="karte">
+      <h2>{{ titel }}</h2>
+      <p class="klein">{% if art == 'annahme' %}Bei der Geräteabgabe: Gerät, Fehler, Zustand, Zubehör, Kosten-Obergrenze, KVA-Wunsch, Datenschutz- und Abholbedingungen.{% else %}Bei der Abholung: Der Kunde bestätigt, das Gerät vollständig und funktionsfähig erhalten zu haben. Gespeicherte Zugangsdaten werden danach gelöscht.{% endif %}</p>
+      <div class="leiste">
+        <a class="knopf" href="{{ url_for('main.auftrag_unterschreiben', aid=a.id, art=art) }}">✍ Hier unterschreiben (PC/Tablet)</a>
+        <form method="post" action="{{ url_for('main.auftrag_handy', aid=a.id, zweck=art) }}">{{ csrf() }}<button class="zweit">📱 Am Handy (QR-Code)</button></form>
+        <a class="knopf zweit" href="{{ url_for('main.auftrag_schein_vorschau', aid=a.id, art=art) }}" target="_blank">Vorschau / Papier zum Unterschreiben</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="karte">
+    <h2>Unterschriebene Scheine</h2>
+    {% if belege %}
+    <table class="liste"><thead><tr><th>Nummer</th><th>Art</th><th>Unterschrieben</th><th>von</th><th>Quelle</th><th></th></tr></thead><tbody>
+      {% for b in belege|reverse %}<tr {% if request.args.get('beleg')|int == b.id %}class="gewaehlt"{% endif %}>
+        <td><a href="{{ url_for('main.beleg_pdf', bid=b.id) }}" target="_blank"><b>{{ b.nummer }}</b></a></td>
+        <td>{{ belegarten[b.art] }}</td><td>{{ b.unterschrieben_am|zeit_sek }}</td><td>{{ b.unterzeichner }}</td><td>{{ b.quelle }}</td>
+        <td class="zahl"><a class="knopf zweit klein" href="{{ url_for('main.beleg_pdf', bid=b.id) }}" target="_blank">PDF / Drucken</a>
+          <a class="knopf zweit klein" href="{{ url_for('main.beleg_email', bid=b.id) }}">Per E-Mail</a></td></tr>
+      {% endfor %}</tbody></table>
+    <p class="klein">Unterschriebene Scheine werden unverändert archiviert (SHA-256) und können weder geändert noch gelöscht werden.</p>
+    {% else %}<p class="klein">Noch kein Schein unterschrieben.</p>{% endif %}
+    <p class="klein">Gerätezugang: {{ zugang_text }}</p>
   </div>
 </section>
 
@@ -127,7 +161,8 @@
 <section data-bereich="fotos">
   <div class="karte">
     <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Fotos hochladen</h2>
-      {% if fotos %}<a class="knopf zweit" href="{{ url_for('main.auftrag_fotos_pdf', aid=a.id) }}" target="_blank">Fotodokumentation als PDF</a>{% endif %}</div>
+      <div class="leiste"><form method="post" action="{{ url_for('main.auftrag_handy', aid=a.id, zweck='fotos') }}">{{ csrf() }}<button class="zweit">📱 Fotos mit dem Handy (QR-Code)</button></form>
+      {% if fotos %}<a class="knopf zweit" href="{{ url_for('main.auftrag_fotos_pdf', aid=a.id) }}" target="_blank">Fotodokumentation als PDF</a>{% endif %}</div></div>
     {{ hochladen(url_for('main.auftrag_fotos_hochladen', aid=a.id), kategorien) }}
   </div>
   {% for kat in alle_kategorien %}{% set gruppe = fotos|selectattr('kategorie', 'equalto', kat)|list %}{% if gruppe %}

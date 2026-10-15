@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -265,6 +265,28 @@
   <h2>Leihbedingungen</h2>
   <p class="klein">Dieser Text steht im Leihvertrag / Übergabeprotokoll, das der Kunde bei der Ausgabe eines Leihgeräts unterschreibt. <code>{firma}</code> wird durch Ihren Firmennamen ersetzt. Lassen Sie die Bedingungen im Zweifel einmal rechtlich prüfen.</p>
   <textarea name="leihbedingungen" style="min-height:360px">{{ einst.leihbedingungen or '' }}</textarea><br><br>
+  <button>Speichern</button>
+</form>
+
+{% elif bereich == 'annahme' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Annahmeschein &amp; Abholschein</h2>
+  <p class="klein">Diese Texte stehen auf dem Annahmeschein, den der Kunde bei der Geräteabgabe unterschreibt. Lassen Sie die Formulierungen im Zweifel einmal rechtlich prüfen. Bereits unterschriebene Scheine bleiben unverändert archiviert.</p>
+  <div class="felder">
+    <div class="s6"><label>Zubehör-Checkliste (ein Eintrag je Zeile)</label><textarea name="annahme_zubehoer" style="min-height:160px">{{ einst.annahme_zubehoer or '' }}</textarea></div>
+    <div class="s6"><label>Gebühr bei abgelehntem KVA – Vorschlag für neue Aufträge (€, brutto)</label><input type="text" name="annahme_kva_gebuehr_cent" value="{{ einst.annahme_kva_gebuehr_cent|euro(false) }}">
+      <div class="hilfe">0 = keine Gebühr. Der Betrag kann je Auftrag geändert werden. Wird der KVA abgelehnt, übernimmt der Rechnungsentwurf diese Gebühr statt der KVA-Positionen.</div></div>
+    <div class="s12"><label>Datenschutz-Hinweis</label><textarea name="annahme_datenschutz" style="min-height:130px">{{ einst.annahme_datenschutz or '' }}</textarea></div>
+    <div class="s12"><label>Abholbedingungen (Abholfrist, Lagergebühr, Umgang mit nicht abgeholten Geräten)</label><textarea name="annahme_abholbedingungen" style="min-height:130px">{{ einst.annahme_abholbedingungen or '' }}</textarea></div>
+    <div class="s12"><label>Bestätigung auf dem Abholschein</label><textarea name="abholschein_text" style="min-height:60px">{{ einst.abholschein_text or '' }}</textarea></div>
+  </div>
+  <h2 style="margin-top:18px">Handy / Tablet im WLAN</h2>
+  <p class="klein">Damit Kunden auf dem Handy oder Tablet unterschreiben bzw. Sie Fotos mit dem Handy aufnehmen können (QR-Code), muss das Programm im eigenen WLAN erreichbar sein. Aus dem Netzwerk sind dann <b>nur</b> die zeitlich begrenzten QR-Code-Seiten ohne Anmeldung erreichbar; alles andere nur, wenn der Passwortschutz eingeschaltet ist und man sich anmeldet. Änderung wirkt nach einem <b>Neustart</b> des Programms. Windows fragt beim ersten Start evtl. nach einer Firewall-Freigabe – bitte nur für „Private Netzwerke“ zulassen.</p>
+  <div class="felder">
+    <div class="s12">{{ haken('handy_im_netz', 'Programm im WLAN erreichbar machen (für QR-Codes am Handy)') }}</div>
+    <div class="s6"><label>Adresse für QR-Codes (optional)</label><input type="text" name="handy_adresse" value="{{ einst.handy_adresse or '' }}" placeholder="automatisch, z. B. 192.168.178.20:5000">
+      <div class="hilfe">Nur nötig, wenn die automatisch erkannte Adresse nicht passt.</div></div>
+  </div><br>
   <button>Speichern</button>
 </form>
 

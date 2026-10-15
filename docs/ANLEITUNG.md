@@ -411,3 +411,31 @@ Prüfen und **„Bestätigen“** klicken. Umsätze ohne Rechnung (z. B. private
 auswählen und **„Ausgewählte Schreiben erstellen“**. Jedes Schreiben öffnen und **„Per E-Mail senden“** oder ausdrucken
 und „per Post versendet“ anklicken. Fristen, Gebühren, Texte und optionale Verzugszinsen stellen Sie unter
 *Einstellungen → Mahnwesen* ein. Den aktuellen Basiszinssatz finden Sie bei der Deutschen Bundesbank.
+
+## 18. Annahmeschein, Abholschein und Handy (QR-Code)
+
+**Gerät annehmen:**
+1. *Reparaturaufträge → + Neuer Auftrag* öffnen.
+2. Gerät, Fehler, Zustand, Zubehör, Kosten-Obergrenze, KVA-Wunsch und Fertigstellung eintragen.
+3. Optional den Gerätezugang eintragen.
+4. Nach dem Speichern öffnet sich der Reiter **Annahme / Abholung**:
+   - **Hier unterschreiben**: Der Kunde unterschreibt am Tablet oder PC.
+   - **Am Handy (QR-Code)**: Der Kunde scannt den Code und unterschreibt auf seinem oder Ihrem Handy.
+   Der Code gilt 30 Minuten und nur für eine Unterschrift.
+5. Danach steht der Schein unter „Unterschriebene Scheine“. Von dort drucken Sie ihn oder senden ihn per E-Mail.
+
+**Ohne digitale Unterschrift:** „Vorschau / Papier zum Unterschreiben“ ausdrucken.
+
+**Abholung:** Im selben Reiter den Abholschein unterschreiben lassen. Das Abholdatum wird eingetragen, gespeicherte
+Zugangsdaten werden gelöscht.
+
+**Gerätezugang:** Hinterlegte Daten zeigt der Knopf „Gespeicherten Zugang anzeigen“. Jeder Aufruf wird protokolliert.
+Wenn der Auftrag erledigt ist, löscht das Programm die Daten automatisch.
+
+**Handy im WLAN freischalten (einmalig):**
+1. *Einstellungen → Annahme & Abholung → „Programm im WLAN erreichbar machen“* anhaken.
+2. Programm beenden und neu starten.
+3. Die Windows-Firewall-Frage nur für private Netzwerke erlauben.
+
+Handy und PC müssen im selben WLAN sein. Passt die angezeigte Adresse nicht, tragen Sie sie in den Einstellungen
+selbst ein, z. B. `192.168.178.20:5000`.

@@ -1,4 +1,5 @@
 """Alle Seiten der Weboberfläche."""
+import io
 import json
 import re
 from datetime import date
@@ -6,13 +7,14 @@ from pathlib import Path
 
 from flask import (Blueprint, abort, current_app, flash, g, jsonify, redirect, render_template, request, send_file,
                    session, url_for)
+from markupsafe import Markup
 from PIL import Image
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from . import db as dbm
 from . import katalog, logik
 from .backup import backup_erstellen
-from .hilfen import (EingabeFehler, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
+from .hilfen import (EingabeFehler, anrede_brief, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
                      zahl_aus_text)
 from .mail import MailFehler, senden
 from .pdf import SCHRIFTEN, pdf_erzeugen
@@ -728,6 +730,8 @@ EINSTELLUNGS_BEREICHE = {
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
     "leihgeraete": ["leihbedingungen"],
+    "annahme": ["annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
+                "abholschein_text", "handy_im_netz", "handy_adresse"],
     "mahnwesen": ["mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage", "mahngebuehr_cent",
                   "mahngebuehr_2_cent", "mahn_text_0", "mahn_text_1", "mahn_text_2", "mahn_email_betreff",
                   "mahn_email_text", "zinsen_aktiv", "basiszinssatz", "zinsen_aufschlag_privat",
@@ -739,7 +743,7 @@ EINSTELLUNGS_BEREICHE = {
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {"zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {"handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
 GANZZAHL = {"mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
@@ -759,7 +763,7 @@ def einstellungen():
         for feld in EINSTELLUNGS_BEREICHE[bereich]:
             if feld in JA_NEIN:
                 neu[feld] = bool(request.form.get(feld))
-            elif feld in ("mahngebuehr_cent", "mahngebuehr_2_cent"):
+            elif feld in ("mahngebuehr_cent", "mahngebuehr_2_cent", "annahme_kva_gebuehr_cent"):
                 neu[feld] = cent_aus_text(_f(feld))
             elif feld in GANZZAHL:
                 neu[feld] = int(zahl_aus_text(_f(feld), 0))
@@ -1191,6 +1195,8 @@ def interessenten_loeschen():
 
 # ====================================================================== Reparaturaufträge (Tafel)
 
+from . import annahme as ann  # noqa: E402
+from . import annahme_pdf as ann_pdf  # noqa: E402
 from . import auftraege as auf  # noqa: E402
 from . import fotos as fot  # noqa: E402
 
@@ -1230,11 +1236,41 @@ def auftraege():
 
 
 def _auftrag_felder():
-    return {f: _f(f) for f in ("geraet", "leistungsart", "seriennummer", "zubehoer", "fehler", "notizen")}
+    felder = {f: _f(f) for f in ("geraet", "leistungsart", "seriennummer", "zubehoer", "fehler", "notizen")}
+    if "annahme_felder" not in request.form:  # z. B. Auftrag aus einer Anfrage
+        return felder
+    vorlagen = ann.zubehoer_vorlagen(dbm.einstellungen())
+    felder["zubehoer"] = ann.zubehoer_zusammen(set(request.form.getlist("zubehoer_check")), _f("zubehoer_sonstiges"),
+                                               vorlagen)
+    felder["zustand_eingang"] = _f("zustand_eingang")
+    felder["kosten_obergrenze"] = cent_aus_text(_f("kosten_obergrenze"), None) or None
+    felder["kva_gewuenscht"] = 1 if request.form.get("kva_gewuenscht") else 0
+    felder["kva_gebuehr"] = cent_aus_text(_f("kva_gebuehr"), None) or None
+    fertig = _f("fertig_bis")
+    if fertig:
+        try:
+            date.fromisoformat(fertig)
+        except ValueError:
+            raise EingabeFehler("Bitte ein gültiges Datum für die voraussichtliche Fertigstellung angeben.")
+    felder["fertig_bis"] = fertig or None
+    return felder
+
+
+def _zugang_aus_formular(con, aid):
+    if "annahme_felder" in request.form:
+        ann.zugang_setzen(con, aid, _f("zugang_art"), request.form.get("zugang_wert", ""),
+                          loeschen=bool(request.form.get("zugang_loeschen")))
+
+
+def _norm(x):
+    return "" if x is None else str(x)
 
 
 FELD_NAMEN = {"geraet": "Gerät", "leistungsart": "Leistungsart", "seriennummer": "Seriennr./IMEI",
-              "zubehoer": "Zubehör", "fehler": "Fehlerbeschreibung", "notizen": "Notizen", "kunde_id": "Kunde"}
+              "zubehoer": "Zubehör", "fehler": "Fehlerbeschreibung", "notizen": "Notizen", "kunde_id": "Kunde",
+              "zustand_eingang": "Zustand bei Eingang", "kosten_obergrenze": "Kosten-Obergrenze",
+              "kva_gewuenscht": "KVA gewünscht", "kva_gebuehr": "Gebühr bei abgelehntem KVA",
+              "fertig_bis": "voraussichtliche Fertigstellung"}
 
 
 UPLOAD_SCHLUESSEL = ("auftrag_upload_token", "leihe_ausgabe_token", "leihe_rueckgabe_token")
@@ -1285,6 +1321,8 @@ def auftrag_neu():
     werte = {"kunde_id": request.args.get("kunde_id", "")}
     if request.method == "POST":
         werte = request.form.to_dict()
+        werte["zubehoer"] = ann.zubehoer_zusammen(set(request.form.getlist("zubehoer_check")),
+                                                  _f("zubehoer_sonstiges"), ann.zubehoer_vorlagen(dbm.einstellungen()))
         try:
             kid = request.form.get("kunde_id", type=int)
             status = request.form.get("status", "offen")
@@ -1293,6 +1331,7 @@ def auftrag_neu():
                 raise EingabeFehler(KEIN_KVA_TEXT)
             with dbm.Transaktion(con):
                 aid = auf.anlegen(con, kid, **_auftrag_felder())
+                _zugang_aus_formular(con, aid)
                 warnung = auf.kva_verknuepfen(con, aid, kva_id) if kva_id else False
                 anzahl = fot.zuordnen(con, request.form.get("upload_token") or token, aid)
                 neue_rechnung = auf.status_setzen(con, aid, status) if status != "offen" else None
@@ -1307,7 +1346,11 @@ def auftrag_neu():
             if neue_rechnung:
                 flash("Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
                 return redirect(url_for("main.dokument", did=neue_rechnung))
-            return redirect(url_for("main.auftrag", aid=aid))
+            flash("Jetzt den Annahmeschein vom Kunden unterschreiben lassen (am PC/Tablet oder per QR-Code am Handy).",
+                  "info")
+            return redirect(url_for("main.auftrag", aid=aid) + "#annahmeschein")
+    if request.method == "GET":
+        werte["kva_gebuehr"] = dbm.einstellung("annahme_kva_gebuehr_cent") or None
     kva_vorauswahl = None
     if werte.get("kva_id"):
         kva_vorauswahl = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (werte["kva_id"],)).fetchone()
@@ -1343,11 +1386,12 @@ def auftrag(aid):
             flash(KEIN_KVA_TEXT + " Die Änderungen wurden noch nicht gespeichert.", "warnung")
             return redirect(url_for("main.auftrag", aid=aid) + "#kostenvoranschlag")
         felder["kunde_id"] = kid
-        geaendert = [FELD_NAMEN[k] for k, v in felder.items() if (a[k] or "") != (v or "")]
+        geaendert = [FELD_NAMEN[k] for k, v in felder.items() if _norm(a[k]) != _norm(v)]
         neue_rechnung = None
         with dbm.Transaktion(con):
             con.execute(f"UPDATE auftraege SET {', '.join(f'{k}=?' for k in felder)}, geaendert_am=? WHERE id=?",
                         (*felder.values(), dbm.jetzt(), aid))
+            _zugang_aus_formular(con, aid)
             if geaendert:
                 dbm.protokollieren("auftrag_geaendert", "auftrag", aid, {"felder": geaendert}, con=con)
                 auf.verlauf(con, aid, "Auftragsdaten geändert", ", ".join(geaendert))
@@ -1372,7 +1416,9 @@ def auftrag(aid):
                            verlauf=auf.verlauf_liste(con, aid), kva_status_namen=auf.KVA_STATUS,
                            kein_kva_text=KEIN_KVA_TEXT, leihe_offen_text=LEIHE_OFFEN_TEXT,
                            leihen=_leihen_zum_auftrag(con, aid), alle_kategorien=fot.ALLE_KATEGORIEN,
-                           heute=date.today().isoformat())
+                           heute=date.today().isoformat(), belege=ann.belege(con, aid), belegarten=ann.ARTEN,
+                           geaendert_seit_unterschrift=ann.geaendert_seit_unterschrift(con, aid),
+                           zugang_text=ann.zugang_text(a))
 
 
 @bp.route("/auftraege/<int:aid>/status", methods=["POST"])
@@ -1490,7 +1536,11 @@ def auftrag_loeschen(aid):
         raise EingabeFehler("Zu diesem Auftrag gibt es eine Fotodokumentation – er kann nicht gelöscht werden.")
     if con.execute("SELECT 1 FROM leihen WHERE auftrag_id=?", (aid,)).fetchone():
         raise EingabeFehler("Zu diesem Auftrag wurde ein Leihgerät ausgegeben – er kann nicht gelöscht werden.")
+    if con.execute("SELECT 1 FROM auftrag_belege WHERE auftrag_id=?", (aid,)).fetchone():
+        raise EingabeFehler("Zu diesem Auftrag gibt es einen unterschriebenen Annahme-/Abholschein – er kann nicht "
+                            "gelöscht werden.")
     with dbm.Transaktion(con):
+        con.execute("DELETE FROM mobil_zugaenge WHERE auftrag_id=?", (aid,))
         con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
         if a["rechnung_id"]:  # automatisch erzeugter Rechnungsentwurf wird mitgelöscht, der KVA bleibt erhalten
             if con.execute("SELECT 1 FROM dokumente WHERE id=? AND status='entwurf'", (a["rechnung_id"],)).fetchone():
@@ -1501,6 +1551,181 @@ def auftrag_loeschen(aid):
         dbm.protokollieren("auftrag_geloescht", "auftrag", aid, {"auftragsnr": a["auftragsnr"]}, con=con)
     flash("Auftrag gelöscht. Ein verknüpfter Kostenvoranschlag bleibt erhalten.", "ok")
     return redirect(url_for("main.auftraege"))
+
+
+# ---------------------------------------------------------------------- Annahme-/Abholschein, Handy (QR-Code)
+
+def _art_pruefen(art):
+    if art not in ann.ARTEN:
+        abort(404)
+    return art
+
+
+@bp.route("/auftraege/<int:aid>/schein/<art>.pdf")
+def auftrag_schein_vorschau(aid, art):
+    """Nicht unterschriebener Schein (Vorschau / zum Ausdrucken und Unterschreiben auf Papier)."""
+    con = dbm.get_db()
+    _auftrag_laden(aid)
+    snap = ann.snapshot(con, aid, _art_pruefen(art))
+    pdf = ann_pdf.erstellen(snap, daten_dir(), dbm.einstellungen(con))
+    return send_file(io.BytesIO(pdf), mimetype="application/pdf", download_name=ann_pdf.dateiname(snap))
+
+
+@bp.route("/auftraege/<int:aid>/unterschreiben/<art>", methods=["GET", "POST"])
+def auftrag_unterschreiben(aid, art):
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    _art_pruefen(art)
+    if request.method == "POST":
+        if not request.form.get("bestaetigt"):
+            raise EingabeFehler("Bitte bestätigen Sie die Angaben (Haken setzen).")
+        with dbm.Transaktion(con):
+            bid = ann.beleg_erstellen(con, aid, art, request.form.get("unterschrift", ""), _f("unterzeichner"),
+                                      daten_dir(), quelle="PC/Tablet", ip=request.remote_addr)
+        flash(f"{ann.ARTEN[art]} wurde unterschrieben und archiviert.", "ok")
+        return redirect(url_for("main.auftrag", aid=aid, beleg=bid) + "#annahmeschein")
+    snap = ann.snapshot(con, aid, art)
+    return render_template("unterschreiben.html", a=a, art=art, snap=snap, titel=ann.ARTEN[art],
+                           ziel=url_for("main.auftrag_unterschreiben", aid=aid, art=art), mobil=False,
+                           zurueck=url_for("main.auftrag", aid=aid) + "#annahmeschein")
+
+
+@bp.route("/belege/<int:bid>.pdf")
+def beleg_pdf(bid):
+    b = dbm.get_db().execute("SELECT * FROM auftrag_belege WHERE id=?", (bid,)).fetchone()
+    if not b:
+        abort(404)
+    daten, ok = ann.beleg_pdf(daten_dir(), b)
+    if not ok:
+        return render_template("pdf_fehler.html", d={"nummer": b["nummer"], "pdf_pfad": b["pdf_datei"],
+                                                     "pdf_sha256": b["pdf_sha256"]}, fehlt=daten is None), 409
+    return send_file(io.BytesIO(daten), mimetype="application/pdf", download_name=f"{b['nummer']}.pdf")
+
+
+@bp.route("/belege/<int:bid>/email", methods=["GET", "POST"])
+def beleg_email(bid):
+    con = dbm.get_db()
+    b = con.execute("SELECT * FROM auftrag_belege WHERE id=?", (bid,)).fetchone()
+    if not b:
+        abort(404)
+    a = _auftrag_laden(b["auftrag_id"])
+    einst = dbm.einstellungen(con)
+    titel = ann.ARTEN[b["art"]]
+    if request.method == "POST":
+        an = _f("an")
+        if "@" not in an:
+            raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
+        daten, ok = ann.beleg_pdf(daten_dir(), b)
+        if not ok:
+            raise EingabeFehler("Das archivierte PDF ist nicht mehr unverändert vorhanden – Versand abgebrochen.")
+        try:
+            hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""), daten, f"{b['nummer']}.pdf")
+        except MailFehler as e:
+            flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+            return redirect(url_for("main.beleg_email", bid=bid))
+        with dbm.Transaktion(con):
+            auf.verlauf(con, a["id"], f"{titel} per E-Mail versendet", f"{b['nummer']} an {an}")
+        flash(f"E-Mail an {an} wurde gesendet.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
+        return redirect(url_for("main.auftrag", aid=a["id"]) + "#annahmeschein")
+    k = con.execute("SELECT * FROM kunden WHERE id=?", (a["kunde_id"],)).fetchone()
+    text = (f"{anrede_brief(k)}\n\nanbei erhalten Sie Ihren {titel} {b['nummer']} zum Reparaturauftrag "
+            f"{a['auftragsnr']}" + (f" ({a['geraet']})" if a["geraet"] else "") + ".\n\n"
+            f"Mit freundlichen Grüßen\n{einst.get('inhaber') or ''}\n{einst.get('firma_name') or ''}")
+    return render_template("beleg_email.html", b=b, a=a, titel=titel, an=k["email"] or "",
+                           betreff=f"{titel} {b['nummer']} – {einst.get('firma_name') or ''}", text=text,
+                           smtp_ok=bool(einst.get("smtp_host")))
+
+
+@bp.route("/auftraege/<int:aid>/zugang", methods=["POST"])
+def auftrag_zugang_anzeigen(aid):
+    _auftrag_laden(aid)
+    return jsonify(wert=ann.zugang_anzeigen(dbm.get_db(), aid))
+
+
+@bp.route("/auftraege/<int:aid>/handy/<zweck>", methods=["POST"])
+def auftrag_handy(aid, zweck):
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    if zweck not in ann.ZWECKE:
+        abort(404)
+    with dbm.Transaktion(con):
+        ann.tokens_aufraeumen(con)
+        token = ann.token_erstellen(con, aid, zweck)
+    port = current_app.config.get("SERVER_PORT") or request.host.rsplit(":", 1)[-1]
+    url = ann.basis_url(dbm.einstellungen(con), port) + url_for("main.mobil", token=token)
+    im_netz = current_app.config.get("SERVER_HOST") == "0.0.0.0" or bool(dbm.einstellung("handy_adresse"))
+    return render_template("handy_qr.html", a=a, zweck=zweck, zweck_text=ann.ZWECKE[zweck], url=url,
+                           qr=Markup(ann.qr_svg(url)), minuten=ann.TOKEN_MINUTEN, im_netz=im_netz,
+                           stand=_auftrag_stand(con, aid))
+
+
+def _auftrag_stand(con, aid):
+    return {"belege": con.execute("SELECT COUNT(*) FROM auftrag_belege WHERE auftrag_id=?", (aid,)).fetchone()[0],
+            "fotos": con.execute("SELECT COUNT(*) FROM auftrag_fotos WHERE auftrag_id=?", (aid,)).fetchone()[0]}
+
+
+@bp.route("/auftraege/<int:aid>/stand.json")
+def auftrag_stand(aid):
+    _auftrag_laden(aid)
+    return jsonify(_auftrag_stand(dbm.get_db(), aid))
+
+
+def _mobil_zugang(token):
+    con = dbm.get_db()
+    z = ann.token_pruefen(con, token)
+    if not z:
+        return None, None
+    g.benutzer_ersatz = f"{z['benutzer'] or 'system'} (Handy)"
+    return z, con.execute(AUFTRAG_SQL + "WHERE a.id=?", (z["auftrag_id"],)).fetchone()
+
+
+@bp.route("/m/<token>", methods=["GET", "POST"])
+def mobil(token):
+    con = dbm.get_db()
+    z, a = _mobil_zugang(token)
+    if not z:
+        return render_template("mobil.html", abgelaufen=True), 410
+    if z["zweck"] == "fotos":
+        return render_template("mobil.html", z=z, a=a, kategorien=fot.KATEGORIEN, token=token,
+                               fotos=fot.liste(con, a["id"], mit_geloeschten=False))
+    if request.method == "POST":
+        try:
+            if not request.form.get("bestaetigt"):
+                raise EingabeFehler("Bitte bestätigen Sie die Angaben (Haken setzen).")
+            with dbm.Transaktion(con):
+                ann.beleg_erstellen(con, a["id"], z["zweck"], request.form.get("unterschrift", ""),
+                                    _f("unterzeichner"), daten_dir(), quelle="Handy (QR-Code)",
+                                    ip=request.remote_addr)
+                ann.token_benutzt(con, token)
+        except EingabeFehler as e:
+            flash(str(e), "fehler")
+            return redirect(url_for("main.mobil", token=token))
+        return render_template("mobil.html", fertig=True, titel=ann.ARTEN[z["zweck"]])
+    snap = ann.snapshot(con, a["id"], z["zweck"])
+    return render_template("unterschreiben.html", a=a, art=z["zweck"], snap=snap, titel=ann.ARTEN[z["zweck"]],
+                           ziel=url_for("main.mobil", token=token), mobil=True, zurueck=None)
+
+
+@bp.route("/m/<token>/fotos", methods=["POST"])
+def mobil_fotos(token):
+    z, a = _mobil_zugang(token)
+    if not z or z["zweck"] != "fotos":
+        return jsonify(ok=False, meldung="Der QR-Code ist abgelaufen. Bitte am PC einen neuen erzeugen."), 410
+    return _foto_hochladen(auftrag_id=a["id"], kategorien=fot.KATEGORIEN)
+
+
+@bp.route("/m/<token>/foto/<int:fid>")
+def mobil_foto_vorschau(token, fid):
+    z, a = _mobil_zugang(token)
+    f = dbm.get_db().execute("SELECT * FROM auftrag_fotos WHERE id=?", (fid,)).fetchone()
+    if not z or not f or f["auftrag_id"] != a["id"]:
+        abort(404)
+    pfad = fot.vorschau_pfad(daten_dir(), f["sha256"])
+    if not pfad.exists():
+        abort(404)
+    return send_file(pfad, mimetype="image/jpeg")
 
 
 # ---------------------------------------------------------------------- Fotos

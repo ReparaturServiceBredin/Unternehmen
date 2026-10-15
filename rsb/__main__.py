@@ -161,8 +161,21 @@ def fenster_modus(db_pfad):
         return "app"
 
 
+def im_netz(db_pfad):
+    """Einstellung „Programm im WLAN erreichbar machen“ (für QR-Codes am Handy)."""
+    try:
+        con = dbm.verbinden(db_pfad)
+        try:
+            return bool(dbm.einstellungen(con).get("handy_im_netz"))
+        finally:
+            con.close()
+    except Exception:
+        return False
+
+
 def main():
-    host = os.environ.get("RSB_HOST", "127.0.0.1")
+    daten_db = os.path.join(os.environ.get("RSB_DATEN") or str(PROJEKT / "Daten"), "buchhaltung.db")
+    host = os.environ.get("RSB_HOST") or ("0.0.0.0" if os.path.exists(daten_db) and im_netz(daten_db) else "127.0.0.1")
     port = int(os.environ.get("RSB_PORT", "5000"))
     adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
 
@@ -182,6 +195,7 @@ def main():
     update.alte_versionen_aufraeumen()
     app = create_app()
     update_beim_start(app)
+    app.config["SERVER_HOST"], app.config["SERVER_PORT"] = host, port
     try:
         ziel = auto_backup(app.config["DATEN"], app.config["DB_PFAD"])
         if ziel:

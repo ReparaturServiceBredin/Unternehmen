@@ -1,4 +1,5 @@
 {# Gemeinsames Formular für „+ Neuer Auftrag“ und die Detailansicht. w = Auftrag (Detail) oder Formularwerte (neu) #}
+{% macro betrag_feld(v) %}{{ (v|euro(false)) if v is number and v else (v or '') }}{% endmacro %}
 {% macro felder(w, kunden, status_namen, leistungsarten) -%}
 <div class="felder">
   <div><label>Kunde</label><select name="kunde_id" id="f_kunde" required><option value="">– bitte wählen –</option>
@@ -8,10 +9,34 @@
   <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if w.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
   <div><label>Gerät (Marke, Modell)</label><input type="text" name="geraet" value="{{ w.geraet or '' }}" placeholder="z. B. Xiaomi 14T Pro"></div>
   <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer" value="{{ w.seriennummer or '' }}"></div>
-  <div class="s3"><label>Mitgegebenes Zubehör</label><input type="text" name="zubehoer" value="{{ w.zubehoer or '' }}" placeholder="z. B. Ladekabel, Hülle"></div>
-  <div class="s12"><label>Fehlerbeschreibung</label><textarea name="fehler">{{ w.fehler or '' }}</textarea></div>
+  <div class="s3"><label>Voraussichtlich fertig am</label><input type="date" name="fertig_bis" value="{{ w.fertig_bis or '' }}"></div>
+  <div class="s12"><label>Fehler laut Kunde</label><textarea name="fehler">{{ w.fehler or '' }}</textarea></div>
+  <div class="s12"><label>Zustand bei Eingang (sichtbare Schäden, Kratzer, Wasserschaden …)</label><textarea name="zustand_eingang" style="min-height:60px">{{ w.zustand_eingang or '' }}</textarea>
+    <div class="hilfe">Bitte zusätzlich Fotos unter der Kategorie „Geräteeingang“ bzw. „Vorschaden“ hochladen – sie erscheinen auf dem Annahmeschein.</div></div>
+  {% set zb = zubehoer_teilen(w.zubehoer) %}
+  <div class="s12"><label>Abgegebenes Zubehör</label>
+    <div class="checkliste">{% for v in zb.vorlagen %}<label class="check"><input type="checkbox" name="zubehoer_check" value="{{ v }}" {{ 'checked' if v in zb.gewaehlt }}> {{ v }}</label>{% endfor %}</div>
+    <input type="text" name="zubehoer_sonstiges" value="{{ zb.rest }}" placeholder="Sonstiges Zubehör (frei)" style="margin-top:6px"></div>
+  <div class="s3"><label>Kosten-Obergrenze (€, brutto)</label><input type="text" name="kosten_obergrenze" value="{{ betrag_feld(w.kosten_obergrenze) }}" placeholder="leer = immer Rückfrage">
+    <div class="hilfe">Bis zu diesem Betrag ohne Rückfrage reparieren.</div></div>
+  <div class="s3"><label>Kostenvoranschlag</label><label class="check" style="margin-top:8px"><input type="checkbox" name="kva_gewuenscht" value="1" {{ 'checked' if w.kva_gewuenscht and w.kva_gewuenscht|string != '0' }}> KVA gewünscht</label></div>
+  <div class="s3"><label>Gebühr bei abgelehntem KVA (€)</label><input type="text" name="kva_gebuehr" value="{{ betrag_feld(w.kva_gebuehr) }}" placeholder="0,00"></div>
+  <div class="s3"><label>Gerätezugang</label><select name="zugang_art" class="zugang-art">{% for k, n in zugang_arten.items() %}<option value="{{ k }}" {{ 'selected' if (w.zugang_art or '') == k }}>{{ n if k != 'telefonisch' else 'telefonisch bei Bedarf' }}</option>{% endfor %}</select></div>
+  <div class="s12 zugang-feld">
+    <label>PIN / Passwort / Muster</label>
+    <div class="leiste">
+      <input type="password" name="zugang_wert" autocomplete="new-password" style="flex:1;min-width:180px" placeholder="{{ 'hinterlegt – zum Ändern neu eingeben' if w.zugang_geheim else 'wird verschlüsselt gespeichert' }}">
+      <button type="button" class="zweit klein zugang-zeigen-eingabe" title="Eingabe sichtbar machen">👁</button>
+      {% if w.id and w.zugang_geheim %}<button type="button" class="zweit klein zugang-anzeigen" data-url="{{ url_for('main.auftrag_zugang_anzeigen', aid=w.id) }}">Gespeicherten Zugang anzeigen</button><span class="zugang-ausgabe" style="font-family:monospace;font-weight:700"></span>
+      <label class="check" style="margin:0"><input type="checkbox" name="zugang_loeschen" value="1"> Zugangsdaten jetzt löschen</label>{% endif %}
+    </div>
+    <div class="muster" hidden><div class="muster-raster">{% for i in range(1, 10) %}<button type="button" data-punkt="{{ i }}">{{ i }}</button>{% endfor %}</div><button type="button" class="zweit klein muster-neu">Muster zurücksetzen</button>
+      <span class="klein">Punkte in der Reihenfolge des Musters antippen (1 = oben links, 9 = unten rechts).</span></div>
+    <div class="hilfe">Wird verschlüsselt gespeichert, nie auf dem Annahmeschein gedruckt und nach Abschluss des Auftrags automatisch gelöscht. Jede Anzeige wird im Verlauf vermerkt.{% if w.zugang_geloescht_am %} Zuletzt gelöscht am {{ w.zugang_geloescht_am|zeit_sek }}.{% endif %}</div>
+  </div>
   <div class="s12"><label>Interne Notizen (z. B. bestellte Teile, Rücksprache)</label><textarea name="notizen">{{ w.notizen or '' }}</textarea></div>
 </div>
+<input type="hidden" name="annahme_felder" value="1">
 <input type="hidden" name="ohne_kva" value="">
 <input type="hidden" name="leihe_spaeter" value="">
 {%- endmacro %}

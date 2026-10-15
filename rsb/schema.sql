@@ -298,7 +298,17 @@ CREATE TABLE IF NOT EXISTS auftraege (
     begonnen_am     TEXT,
     erledigt_am     TEXT,
     erstellt_am     TEXT NOT NULL,
-    geaendert_am    TEXT NOT NULL
+    geaendert_am    TEXT NOT NULL,
+    -- Annahme (0.13.0)
+    zustand_eingang TEXT,
+    kosten_obergrenze INTEGER,          -- Cent brutto: bis zu diesem Betrag ohne Rückfrage reparieren
+    kva_gewuenscht  INTEGER NOT NULL DEFAULT 0,
+    kva_gebuehr     INTEGER,            -- Cent brutto: Gebühr, falls der KVA abgelehnt wird
+    fertig_bis      TEXT,               -- voraussichtliche Fertigstellung
+    zugang_art      TEXT,               -- pin / passwort / muster / telefonisch / keiner
+    zugang_geheim   TEXT,               -- verschlüsselt (Fernet), wird nach Abschluss gelöscht
+    zugang_geloescht_am TEXT,
+    abgeholt_am     TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_auftraege_status ON auftraege(status);
 
@@ -765,3 +775,41 @@ BEFORE DELETE ON mahnungen
 BEGIN
     SELECT RAISE(ABORT, 'Mahnungen sind archiviert und können nicht gelöscht werden.');
 END;
+
+-- Annahme- und Abholscheine mit digitaler Unterschrift (unveränderlich archiviert)
+CREATE TABLE IF NOT EXISTS auftrag_belege (
+    id                 INTEGER PRIMARY KEY,
+    auftrag_id         INTEGER NOT NULL REFERENCES auftraege(id),
+    art                TEXT NOT NULL CHECK (art IN ('annahme', 'abholung')),
+    nummer             TEXT NOT NULL UNIQUE,      -- z. B. RA-2026-0001-AN1
+    unterzeichner      TEXT,
+    unterschrieben_am  TEXT NOT NULL,             -- Serverzeit Europe/Berlin mit Sekunden
+    unterschrift_sha256 TEXT NOT NULL,
+    quelle             TEXT,                      -- PC/Tablet oder Handy (QR-Code)
+    ip                 TEXT,
+    pdf_datei          TEXT NOT NULL,
+    pdf_sha256         TEXT NOT NULL,
+    snapshot           TEXT NOT NULL,             -- JSON der unterschriebenen Angaben
+    benutzer           TEXT,
+    erstellt_am        TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_auftrag_belege ON auftrag_belege(auftrag_id);
+CREATE TRIGGER IF NOT EXISTS auftrag_beleg_schutz_update BEFORE UPDATE ON auftrag_belege
+BEGIN
+    SELECT RAISE(ABORT, 'Unterschriebene Annahme-/Abholscheine dürfen nicht geändert werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS auftrag_beleg_schutz_delete BEFORE DELETE ON auftrag_belege
+BEGIN
+    SELECT RAISE(ABORT, 'Unterschriebene Annahme-/Abholscheine dürfen nicht gelöscht werden.');
+END;
+
+-- Zeitlich begrenzte Zugänge für das Handy (QR-Code): Fotos aufnehmen oder unterschreiben
+CREATE TABLE IF NOT EXISTS mobil_zugaenge (
+    token        TEXT PRIMARY KEY,
+    auftrag_id   INTEGER NOT NULL REFERENCES auftraege(id) ON DELETE CASCADE,
+    zweck        TEXT NOT NULL CHECK (zweck IN ('fotos', 'annahme', 'abholung')),
+    erstellt_am  TEXT NOT NULL,
+    gueltig_bis  TEXT NOT NULL,
+    benutzer     TEXT,
+    benutzt_am   TEXT
+);

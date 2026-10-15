@@ -158,6 +158,26 @@ STANDARD_EINSTELLUNGEN = {
     "interessent_loeschen_monate": 6,
     "anfragen_letzter_abruf": "",
     "anfragen_letzter_fehler": "",
+    # Annahme-/Abholschein (Reparaturannahme)
+    "annahme_zubehoer": "Ladekabel\nNetzteil\nHülle / Case\nSIM-Karte\nSpeicherkarte\nEingabestift\nTasche\n"
+                        "Originalverpackung",
+    "annahme_kva_gebuehr_cent": 0,          # Vorschlag für neue Aufträge (Gebühr bei abgelehntem KVA)
+    "annahme_datenschutz": (
+        "Bitte sichern Sie Ihre Daten vor der Abgabe. Bei einer Reparatur kann es trotz aller Sorgfalt zu "
+        "Datenverlust kommen – für die Sicherung Ihrer Daten sind Sie selbst verantwortlich. Wir greifen auf Ihre "
+        "Daten nur zu, soweit es für die Reparatur und den Funktionstest erforderlich ist. Angegebene "
+        "Zugangsdaten (PIN, Passwort, Muster) speichern wir verschlüsselt und löschen sie automatisch, sobald der "
+        "Auftrag abgeschlossen ist. Ihre Kontaktdaten verarbeiten wir zur Durchführung des Auftrags "
+        "(Art. 6 Abs. 1 lit. b DSGVO)."),
+    "annahme_abholbedingungen": (
+        "Wir informieren Sie, sobald Ihr Gerät abholbereit ist. Bitte holen Sie es innerhalb von 14 Tagen nach "
+        "dieser Mitteilung ab. Danach können wir eine angemessene Lagergebühr berechnen. Wird das Gerät trotz "
+        "schriftlicher Aufforderung nicht abgeholt, behalten wir uns weitere Schritte im Rahmen der gesetzlichen "
+        "Vorschriften vor. Die Herausgabe erfolgt gegen Vorlage dieses Annahmescheins oder eines Ausweises."),
+    "abholschein_text": "Ich habe mein Gerät mit dem oben aufgeführten Zubehör vollständig und funktionsfähig "
+                        "zurückerhalten.",
+    "handy_im_netz": False,                 # Server im WLAN erreichbar machen (für QR-Code am Handy), Neustart nötig
+    "handy_adresse": "",                    # optional: feste Adresse, z. B. 192.168.178.20:5000
     # Programm-Updates
     "update_auto": True,
     "update_letzte_pruefung": "",
@@ -198,7 +218,9 @@ def jetzt_berlin():
 
 
 def aktueller_benutzer():
-    return session.get("benutzer", "system") if has_request_context() else "system"
+    if not has_request_context():
+        return "system"
+    return g.get("benutzer_ersatz") or session.get("benutzer", "system")
 
 
 def verbinden(pfad):
@@ -277,12 +299,21 @@ MIGRATIONEN = [
     ("kunden", "email_weitere", "TEXT"),
     ("dokumente", "snapshot_sha256", "TEXT"),
     ("kunden", "anonymisiert_am", "TEXT"),
+    ("auftraege", "zustand_eingang", "TEXT"),
+    ("auftraege", "kosten_obergrenze", "INTEGER"),
+    ("auftraege", "kva_gewuenscht", "INTEGER NOT NULL DEFAULT 0"),
+    ("auftraege", "kva_gebuehr", "INTEGER"),
+    ("auftraege", "fertig_bis", "TEXT"),
+    ("auftraege", "zugang_art", "TEXT"),
+    ("auftraege", "zugang_geheim", "TEXT"),
+    ("auftraege", "zugang_geloescht_am", "TEXT"),
+    ("auftraege", "abgeholt_am", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
 NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
                  "email_nachrichten", "email_kunden", "imap_ordner_status", "feldaenderungen", "zahlungen",
-                 "bank_importe", "bank_umsaetze", "mahnungen"]
+                 "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge"]
 
 
 def _migrieren(con, pfad=None):

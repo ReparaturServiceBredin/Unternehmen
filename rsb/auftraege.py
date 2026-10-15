@@ -24,9 +24,15 @@ def naechste_auftragsnr(con):
     return f"{praefix}{nr + 1:04d}"
 
 
+ANNAHME_FELDER = ("zustand_eingang", "kosten_obergrenze", "kva_gewuenscht", "kva_gebuehr", "fertig_bis", "zugang_art")
+
+
 def anlegen(con, kunde_id, geraet="", fehler="", leistungsart="", seriennummer="", zubehoer="", notizen="",
-            anfrage_id=None):
-    """Legt einen Auftrag in der Spalte „offen“ an. Muss in einer Transaktion laufen."""
+            anfrage_id=None, **annahme):
+    """Legt einen Auftrag in der Spalte „offen“ an. Muss in einer Transaktion laufen.
+
+    annahme: optionale Felder aus ANNAHME_FELDER (Kosten-Obergrenze, KVA-Wunsch, Fertigstellung …).
+    """
     if not con.execute("SELECT 1 FROM kunden WHERE id=?", (kunde_id,)).fetchone():
         raise EingabeFehler("Bitte einen Kunden auswählen.")
     nr = naechste_auftragsnr(con)
@@ -37,6 +43,10 @@ def anlegen(con, kunde_id, geraet="", fehler="", leistungsart="", seriennummer="
         "VALUES (?,?,?,'offen',?,?,?,?,?,?,?,?,?,?)",
         (nr, kunde_id, anfrage_id, geraet, leistungsart, seriennummer, zubehoer, fehler, notizen, reihenfolge,
          dbm.jetzt(), dbm.jetzt(), dbm.jetzt()))
+    weitere = {k: v for k, v in annahme.items() if k in ANNAHME_FELDER}
+    if weitere:
+        con.execute(f"UPDATE auftraege SET {', '.join(f'{k}=?' for k in weitere)} WHERE id=?",
+                    (*weitere.values(), cur.lastrowid))
     dbm.protokollieren("auftrag_angelegt", "auftrag", cur.lastrowid, {"auftragsnr": nr}, con=con)
     verlauf(con, cur.lastrowid, "Auftrag angelegt", nr)
     return cur.lastrowid
@@ -177,16 +187,31 @@ def rechnung_erstellen(con, auftrag_id):
         if r and r["status"] != "storniert":
             return a["rechnung_id"], False
     positionen = []
-    if a["kva_id"]:
+    einst = dbm.einstellungen(con)
+    kva = con.execute("SELECT * FROM dokumente WHERE id=?", (a["kva_id"],)).fetchone() if a["kva_id"] else None
+    if kva and kva["kva_status"] == "abgelehnt" and a["kva_gebuehr"]:
+        positionen = [kva_gebuehr_position(einst, a["kva_gebuehr"], kva)]
+        art = "Entwurf mit der Gebühr für den abgelehnten KVA"
+    elif kva:
         positionen = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (a["kva_id"],)).fetchall()
-    did = logik.neuer_entwurf(con, dbm.einstellungen(con), "rechnung", a["kunde_id"], betreff(a), positionen,
+        art = "Entwurf mit Positionen aus dem KVA"
+    did = logik.neuer_entwurf(con, einst, "rechnung", a["kunde_id"], betreff(a), positionen,
                               leistungsdatum=date.today().isoformat())
     con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE id=?", (did, dbm.jetzt(), auftrag_id))
-    verlauf(con, auftrag_id, "Rechnung erstellt",
-            "Entwurf mit Positionen aus dem KVA" if positionen else "leerer Rechnungsentwurf")
+    verlauf(con, auftrag_id, "Rechnung erstellt", art if positionen else "leerer Rechnungsentwurf")
     from .leihgeraete import fuer_auftragsrechnung
     fuer_auftragsrechnung(con, auftrag_id, did)  # Leihgebühr/Schäden zurückgenommener Leihgeräte
     return did, True
+
+
+def kva_gebuehr_position(einst, brutto, kva):
+    """Rechnungsposition „Gebühr Kostenvoranschlag“ (Betrag auf dem Annahmeschein ist brutto)."""
+    satz = float(einst.get("regel_steuersatz") or 19)
+    netto = int(round(brutto * 100 / (100 + satz))) if einst["steuer_modus"] == "regel" else brutto
+    return {"artikel_id": None, "bezeichnung": "Gebühr Kostenvoranschlag",
+            "beschreibung": f"Kostenvoranschlag {kva['nummer'] or ''} wurde nicht angenommen (Vereinbarung lt. "
+                            "Annahmeschein)", "menge": 1, "einheit": "pauschal", "einzelpreis": netto,
+            "teilekosten": 0, "steuersatz": satz, "leistungsart": "Sonstiges"}
 
 
 def status_setzen(con, auftrag_id, status, vor_id=None):
@@ -222,6 +247,9 @@ def status_setzen(con, auftrag_id, status, vor_id=None):
         dbm.protokollieren("auftrag_status", "auftrag", auftrag_id, {"von": a["status"], "nach": status}, con=con)
         verlauf(con, auftrag_id, "Status geändert", f"{STATUS[a['status']]} → {STATUS[status]}")
         from .leihgeraete import interner_auftrag_erledigt, ist_intern
+        if status == "erledigt":
+            from .annahme import zugang_loeschen
+            zugang_loeschen(con, auftrag_id, "Auftrag abgeschlossen (automatisch)")
         if status == "erledigt" and ist_intern(con, a["kunde_id"]):
             interner_auftrag_erledigt(con, auftrag_id)  # interne Reparatur eines Leihgeräts: keine Rechnung
         elif status == "erledigt":

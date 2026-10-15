@@ -259,3 +259,17 @@ details.mail summary { cursor: pointer; display: flex; gap: 10px; align-items: b
 .zs-erstattung { background: var(--gelb-hell); color: #7a5b00; }
 tr.storniert td { color: var(--grau); text-decoration: line-through; }
 button.klein:not(.zweit):not(.gefahr), .knopf.klein:not(.zweit):not(.gefahr) { color: #fff; }
+
+/* Annahmeschein: Unterschrift, Muster, QR-Code */
+.unterschrift canvas { width: 100%; height: 220px; border: 2px dashed var(--linie, #c9ced6); border-radius: 10px; background: #fff; touch-action: none; display: block; cursor: crosshair; }
+.unterschrift.hat-unterschrift canvas { border-style: solid; border-color: var(--blau, #1C54A3); }
+.unterschrift .grundlinie { font-size: 12px; color: var(--grau); margin-top: 4px; }
+.muster { margin-top: 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.muster-raster { display: grid; grid-template-columns: repeat(3, 38px); gap: 6px; }
+.muster-raster button { width: 38px; height: 38px; border-radius: 50%; padding: 0; text-align: center; justify-content: center; display: inline-flex; align-items: center; background: #fff; color: var(--text); border: 2px solid var(--linie, #c9ced6); }
+.muster-raster button.gewaehlt { background: var(--blau, #1C54A3); color: #fff; border-color: var(--blau, #1C54A3); }
+.qr-box { text-align: center; }
+.qr-box svg { width: 260px; height: 260px; max-width: 100%; }
+.schein-text { max-height: 220px; overflow: auto; white-space: pre-wrap; font-size: 13px; background: var(--hell, #f5f7fa); padding: 10px 12px; border-radius: 8px; }
+.mobil-seite { max-width: 720px; margin: 0 auto; padding: 14px; }
+.mobil-seite .karte { margin-bottom: 12px; }

@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.13.0 | 15.10.2026 | Annahme- und Abholschein mit digitaler Unterschrift, Handy per QR-Code |
 | 0.12.0 | 15.10.2026 | Zahlungen, offene Posten, Bankabgleich, Mahnwesen |
 | 0.11.0 | 15.10.2026 | GoBD-Grundlagen: Gutschrift, Pflichtangaben, Änderungsprotokoll, Aufbewahrung |
 | 0.10.0 | 15.10.2026 | Automatische E-Mail-Historie je Kunde |
@@ -33,6 +34,54 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.13.0 – 15.10.2026
+Annahmeschein mit digitaler Unterschrift (Ausbaustufe 3 von 10).
+
+### Neu
+
+**Mehr Angaben bei der Annahme:** Im Auftrag gibt es jetzt:
+- Zustand bei Eingang
+- Zubehör als Checkliste
+- Kosten-Obergrenze (Reparatur ohne Rückfrage bis zu diesem Betrag)
+- „KVA gewünscht“ und eine Gebühr für den Fall, dass der KVA abgelehnt wird
+- voraussichtliche Fertigstellung
+
+**Gerätezugang:** PIN, Passwort oder Entsperrmuster lassen sich hinterlegen. Fürs Muster gibt es ein Punkte-Raster
+zum Antippen. Alternativ: „Kunde gibt den Zugang bei Bedarf telefonisch durch“.
+- Die Daten werden verschlüsselt gespeichert und nie gedruckt.
+- Jede Anzeige wird im Verlauf vermerkt.
+- Nach Abschluss oder Abholung löscht das Programm sie automatisch.
+
+**Annahmeschein und Abholschein:** Im Auftrag gibt es den neuen Reiter „Annahme / Abholung“. Der Kunde unterschreibt
+direkt am PC oder Tablet mit Finger, Stift oder Maus, oder auf dem Handy über einen QR-Code.
+- Das PDF mit Unterschrift, Zeitpunkt (Serverzeit) und Eingangsfotos wird unverändert archiviert und mit SHA-256 gesichert.
+- Danach lässt es sich ausdrucken oder per E-Mail senden.
+- Für die Unterschrift auf Papier gibt es eine Vorschau ohne Unterschrift.
+- Der Abholschein bestätigt „vollständig und funktionsfähig erhalten“ und trägt das Abholdatum ein.
+
+**Fotos mit dem Handy:** Im Reiter Fotos erzeugt „Fotos mit dem Handy (QR-Code)“ einen 30 Minuten gültigen Link. Die
+Fotos landen direkt im Auftrag.
+
+**Abgelehnter KVA:** Ist eine Gebühr vereinbart, enthält der Rechnungsentwurf nur diese Gebühr statt der KVA-Positionen.
+
+**Einstellungen → Annahme & Abholung:** Hier pflegen Sie:
+- Zubehör-Liste
+- Gebühren-Vorschlag
+- Datenschutz-Hinweis
+- Abholbedingungen
+- Text des Abholscheins
+- Freigabe fürs WLAN
+
+### Wichtig
+- Damit Handys den QR-Code öffnen können, schalten Sie „Programm im WLAN erreichbar machen“ ein und starten das
+  Programm neu. Windows fragt dann nach der Firewall: nur **private Netzwerke** erlauben.
+- Aus dem WLAN sind ohne Passwortschutz nur die QR-Seiten erreichbar.
+- Die mitgelieferten Texte zu Datenschutz und Abholung sind Vorschläge. Bitte rechtlich prüfen lassen.
+
+### Technisch
+- Neue Tabellen `auftrag_belege` (gegen Ändern und Löschen geschützt) und `mobil_zugaenge`.
+- Neue Spalten in `auftraege`. Vor der Umstellung wird automatisch gesichert.
 
 ## 0.12.0 – 15.10.2026
 Zahlungseingänge, offene Posten, Bankabgleich und Mahnwesen (Ausbaustufe 2 von 10).

@@ -4,13 +4,13 @@ import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from flask import Flask, flash, redirect, request, session, url_for
+from flask import abort, Flask, flash, redirect, request, session, url_for
 
 from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.12.0"
+VERSION_NUMMER = "0.13.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -53,15 +53,35 @@ def create_app(daten_dir=None, testing=False):
 
     app.jinja_env.filters.update(zeit_sek=zeit_sek, euro=euro, datum=datum_de, zeit=zeit_de, menge=menge_text, kunde_name=kunde_name,
                                  tage_seit=tage_seit)
-    app.jinja_env.globals.update(csrf_token=csrf_token, version=VERSION)
+    def zubehoer_teilen(text):
+        from .annahme import zubehoer_aufteilen, zubehoer_vorlagen
+        vorlagen = zubehoer_vorlagen(dbm.einstellungen())
+        gewaehlt, rest = zubehoer_aufteilen(text, vorlagen)
+        return {"vorlagen": vorlagen, "gewaehlt": gewaehlt, "rest": rest}
+
+    from .annahme import ZUGANG_ARTEN
+    app.jinja_env.globals.update(csrf_token=csrf_token, version=VERSION, zubehoer_teilen=zubehoer_teilen,
+                                 zugang_arten=ZUGANG_ARTEN)
 
     from .views import bp
     app.register_blueprint(bp)
 
     offen = {"main.login", "main.einrichten", "main.version_info", "static"}
 
+    mobil = {"main.mobil", "main.mobil_fotos", "main.mobil_foto_vorschau"}  # Handy-Seiten (QR-Code mit Zugangs-Token)
+    lokal = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
     @app.before_request
     def anmeldung_pruefen():
+        if request.endpoint == "static":
+            return None
+        if request.endpoint in mobil:
+            csrf_pruefen()  # Zugriff nur mit gültigem Token, das prüft die Seite selbst
+            return None
+        if (request.remote_addr or "127.0.0.1") not in lokal and not (
+                dbm.einstellung("login_aktiv") and dbm.einstellung("passwort_hash")):
+            # Aus dem WLAN ohne Passwortschutz: nur die QR-Code-Seiten
+            abort(403, "Zugriff aus dem Netzwerk ist nur mit eingeschaltetem Passwortschutz möglich.")
         if request.endpoint in offen:
             return None
         if not dbm.einstellung("login_aktiv"):
