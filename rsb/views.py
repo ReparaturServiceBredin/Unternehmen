@@ -149,7 +149,7 @@ def kunde(kid=None):
         abort(404)
     if request.method == "POST":
         felder = {f: _f(f) for f in ("typ", "firma", "anrede", "vorname", "nachname", "strasse", "plz", "ort", "land",
-                                     "email", "telefon", "ust_idnr", "notizen")}
+                                     "email", "telefon", "ust_idnr", "notizen", "email_weitere")}
         if felder["typ"] not in ("privat", "firma"):
             felder["typ"] = "privat"
         if not (felder["firma"] or felder["nachname"]):
@@ -171,6 +171,7 @@ def kunde(kid=None):
                 kid = cur.lastrowid
                 dbm.protokollieren("kunde_angelegt", "kunde", kid, {"kundennr": nr}, con=con)
         flash("Kunde gespeichert.", "ok")
+        _historie_nachholen(k, felder)
         if request.form.get("danach") == "rechnung":
             return redirect(url_for("main.dokument_neu", kunde_id=kid))
         return redirect(url_for("main.kunde", kid=kid))
@@ -190,7 +191,32 @@ def kunde(kid=None):
         if kid else []
     return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen,
                            auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG,
-                           leihen=kunden_leihen, heute=date.today().isoformat())
+                           leihen=kunden_leihen, heute=date.today().isoformat(),
+                           emails=_kunden_emails(con, kid, request.args.get("mails") == "alle"),
+                           email_anzahl=con.execute("SELECT COUNT(*) FROM email_kunden WHERE kunde_id=?",
+                                                    (kid,)).fetchone()[0] if kid else 0)
+
+
+def _kunden_emails(con, kid, alle=False):
+    if not kid:
+        return []
+    from .email_historie import fuer_kunde
+    return fuer_kunde(con, kid, None if alle else 50)
+
+
+def _historie_nachholen(alt, felder):
+    """Neue Adresse beim Kunden → im Hintergrund gezielt im Postfach nach früheren Mails suchen."""
+    from . import email_historie as eh
+    einst = dbm.einstellungen()
+    if not einst.get("historie_aktiv"):
+        return
+    vorher = set(eh.adressen_aus_text(alt["email"]) + eh.adressen_aus_text(alt["email_weitere"])) if alt else set()
+    neu = [a for a in eh.adressen_aus_text(felder["email"]) + eh.adressen_aus_text(felder["email_weitere"])
+           if a not in vorher]
+    if neu:
+        eh.im_hintergrund(current_app._get_current_object(), eh.adressen_nachholen, neu,
+                          synchron=current_app.config.get("HISTORIE_SYNCHRON", False))
+        flash(f"Das Postfach wird im Hintergrund nach E-Mails von/an {', '.join(neu)} durchsucht.", "info")
 
 
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
@@ -218,6 +244,8 @@ def kunde_loeschen(kid):
         raise EingabeFehler("Dieser Kunde hatte Leihgeräte – die Leihprotokolle müssen erhalten bleiben. "
                             "Sie können ihn stattdessen archivieren.")
     with dbm.Transaktion(con):
+        from .email_historie import kunde_entfernen
+        kunde_entfernen(con, kid)  # E-Mail-Historie dieses Kunden (Datenschutz)
         for a in con.execute("SELECT id, auftragsnr FROM auftraege WHERE kunde_id=?", (kid,)).fetchall():
             auf.verlauf(con, a["id"], "Auftrag gelöscht", a["auftragsnr"])
         con.execute("DELETE FROM auftraege WHERE kunde_id=?", (kid,))
@@ -618,14 +646,16 @@ EINSTELLUNGS_BEREICHE = {
     "programm": ["update_auto", "fenster_modus"],
     "vertraege": ["abo_modus", "vertrag_erinnerung_tage"],
     "leihgeraete": ["leihbedingungen"],
-    "anfragen": ["anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_sicherheit", "imap_benutzer",
+    "anfragen": ["historie_aktiv", "historie_ordner_eingang", "historie_ordner_gesendet", "historie_zeitraum_tage",
+                 "historie_eigene_adressen",
+                 "anfragen_aktiv", "anfragen_intervall_min", "imap_host", "imap_port", "imap_sicherheit", "imap_benutzer",
                  "imap_ordner", "imap_zielordner", "imap_verschieben", "anfrage_erkennung", "anfrage_auto_kunde",
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {"gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {"historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
+GANZZAHL = {"historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
 KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
@@ -665,6 +695,14 @@ def einstellungen():
                 raise EingabeFehler("Für die Ablage im Gesendet-Ordner bitte einen IMAP-Server angeben.")
         if bereich == "anfragen" and neu["imap_sicherheit"] not in ("ssl", "starttls"):
             neu["imap_sicherheit"] = "ssl"
+        if bereich == "anfragen":
+            from .email_historie import ZEITRAUM, ordner_liste
+            if neu["historie_zeitraum_tage"] not in ZEITRAUM:
+                neu["historie_zeitraum_tage"] = 182
+            neu["historie_ordner_eingang"] = "\n".join(ordner_liste(request.form.get("historie_ordner_eingang"))) \
+                or "INBOX"
+            neu["historie_ordner_gesendet"] = "\n".join(ordner_liste(request.form.get("historie_ordner_gesendet")))
+            neu["historie_eigene_adressen"] = request.form.get("historie_eigene_adressen", "").strip()
         if bereich == "anfragen" and request.form.get("imap_passwort"):
             neu["imap_passwort_enc"] = verschluesseln(request.form["imap_passwort"])
         if bereich == "vertraege" and neu["abo_modus"] not in ("entwurf", "automatisch"):
@@ -2156,6 +2194,38 @@ def imap_ordner_abrufen():
     return jsonify(ok=True, ordner=ordner,
                    meldung=f"{len(ordner)} Ordner gefunden." + (" Der Gesendet-Ordner ist vorausgewählt."
                                                                  if any(o["gesendet"] for o in ordner) else ""))
+
+
+@bp.route("/einstellungen/historie/abrufen", methods=["POST"])
+def historie_abrufen():
+    from . import email_historie as eh
+    if request.form.get("neu_abgleichen"):
+        eh.zuruecksetzen(dbm.get_db())
+    eh.im_hintergrund(current_app._get_current_object(), eh.abgleich_mit_protokoll,
+                      synchron=current_app.config.get("HISTORIE_SYNCHRON", False))
+    flash("E-Mail-Historie wird im Hintergrund abgeglichen. Das Ergebnis steht nach kurzer Zeit hier und bei den "
+          "Kunden.", "ok")
+    return redirect(url_for("main.einstellungen", bereich="anfragen") + "#historie")
+
+
+@bp.route("/einstellungen/anfragen/imap-ordner", methods=["POST"])
+def anfragen_imap_ordner():
+    """Ordnerliste des Anfragen-/Historie-Postfachs (Namen in IMAP-UTF-7 werden lesbar dekodiert)."""
+    from .imap_ablage import ordner_auflisten
+    f = request.form
+    werte = {"imap_host": f.get("imap_host", "").strip(), "imap_port": f.get("imap_port", "").strip(),
+             "imap_sicherheit": f.get("imap_sicherheit", ""), "imap_benutzer": f.get("imap_benutzer", "").strip(),
+             "imap_passwort_klartext": f.get("imap_passwort", "")}
+    try:
+        imap = anf.imap_anmelden(anf.imap_zugang(dbm.einstellungen(), werte))
+        try:
+            ordner = ordner_auflisten(imap)
+        finally:
+            from .imap_verbindung import abmelden
+            abmelden(imap)
+    except Exception as e:
+        return jsonify(ok=False, meldung=str(e))
+    return jsonify(ok=True, ordner=ordner, meldung=f"{len(ordner)} Ordner gefunden.")
 
 
 @bp.route("/einstellungen/anfragen/imap-test", methods=["POST"])

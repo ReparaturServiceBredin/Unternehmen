@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS kunden (
     ust_idnr         TEXT,
     zahlungsziel_tage INTEGER,
     notizen          TEXT,
+    email_weitere    TEXT,            -- weitere Adressen / Ansprechpartner (eine je Zeile) für die E-Mail-Historie
     interessent      INTEGER NOT NULL DEFAULT 0,
     quelle           TEXT,
     archiviert       INTEGER NOT NULL DEFAULT 0,
@@ -574,3 +575,41 @@ BEFORE DELETE ON leihgeraet_verlauf
 BEGIN
     SELECT RAISE(ABORT, 'Die Historie kann nicht gelöscht werden.');
 END;
+
+-- ====================================================================== E-Mail-Historie je Kunde
+-- Nur Mails mit mindestens einem Kundentreffer werden gespeichert (alle anderen werden übersprungen).
+CREATE TABLE IF NOT EXISTS email_nachrichten (
+    id            INTEGER PRIMARY KEY,
+    message_id    TEXT UNIQUE NOT NULL,             -- verhindert Duplikate (mehrere Ordner, selbst versendet)
+    richtung      TEXT NOT NULL CHECK (richtung IN ('gesendet', 'empfangen')),
+    datum         TEXT,                             -- laut Date-Kopf, deutsche Zeit
+    von           TEXT,
+    an            TEXT,
+    cc            TEXT,
+    betreff       TEXT,
+    text          TEXT,                             -- lesbarer Text der Mail (HTML wird in Text umgewandelt)
+    anhaenge      TEXT,                             -- JSON-Liste: Name und Größe (Inhalte werden nicht gespeichert)
+    quelle        TEXT NOT NULL DEFAULT 'imap',     -- imap / programm (beim Versand aus dem Programm)
+    ordner        TEXT,                             -- erster IMAP-Fundort
+    imap_uid      INTEGER,
+    dokument_id   INTEGER REFERENCES dokumente(id) ON DELETE SET NULL,
+    anfrage_id    INTEGER,
+    erfasst_am    TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_email_datum ON email_nachrichten(datum);
+
+CREATE TABLE IF NOT EXISTS email_kunden (
+    nachricht_id  INTEGER NOT NULL REFERENCES email_nachrichten(id) ON DELETE CASCADE,
+    kunde_id      INTEGER NOT NULL REFERENCES kunden(id) ON DELETE CASCADE,
+    adresse       TEXT,                             -- über welche Adresse zugeordnet
+    PRIMARY KEY (nachricht_id, kunde_id)
+);
+CREATE INDEX IF NOT EXISTS ix_email_kunden_kunde ON email_kunden(kunde_id);
+
+-- Stand des inkrementellen Abrufs je IMAP-Ordner
+CREATE TABLE IF NOT EXISTS imap_ordner_status (
+    ordner          TEXT PRIMARY KEY,
+    uidvalidity     INTEGER,
+    letzte_uid      INTEGER NOT NULL DEFAULT 0,
+    aktualisiert_am TEXT
+);

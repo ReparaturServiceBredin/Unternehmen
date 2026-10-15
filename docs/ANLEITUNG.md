@@ -341,3 +341,28 @@ Rücknahme eine eigene Rechnung über „Abrechnung“ im Leihvorgang.
 **Nichts geht verloren:** Ausgabe- und Rückgabeprotokolle, Schadensfälle und die Historie lassen sich nicht ändern
 oder löschen. Eine irrtümliche Ausgabe oder ein falscher Schadensfall wird mit Begründung **storniert** und bleibt
 markiert sichtbar.
+
+## 15. E-Mail-Historie bei Kunden
+
+Alle E-Mails, die Sie mit einem Kunden austauschen, erscheinen automatisch beim Kunden unter **„E-Mail-Verlauf“**.
+Das gilt für Mails aus dem Programm, aus Outlook und vom Handy.
+
+**Einrichten:** *Einstellungen → Anfragen*. Der IMAP-Zugang oben muss funktionieren (z. B. `imap.ionos.de`, Port 143,
+STARTTLS, „Verbindung testen“). Darunter im Abschnitt **„E-Mail-Historie bei Kunden“**:
+1. „E-Mail-Historie aktivieren“ ankreuzen.
+2. **„Ordner abrufen“** und die Ordner ankreuzen: empfangene Mails (meist `INBOX`, ggf. Unterordner) und gesendete
+   Mails (bei IONOS meist „Gesendete Objekte“).
+3. Festlegen, wie weit der erste Import zurückgehen soll (z. B. 6 Monate).
+4. Speichern und unten auf **„Jetzt abgleichen“** klicken. Danach läuft der Abgleich automatisch im Intervall der
+   Anfragen, solange das Programm geöffnet ist.
+
+**Was gespeichert wird:** nur Mails, an denen mindestens ein Kunde beteiligt ist (Absender, Empfänger, Cc oder
+Antwortadresse). Alles andere wird übersprungen und nicht gespeichert. Hat ein Kunde mehrere Adressen oder
+Ansprechpartner, tragen Sie diese beim Kunden unter **„Weitere E-Mail-Adressen“** ein. Das Programm sucht dann sofort im
+Postfach nach früheren Mails dieser Adressen. Das passiert auch beim Anlegen eines neuen Kunden.
+
+**Ihr Postfach bleibt unverändert:** Das Programm liest nur. Nichts wird als gelesen markiert, verschoben oder
+gelöscht. Anhänge bleiben im Postfach; beim Kunden stehen nur ihre Namen.
+
+**Neu abgleichen:** Wenn Sie den Importzeitraum vergrößern, klicken Sie auf „Alle Ordner neu abgleichen“. Doppelte
+Einträge entstehen dabei nicht.

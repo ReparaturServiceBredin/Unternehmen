@@ -151,6 +151,22 @@
       <span class="klein">prüft Verbindung, Anmeldung und die Ordner – auch vor dem Speichern</span></div>
     <div class="s12"><div id="abrufmeldung" class="meldung" style="display:none;margin:0;white-space:pre-line"></div></div>
   </div>
+  <br><h2 id="historie">E-Mail-Historie bei Kunden</h2>
+  <p class="klein">Alle E-Mails mit Kunden erscheinen automatisch beim Kunden – egal ob aus dem Programm, Outlook oder vom Handy gesendet. Es wird der IMAP-Zugang oben verwendet und das Postfach nur gelesen (nichts wird als gelesen markiert, verschoben oder gelöscht). E-Mails ohne Bezug zu einem Kunden werden übersprungen und nicht gespeichert. Abgerufen wird im gleichen Intervall wie die Anfragen.</p>
+  <div class="felder">
+    {{ haken('historie_aktiv', 'E-Mail-Historie aktivieren') }}
+    <div><label>Ordner für empfangene Mails (einer je Zeile)</label><textarea name="historie_ordner_eingang" id="hist_eingang" style="min-height:60px">{{ einst.historie_ordner_eingang or 'INBOX' }}</textarea>
+      <div id="hist_eingang_wahl" class="checkliste" style="margin-top:6px"></div></div>
+    <div><label>Ordner für gesendete Mails (einer je Zeile)</label><textarea name="historie_ordner_gesendet" id="hist_gesendet" style="min-height:60px">{{ einst.historie_ordner_gesendet or '' }}</textarea>
+      <div class="hilfe">bei IONOS meist „Gesendete Objekte“</div>
+      <div id="hist_gesendet_wahl" class="checkliste" style="margin-top:6px"></div></div>
+    <div class="s12"><button type="button" class="zweit" id="histordnerknopf">Ordner abrufen</button> <span class="klein">zeigt alle Ordner des Postfachs zum Ankreuzen (Umlaute werden richtig dargestellt)</span></div>
+    <div class="s4"><label>Erster Import: wie weit zurück</label><select name="historie_zeitraum_tage">
+      {% for t, n in [(30, 'letzte 30 Tage'), (182, 'letzte 6 Monate'), (365, 'letztes Jahr'), (0, 'alles')] %}<option value="{{ t }}" {{ 'selected' if (einst.historie_zeitraum_tage if einst.historie_zeitraum_tage is not none else 182) == t }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="s8"><label>Weitere eigene Adressen (werden beim Abgleich ignoriert)</label><textarea name="historie_eigene_adressen" style="min-height:40px" placeholder="reparatur-bredin@gmail.com">{{ einst.historie_eigene_adressen or '' }}</textarea>
+      <div class="hilfe">Absender-, SMTP- und IMAP-Adresse sind automatisch dabei.</div></div>
+    <div class="s12"><div id="histmeldung" class="meldung" style="display:none;margin:0"></div></div>
+  </div>
   <br><h2>Prüfung &amp; Kunden</h2>
   <div class="felder">
     {{ haken('anfrage_auto_kunde', 'Bei echten Anfragen automatisch Kunden (Interessent) anlegen') }}
@@ -165,6 +181,12 @@
   <h2>Test</h2>
   <p class="klein">Zuletzt geprüft: {{ einst.anfragen_letzter_abruf|zeit if einst.anfragen_letzter_abruf else 'noch nie' }}{% if einst.anfragen_letzter_fehler %} – <span style="color:var(--rot)">{{ einst.anfragen_letzter_fehler }}</span>{% endif %}</p>
   <button class="zweit">Postfach jetzt prüfen</button>
+</form>
+<form method="post" action="{{ url_for('main.historie_abrufen') }}" class="karte">{{ csrf() }}
+  <h2>E-Mail-Historie</h2>
+  <p class="klein">{% if not einst.historie_aktiv %}Ausgeschaltet. {% endif %}Zuletzt abgeglichen: {{ einst.historie_letzter_abruf|zeit if einst.historie_letzter_abruf else 'noch nie' }}{% if einst.historie_letzter_fehler %} – <span style="color:var(--rot)">{{ einst.historie_letzter_fehler }}</span>{% endif %}</p>
+  <div class="leiste"><button class="zweit" {{ 'disabled' if not einst.historie_aktiv }}>Jetzt abgleichen</button>
+    <button class="zweit" name="neu_abgleichen" value="1" {{ 'disabled' if not einst.historie_aktiv }} onclick="return confirm('Alle Ordner im Importzeitraum neu durchsuchen? Vorhandene Einträge bleiben, es entstehen keine Duplikate.')">Alle Ordner neu abgleichen</button></div>
 </form>
 
 {% elif bereich == 'backup' %}
@@ -282,6 +304,29 @@
     if (sel.value === 'starttls' && ['', '993'].includes(port.value)) port.value = '143';
     if (sel.value === 'ssl' && ['', '143'].includes(port.value)) port.value = '993';
   });
+  document.getElementById('histordnerknopf').onclick = async e => {
+    const knopf = e.target, alt = knopf.textContent, m = document.getElementById('histmeldung');
+    knopf.disabled = true; knopf.textContent = 'Bitte warten …';
+    let j;
+    try {
+      const r = await fetch('{{ url_for('main.anfragen_imap_ordner') }}', { method: 'POST', body: new FormData(form), headers: { 'X-Requested-With': 'fetch' } });
+      j = await r.json();
+    } catch (err) { j = { ok: false, meldung: 'Keine Antwort vom Programm: ' + err }; }
+    finally { knopf.disabled = false; knopf.textContent = alt; }
+    m.style.display = ''; m.className = 'meldung ' + (j.ok ? 'ok' : 'fehler'); m.textContent = j.meldung;
+    if (!j.ok) return;
+    const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    [['hist_eingang', o => !o.gesendet], ['hist_gesendet', o => o.gesendet]].forEach(([id]) => {
+      const feld = document.getElementById(id), wahl = document.getElementById(id + '_wahl');
+      const gewaehlt = () => feld.value.split('\n').map(s => s.trim()).filter(Boolean);
+      wahl.innerHTML = j.ordner.map(o => `<label class="check"><input type="checkbox" value="${esc(o.name)}" ${gewaehlt().includes(o.name) ? 'checked' : ''}> ${esc(o.name)}${o.gesendet ? ' (Gesendet)' : ''}</label>`).join('');
+      wahl.querySelectorAll('input').forEach(c => c.onchange = () => {
+        let liste = gewaehlt().filter(n => n !== c.value);
+        if (c.checked) liste.push(c.value);
+        feld.value = liste.join('\n');
+      });
+    });
+  };
   document.getElementById('abruftestknopf').onclick = async e => {
     const knopf = e.target, alt = knopf.textContent;
     knopf.disabled = true; knopf.textContent = 'Bitte warten … (bis zu 20 Sekunden)';

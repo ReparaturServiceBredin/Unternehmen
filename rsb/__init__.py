@@ -10,7 +10,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.9.1"
+VERSION_NUMMER = "0.10.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe

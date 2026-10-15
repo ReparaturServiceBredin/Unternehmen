@@ -151,6 +151,12 @@ def senden(con, einst=None, an=None, betreff="", text="", anhang=None, anhang_na
         if hinweis:
             dbm.protokollieren("email_ablage_fehler", "dokument" if dokument_id else "einstellungen", dokument_id,
                                hinweis, con=con)
+    if status == "gesendet":
+        try:
+            from .email_historie import aus_versand
+            aus_versand(con, msg, dokument_id)  # beim Kunden in der E-Mail-Historie
+        except Exception as e:  # die Historie darf den Versand nie scheitern lassen
+            print(f"E-Mail-Historie: {e}")
     if hinweis:
         print(hinweis)
     if fehler:

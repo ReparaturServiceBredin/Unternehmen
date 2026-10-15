@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.10.0 | 15.10.2026 | Automatische E-Mail-Historie je Kunde |
 | 0.9.1 | 15.10.2026 | IMAP-Abruf auch mit STARTTLS (Port 143), Verbindungstest |
 | 0.9.0 | 15.10.2026 | Leihgeräte: Ausgabe, Rückgabe, Schadensfall, Abrechnung |
 | 0.8.0 | 15.10.2026 | Auftrags-Detailansicht: KVA verknüpfen, Fotodokumentation, Verlauf |
@@ -28,6 +29,55 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.10.0 – 15.10.2026
+Alle E-Mails mit Kunden erscheinen automatisch beim Kunden, egal ob aus dem Programm, aus Outlook oder vom Handy
+gesendet.
+
+### Neu
+- **E-Mail-Verlauf beim Kunden:** gesendete (↗) und empfangene (↙) Mails mit Datum, Betreff, Absender/Empfänger,
+  Anhangsnamen und Text zum Aufklappen. Verweise auf das versendete Dokument bzw. die Kontaktformular-Anfrage.
+- **Einstellungen → Anfragen → „E-Mail-Historie bei Kunden“:**
+  - einschalten
+  - Ordner für empfangene Mails (mehrere, auch Unterordner) und für gesendete Mails (bei IONOS meist „Gesendete
+    Objekte“); „Ordner abrufen“ zeigt alle Ordner zum Ankreuzen, Umlaute in IMAP-UTF-7 werden richtig dargestellt
+  - erster Import: 30 Tage, 6 Monate, 1 Jahr oder alles
+  - weitere eigene Adressen
+  - Es wird der vorhandene IMAP-Zugang verwendet, ohne doppelte Felder. Abgerufen wird im Intervall der Anfragen.
+  - Dazu die Knöpfe „Jetzt abgleichen“ und „Alle Ordner neu abgleichen“ mit Anzeige des letzten Abgleichs und
+    eventueller Hinweise.
+- **Kunden:** neues Feld „Weitere E-Mail-Adressen / Ansprechpartner“ (eine je Zeile).
+- **Nachträglicher Abgleich:** Neuer Kunde oder neue Adresse beim Kunden → das Postfach wird im Hintergrund gezielt
+  nach Mails von/an/cc dieser Adresse im Importzeitraum durchsucht.
+
+### So arbeitet der Abgleich
+- From, To, Cc und Reply-To werden mit allen Kunden-Adressen verglichen. Groß-/Kleinschreibung, Leerzeichen und
+  Anzeigenamen werden ignoriert, eigene Adressen zählen nie.
+- **Ohne Kundentreffer wird nichts gespeichert,** auch nicht im Protokoll. Das Protokoll enthält nur Anzahlen.
+- Trifft eine Mail mehrere Kunden, steht sie bei jedem.
+- Richtung: „gesendet“ aus dem Gesendet-Ordner oder bei eigener Absenderadresse, sonst „empfangen“.
+- Kontaktformular-Mails werden mit der vorhandenen Anfrage verknüpft und nicht doppelt angelegt.
+- **Nur lesen:** Ordner werden mit EXAMINE geöffnet und Inhalte mit BODY.PEEK[] geholt. Nichts wird als gelesen
+  markiert, verschoben oder gelöscht.
+- **Inkrementell:** je Ordner UIDVALIDITY und letzte UID. Ändert sich die UIDVALIDITY, wird der Ordner im
+  Importzeitraum neu abgeglichen.
+- Zuerst werden nur die Kopfzeilen geladen, der vollständige Inhalt nur bei einem Kundentreffer.
+- Keine Duplikate dank Message-ID. Mails, die das Programm selbst verschickt (KVA, Rechnung, Leihvertrag …), werden
+  direkt beim Versand gespeichert und später mit dem Fund im Postfach zusammengeführt.
+- Der Abruf läuft im Hintergrund mit Zeitlimit. Fehler erscheinen als Hinweis; ein fehlender Ordner hält die übrigen
+  nicht auf.
+
+### Datenschutz
+- Beim Löschen eines Kunden wird auch sein E-Mail-Verlauf im Programm gelöscht (Mails, die zusätzlich bei anderen
+  Kunden stehen, bleiben dort). Das Postfach selbst bleibt unverändert.
+- Anhänge werden nicht kopiert, nur ihre Namen und Größen. Die Dateien bleiben im Postfach.
+
+### Technik
+- Neue Tabellen `email_nachrichten`, `email_kunden` und `imap_ordner_status`, neues Feld `kunden.email_weitere`.
+  Vor der Erweiterung wird automatisch `Daten\backups\vor_update_….db` angelegt.
+- Neues Modul `rsb/email_historie.py`. 111 automatische Tests.
 
 ---
 

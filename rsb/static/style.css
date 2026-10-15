@@ -238,3 +238,14 @@ table.liste tr.zeile-rot td { background: var(--rot-hell); }
 .verrechnung td:last-child { text-align: right; white-space: nowrap; }
 .verrechnung tr.summe td { font-weight: 700; border-top: 2px solid var(--text); }
 @media (max-width: 900px) { .vergleich { grid-template-columns: 1fr; } }
+
+/* E-Mail-Verlauf beim Kunden */
+details.mail { border-bottom: 1px solid var(--rand); padding: 8px 0; }
+details.mail summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+.mail-richtung { font-weight: 700; width: 18px; text-align: center; }
+.mail-richtung.gesendet { color: var(--blau); }
+.mail-richtung.empfangen { color: var(--gruen); }
+.mail-datum { color: var(--grau); font-size: 12px; white-space: nowrap; }
+.mail-inhalt { padding: 8px 0 4px 28px; }
+.mail-text { white-space: pre-wrap; margin-top: 8px; max-height: 420px; overflow: auto; background: var(--grau-hell);
+  border-radius: 6px; padding: 10px 12px; font-size: 13px; }

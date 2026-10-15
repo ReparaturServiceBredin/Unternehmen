@@ -34,6 +34,7 @@
     <div><label>Abweichendes Zahlungsziel (Tage)</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ k.zahlungsziel_tage if k and k.zahlungsziel_tage is not none }}">
       <div class="hilfe">Leer lassen = Standard ({{ einst.zahlungsziel_privat }} Tage privat / {{ einst.zahlungsziel_firma }} Tage Firma)</div></div>
     <div class="s12"><label class="check"><input type="checkbox" name="interessent" {{ 'checked' if k and k.interessent }}> Interessent (hat angefragt, noch keine Rechnung){% if k and k.quelle %} – Quelle: {{ k.quelle }}{% endif %}</label></div>
+    <div class="s12"><label>Weitere E-Mail-Adressen / Ansprechpartner (eine je Zeile, für die E-Mail-Historie)</label><textarea name="email_weitere" style="min-height:50px" placeholder="buchhaltung@firma.de&#10;Max Muster &lt;max@firma.de&gt;">{{ (k.email_weitere or '') if k }}</textarea></div>
     <div class="s12"><label>Notizen (intern, erscheinen nicht auf Dokumenten)</label><textarea name="notizen">{{ (k.notizen or '') if k }}</textarea></div>
   </div>
   <br>
@@ -97,6 +98,29 @@
   </table>
 </div>
 {% endif %}
+<div class="karte" id="emails">
+  <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">E-Mail-Verlauf <span class="klein">({{ email_anzahl }})</span></h2>
+    {% if email_anzahl > emails|length %}<a href="{{ url_for('main.kunde', kid=k.id, mails='alle') }}#emails">alle {{ email_anzahl }} anzeigen</a>{% endif %}</div>
+  {% if not einst.historie_aktiv %}<p class="klein">Die E-Mail-Historie ist ausgeschaltet – <a href="{{ url_for('main.einstellungen', bereich='anfragen') }}#historie">einschalten unter Einstellungen → Anfragen</a>.</p>{% endif %}
+  {% for m in emails %}
+  <details class="mail">
+    <summary><span class="mail-richtung {{ m.richtung }}" title="{{ m.richtung }}">{{ '↗' if m.richtung == 'gesendet' else '↙' }}</span>
+      <span class="mail-datum">{{ m.datum|zeit }}</span>
+      <b>{{ m.betreff or '(ohne Betreff)' }}</b>
+      <span class="klein">{{ ('an ' ~ m.an) if m.richtung == 'gesendet' else ('von ' ~ m.von) }}</span>
+      {% if m.anhaenge %}<span class="klein" title="{{ m.anhaenge|map(attribute='name')|join(', ') }}">📎 {{ m.anhaenge|length }}</span>{% endif %}
+      {% if m.quelle == 'programm' %}<span class="marke-status st-festgeschrieben">aus dem Programm</span>{% endif %}
+    </summary>
+    <div class="mail-inhalt">
+      <div class="klein">Von: {{ m.von }}<br>An: {{ m.an }}{% if m.cc %}<br>Cc: {{ m.cc }}{% endif %}<br>Datum: {{ m.datum|zeit }}{% if m.ordner %} · Ordner: {{ m.ordner }}{% endif %}
+        {% if m.dokument_id %}<br>Dokument: <a href="{{ url_for('main.dokument', did=m.dokument_id) }}">öffnen</a>{% endif %}
+        {% if m.anfrage_id %}<br>Kontaktformular: <a href="{{ url_for('main.anfrage', aid=m.anfrage_id) }}">Anfrage öffnen</a>{% endif %}
+        {% if m.anhaenge %}<br>Anhänge: {% for a in m.anhaenge %}{{ a.name }} ({{ (a.groesse / 1024)|round|int }} KB){{ ', ' if not loop.last }}{% endfor %} – nur im Postfach gespeichert{% endif %}</div>
+      <div class="mail-text">{{ m.text or '' }}</div>
+    </div>
+  </details>
+  {% else %}<p class="klein">Noch keine E-Mails mit diesem Kunden{{ ' gefunden' if einst.historie_aktiv }}.</p>{% endfor %}
+</div>
 {% if anfragen %}
 <div class="karte">
   <h2>Anfragen</h2>
@@ -108,7 +132,7 @@
 {% endif %}
 <div class="karte">
   <h2>Datenschutz</h2>
-  <p class="klein">Kunden mit festgeschriebenen Rechnungen dürfen wegen der Aufbewahrungspflicht nicht gelöscht werden – sie können archiviert werden. Kunden ohne Rechnungen können vollständig gelöscht werden.</p>
+  <p class="klein">Kunden mit festgeschriebenen Rechnungen dürfen wegen der Aufbewahrungspflicht nicht gelöscht werden – sie können archiviert werden. Kunden ohne Rechnungen können vollständig gelöscht werden – dabei wird auch ihr E-Mail-Verlauf im Programm gelöscht (das Postfach bleibt unverändert).</p>
   <div class="leiste">
     <form method="post" action="{{ url_for('main.kunde_archivieren', kid=k.id) }}" class="inline">{{ csrf() }}
       {% if k.archiviert %}<input type="hidden" name="zurueck" value="1"><button class="zweit">Wieder aktivieren</button>

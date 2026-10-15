@@ -109,6 +109,12 @@ STANDARD_EINSTELLUNGEN = {
     "imap_host": "imap.ionos.de",
     "imap_port": 993,
     "imap_sicherheit": "ssl",               # ssl (Port 993) / starttls (Port 143)
+    # E-Mail-Historie bei Kunden (nutzt den IMAP-Zugang oben und das Abrufintervall der Anfragen)
+    "historie_aktiv": False,
+    "historie_ordner_eingang": "INBOX",      # eine Zeile je Ordner
+    "historie_ordner_gesendet": "Gesendete Objekte",
+    "historie_zeitraum_tage": 182,           # erster Import: 30 / 182 / 365 Tage, 0 = alles
+    "historie_eigene_adressen": "",          # weitere eigene Adressen (werden beim Abgleich ignoriert)
     "imap_benutzer": "",
     "imap_passwort_enc": "",
     "imap_ordner": "INBOX",
@@ -238,10 +244,12 @@ MIGRATIONEN = [
     ("auftrag_fotos", "leihgeraet_id", "INTEGER"),
     ("auftrag_fotos", "leihe_id", "INTEGER"),
     ("auftrag_fotos", "schadensfall_id", "INTEGER"),
+    ("kunden", "email_weitere", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
-NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf"]
+NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "schadensfaelle", "leihgeraet_verlauf",
+                 "email_nachrichten", "email_kunden", "imap_ordner_status"]
 
 
 def _migrieren(con, pfad=None):

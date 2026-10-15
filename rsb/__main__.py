@@ -27,6 +27,13 @@ def anfragen_hintergrund(app):
                 con = dbm.verbinden(app.config["DB_PFAD"])
                 try:
                     einst = dbm.einstellungen(con)
+                    from .email_historie import abgleich_mit_protokoll, faellig
+                    if faellig(einst):  # E-Mail-Historie: gleiches Intervall wie der Anfragen-Abruf
+                        e, fehler = abgleich_mit_protokoll(con)
+                        if e and e["neu"]:
+                            print(f"{datetime.now():%H:%M} E-Mail-Historie: {e['neu']} neue Mail(s) bei Kunden")
+                        if fehler:
+                            print(f"{datetime.now():%H:%M} E-Mail-Historie: {fehler}")
                     if not einst.get("anfragen_aktiv"):
                         continue
                     letzter = einst.get("anfragen_letzter_abruf")
