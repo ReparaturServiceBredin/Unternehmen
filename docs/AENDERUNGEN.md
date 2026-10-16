@@ -57,14 +57,19 @@ automatisch eine Sicherung an. Alle bisherigen Daten bleiben unverändert.
 
 ### Neu
 - **Ältere Anfragen prüfen und nachholen** (*Anfragen → Ältere Anfragen prüfen und nachholen*):
-  - Durchsucht den Posteingang **und** den Ordner „Anfragen erledigt“ nach Formular-E-Mails, die noch nicht im
-    Programm sind. Zeitraum wählbar: 6 Monate, 1 Jahr, 2 Jahre oder alle E-Mails. Der normale Abruf schaut nur
+  - Durchsucht den Posteingang, den Ordner „Anfragen erledigt“ und das Archiv (bei Gmail „Alle Nachrichten“,
+    also auch archivierte E-Mails) nach Formular-E-Mails, die noch nicht im Programm sind. Zeitraum wählbar: 6 Monate, 1 Jahr, 2 Jahre oder alle E-Mails. Der normale Abruf schaut nur
     60 Tage zurück.
   - Findet Anfragen, deren Kunde nicht mehr vorhanden ist, und stellt sie wieder unter „Zu prüfen“.
   - Es wird **kein Kunde automatisch angelegt** und keine E-Mail verschoben. Alles landet unter „Zu prüfen“.
 - **Sammelbestätigung unter „Zu prüfen“:** Anfragen ankreuzen und mit einem Klick als Kunden (Interessenten)
   anlegen. Gibt es die E-Mail-Adresse oder Telefonnummer schon, wird die Anfrage dem vorhandenen Kunden zugeordnet.
   Echte Anfragen sind vorausgewählt, unsichere nicht, Spam ist ausgenommen.
+
+### Behoben
+- **Gmail-Anmeldung:** App-Passwörter dürfen mit Leerzeichen eingetragen werden, so wie Google sie anzeigt
+  („abcd efgh ijkl mnop“). Lehnt Gmail die Anmeldung ab, erklärt die Meldung Schritt für Schritt, wie man ein
+  App-Passwort erstellt.
 
 ### Geändert
 - Gelöschte Anfragen (Spam nach 30 Tagen, verworfene, Löschung aus Datenschutzgründen) kommen beim Abruf nicht

@@ -225,6 +225,10 @@ class OrdnerImap(FalschesImap):
         OrdnerImap.aufrufe.append((befehl,))
         return "OK", []
 
+    def list(self):
+        return "OK", [(b'(\\HasNoChildren \\All) "/" "' if "Gmail" in n else b'(\\HasNoChildren) "/" "')
+                      + n.encode() + b'"' for n in OrdnerImap.ordner]
+
 
 def _imap_einrichten(con):
     with dbm.Transaktion(con):
@@ -252,12 +256,17 @@ def test_nachholen_aelterer_anfragen_ohne_auto_kunde(app, con):
             "Anfragen erledigt": {b"1": formular_mail(name="Erledigt Eva", mail="eva@web.de", tel="0172 3333333",
                                                       msgid="<alt2>").as_bytes(),
                                   b"2": formular_mail(msgid="<weg>").as_bytes()},
+            "[Gmail]/Alle Nachrichten": {b"7": formular_mail(name="Archiv Jan", mail="jan@web.de", tel="0173 4444444",
+                                                             msgid="<archiv>").as_bytes(),
+                                         b"8": formular_mail(name="Alt Max", mail="max@gmx.de", tel="0171 2222222",
+                                                             msgid="<alt1>").as_bytes()},
         }
         OrdnerImap.aufrufe = []
         e = anf.nachholen(con, dbm.einstellungen(con), 0, imap_klasse=OrdnerImap)
-    assert (e["neu"], e["echt"], e["bekannt"]) == (2, 2, 2)
-    assert e["ordner"] == ["INBOX", "Anfragen erledigt"]
-    neu = con.execute("SELECT * FROM anfragen WHERE message_id IN ('<alt1>','<alt2>')").fetchall()
+    assert (e["neu"], e["echt"], e["bekannt"]) == (3, 3, 3)
+    assert e["ordner"] == ["INBOX", "Anfragen erledigt", "[Gmail]/Alle Nachrichten"]
+    neu = con.execute("SELECT * FROM anfragen WHERE message_id IN ('<alt1>','<alt2>','<archiv>')").fetchall()
+    assert len(neu) == 3
     assert all(a["status"] == "neu" and a["kunde_id"] is None for a in neu)  # erst nach Bestätigung
     assert con.execute("SELECT COUNT(*) FROM kunden").fetchone()[0] == kunden_vorher
     assert not con.execute("SELECT 1 FROM anfragen WHERE message_id='<weg>'").fetchone()

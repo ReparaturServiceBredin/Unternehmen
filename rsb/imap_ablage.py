@@ -147,7 +147,7 @@ def ordner_auflisten(imap):
             continue
         if "\\Noselect" not in flags and "\\NonExistent" not in flags:
             ordner.append({"name": utf7_dekodieren(name_roh), "roh": name_roh,
-                           "gesendet": "\\Sent" in flags})
+                           "gesendet": "\\Sent" in flags, "archiv": "\\All" in flags})
         i += 1
     return sorted(ordner, key=lambda o: (not o["gesendet"], o["name"].lower()))
 

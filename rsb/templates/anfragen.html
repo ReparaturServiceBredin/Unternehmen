@@ -19,7 +19,7 @@
 </p>
 <details class="karte">
   <summary><b>Ältere Anfragen prüfen und nachholen</b></summary>
-  <p class="klein">Sucht im Posteingang und im Ordner „{{ einst.imap_zielordner or 'Anfragen erledigt' }}“ nach Formular-E-Mails, die noch nicht im Programm sind, und findet Anfragen, deren Kunde nicht (mehr) angelegt ist.
+  <p class="klein">Sucht im Posteingang, im Ordner „{{ einst.imap_zielordner or 'Anfragen erledigt' }}“ und im Archiv (Gmail: „Alle Nachrichten“) nach Formular-E-Mails, die noch nicht im Programm sind, und findet Anfragen, deren Kunde nicht (mehr) angelegt ist.
     Es wird <b>kein</b> Kunde automatisch angelegt und keine E-Mail verschoben: Alles landet unter „Zu prüfen“ und wird dort von Ihnen bestätigt.
     Früher gelöschte Anfragen (Spam, Datenschutz) kommen nicht zurück.</p>
   <form method="post" action="{{ url_for('main.anfragen_nachholen') }}" class="leiste">{{ csrf() }}

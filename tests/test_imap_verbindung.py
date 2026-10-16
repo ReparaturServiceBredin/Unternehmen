@@ -218,3 +218,16 @@ def test_knopf_verbindung_testen(client, con, monkeypatch):
     assert dbm.einstellungen(con)["imap_sicherheit"] == "starttls"
     seite = client.get("/einstellungen/anfragen").get_data(as_text=True)
     assert "STARTTLS (meist Port 143)" in seite and "Verbindung testen" in seite
+
+
+def test_gmail_app_passwort_mit_leerzeichen_und_hinweis():
+    class GmailSsl(FalschesSsl):
+        def login(self, b, p):
+            if p != "abcdefghijklmnop":
+                raise imaplib.IMAP4.error("[AUTHENTICATIONFAILED] Invalid credentials")
+            Protokoll.schritte.append(("login", b))
+
+    verbinden("imap.gmail.com", 993, "ssl", "u@gmail.com", "abcd efgh ijkl mnop", imap_ssl=GmailSsl)
+    assert ("login", "u@gmail.com") in Protokoll.schritte
+    with pytest.raises(ImapFehler, match="App-Passwort"):
+        verbinden("imap.gmail.com", 993, "ssl", "u@gmail.com", "normales-passwort", imap_ssl=GmailSsl)

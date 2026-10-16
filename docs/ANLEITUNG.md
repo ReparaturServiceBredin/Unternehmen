@@ -238,8 +238,8 @@ was in den letzten 60 Tagen eingegangen ist.
 
 ### Ältere Anfragen prüfen und nachholen
 
-Unter *Anfragen → Ältere Anfragen prüfen und nachholen* durchsucht das Tool den Posteingang und den Ordner
-„Anfragen erledigt“ nach Formular-E-Mails, die noch nicht im Programm sind. Der Zeitraum ist wählbar
+Unter *Anfragen → Ältere Anfragen prüfen und nachholen* durchsucht das Tool den Posteingang, den Ordner
+„Anfragen erledigt“ und das Archiv (bei Gmail „Alle Nachrichten“) nach Formular-E-Mails, die noch nicht im Programm sind. Der Zeitraum ist wählbar
 (6 Monate, 1 Jahr, 2 Jahre oder alle E-Mails). Außerdem findet es Anfragen, deren Kunde nicht mehr vorhanden ist.
 
 - Es wird **kein Kunde automatisch angelegt** und keine E-Mail verschoben oder gelöscht.

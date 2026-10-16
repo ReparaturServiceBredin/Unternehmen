@@ -89,6 +89,9 @@ def verbinden(host, port, sicherheit, benutzer, passwort, imap_ssl=None, imap_pl
         raise ImapFehler("Der IMAP-Port ist ungültig (üblich: 993 für SSL/TLS, 143 für STARTTLS).")
     if not benutzer or not passwort:
         raise ImapFehler("Für IMAP fehlen Benutzername oder Passwort.")
+    gmail = host.lower().endswith(("gmail.com", "googlemail.com"))
+    if gmail:
+        passwort = passwort.replace(" ", "")  # Google zeigt App-Passwörter in Vierergruppen mit Leerzeichen an
     imap_ssl = imap_ssl or imaplib.IMAP4_SSL  # erst hier auflösen (Tests ersetzen imaplib.IMAP4_SSL)
     imap_plain = imap_plain or imaplib.IMAP4
     try:
@@ -120,6 +123,11 @@ def verbinden(host, port, sicherheit, benutzer, passwort, imap_ssl=None, imap_pl
         raise ImapFehler(f"Verbindung während der Anmeldung abgebrochen: {e}")
     except IMAP_FEHLER:
         abmelden(imap)
+        if gmail:
+            raise ImapFehler("Gmail hat die Anmeldung abgelehnt. Gmail akzeptiert hier nicht das normale "
+                             "Google-Passwort, sondern nur ein App-Passwort: Google-Konto → Sicherheit → "
+                             "Bestätigung in zwei Schritten einschalten → App-Passwörter → neues App-Passwort "
+                             "erstellen und die 16 Buchstaben hier als Passwort eintragen.")
         raise ImapFehler("Anmeldung am IMAP-Server fehlgeschlagen – Benutzername oder Passwort ist falsch. "
                          "(Gmail: nur mit App-Passwort.)")
     except OSError as e:

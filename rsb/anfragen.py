@@ -612,7 +612,7 @@ NACHHOLEN_ZEITRAUM = {"180": "letzte 6 Monate", "365": "letztes Jahr", "730": "l
 
 
 def nachholen(con, einst, tage=365, imap_klasse=None, imap_plain=None):
-    """Durchsucht Posteingang und Ordner für erledigte nach älteren Formular-E-Mails, die noch fehlen.
+    """Durchsucht Posteingang, Ordner für erledigte und Archiv nach älteren Formular-E-Mails, die noch fehlen.
 
     Es wird nichts verschoben und kein Kunde automatisch angelegt: Neue Anfragen landen unter „Zu prüfen“ und
     werden dort bestätigt. Früher gelöschte Anfragen (Datenschutz, Spam) kommen nicht zurück.
@@ -623,10 +623,16 @@ def nachholen(con, einst, tage=365, imap_klasse=None, imap_plain=None):
     suche = f"SINCE {(heute_datum() - timedelta(days=tage)).strftime('%d-%b-%Y')}" if tage else "ALL"
     eingang = (einst.get("imap_ordner") or "INBOX").strip()
     erledigt = (einst.get("imap_zielordner") or "Anfragen erledigt").strip()
+    from .imap_ablage import AblageFehler, ordner_auflisten
     from .imap_verbindung import IMAP_FEHLER
     imap = imap_anmelden(zugang, imap_klasse, imap_plain)
     try:
-        for name in dict.fromkeys([eingang, erledigt]):
+        ordner = [eingang, erledigt]
+        try:  # archivierte E-Mails (Gmail: „Alle Nachrichten“) mit durchsuchen
+            ordner += [o["name"] for o in ordner_auflisten(imap) if o.get("archiv")]
+        except (AblageFehler, IMAP_FEHLER):
+            pass
+        for name in dict.fromkeys(ordner):
             try:
                 typ, _ = imap.select(_imap_ordnername(name), readonly=True)
             except IMAP_FEHLER:
