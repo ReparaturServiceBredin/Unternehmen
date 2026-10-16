@@ -1649,6 +1649,16 @@ def einstellungen(bereich=None):
                 neu[feld] = zahl_aus_text(_f(feld), 0)
             else:
                 neu[feld] = _f(feld)
+        from .hilfen import UNERLAUBT_IM_DATEINAMEN
+        for k, v in neu.items():  # Präfixe und Nummernformat werden Teil von Dateinamen (Windows und Linux)
+            if k == "nummern_format":
+                try:
+                    v = logik.nummer_formatieren(v, "RE", 2026, 1)  # geprüft wird das Ergebnis, z. B. RE-2026-0001
+                except (KeyError, ValueError, IndexError):
+                    continue  # ungültiges Format meldet die Prüfung weiter unten
+            if (k.startswith("praefix_") or k == "nummern_format") and any(c in str(v) for c in UNERLAUBT_IM_DATEINAMEN):
+                raise EingabeFehler("Präfixe und Nummernformat dürfen diese Zeichen nicht enthalten: "
+                                    + " ".join(UNERLAUBT_IM_DATEINAMEN))
         if bereich == "firma":
             neu["iban"] = neu["iban"].replace(" ", "").upper()
         if bereich == "email" and request.form.get("smtp_passwort"):

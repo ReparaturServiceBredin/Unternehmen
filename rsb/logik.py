@@ -6,7 +6,7 @@ from pathlib import Path
 
 from . import db as dbm
 from .hilfen import (EingabeFehler, anrede_brief, anschrift_zeilen, datum_de, euro, kunde_name,
-                     platzhalter_ersetzen)
+                     platzhalter_ersetzen, sicherer_dateiname)
 
 DOKUMENTTYPEN = {
     # typ: (Titel, Präfix-Einstellung)
@@ -339,13 +339,13 @@ def festschreiben(con, dok_id, daten_dir):
         pdf = pdf_erzeugen(snap, daten_dir=daten_dir, entwurf=False)
         pdf, xml = erechnung.erzeugen(snap, einst, kunde, e_format, pdf)
         sha = hashlib.sha256(pdf).hexdigest()
-        rel = Path("dokumente") / str(jahr) / f"{nummer}.pdf"
+        rel = Path("dokumente") / str(jahr) / f"{sicherer_dateiname(nummer)}.pdf"
         ziel = Path(daten_dir) / rel
         ziel.parent.mkdir(parents=True, exist_ok=True)
         ziel.write_bytes(pdf)
         xml_rel = xml_sha = None
         if xml:
-            xml_rel = rel.with_name(f"{nummer}_{e_format}.xml")
+            xml_rel = rel.with_name(f"{sicherer_dateiname(nummer)}_{e_format}.xml")
             (Path(daten_dir) / xml_rel).write_bytes(xml)
             xml_sha = hashlib.sha256(xml).hexdigest()
             xml_rel = xml_rel.as_posix()
@@ -460,6 +460,51 @@ def standard_texte(con, dokumenttyp):
 
 # ---------------------------------------------------------------- Prüfung
 
+DATEIPFADE = [  # (Tabelle, Spalte, Bezeichnung, Bedingung, Datei hier prüfen – sonst schon oben mit Prüfsumme)
+    ("dokumente", "pdf_pfad", "Beleg-PDF", "pdf_pfad IS NOT NULL", False),
+    ("dokumente", "xml_pfad", "E-Rechnungs-XML", "xml_pfad IS NOT NULL", False),
+    ("mahnungen", "pdf_pfad", "Mahnungs-PDF", "1=1", False),
+    ("auftrag_fotos", "pfad", "Foto", "geloescht_am IS NULL", True),
+    ("auftrag_belege", "pdf_datei", "Annahme-/Abholschein", "1=1", False),
+    ("inventuren", "pdf_datei", "Inventurprotokoll", "pdf_datei IS NOT NULL", False),
+    ("eingangsrechnungen", "datei", "Eingangsrechnung", "datei IS NOT NULL", False),
+    ("kassenbuch", "beleg_datei", "Kassenbeleg", "beleg_datei IS NOT NULL", True),
+    ("datev_exporte", "datei", "DATEV-Export", "datei IS NOT NULL", True),
+]
+
+
+def pfad_problem(rel):
+    """Warum ein gespeicherter Pfad nicht plattformunabhängig ist (sonst None)."""
+    if not rel:
+        return None
+    if "\\" in rel:
+        return "enthält Backslashes (nur unter Windows lesbar)"
+    if rel.startswith("/") or (len(rel) > 1 and rel[1] == ":"):
+        return "ist absolut statt relativ zum Datenordner"
+    if ".." in rel.split("/"):
+        return "verweist aus dem Datenordner heraus"
+    return None
+
+
+def dateipfade_pruefen(con, daten_dir):
+    """Alle gespeicherten Dateipfade: relativ zum Datenordner, mit „/“, und die Datei ist vorhanden."""
+    fehler = []
+    tabellen = {r[0] for r in con.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    for tabelle, spalte, text, bedingung, vorhanden in DATEIPFADE:
+        if tabelle not in tabellen:
+            continue
+        for (rel,) in con.execute(f"SELECT {spalte} FROM {tabelle} WHERE {bedingung}"):
+            problem = pfad_problem(rel)
+            if problem:
+                fehler.append(f"{text} {rel}: Pfad {problem}.")
+            elif rel and vorhanden and not (Path(daten_dir) / rel).is_file():
+                fehler.append(f"{text} {rel}: Datei fehlt im Datenordner.")
+    logo = dbm.einstellungen(con).get("logo_datei")
+    if logo and pfad_problem(logo):
+        fehler.append(f"Logo {logo}: Pfad {pfad_problem(logo)}.")
+    return fehler
+
+
 def integritaet_pruefen(con, daten_dir):
     """Prüft PDF-Prüfsummen, Lückenlosigkeit der Nummern und die Protokollkette."""
     ergebnisse = {"pdf": [], "nummern": [], "protokoll": dbm.protokoll_pruefen(con), "anzahl_dokumente": 0}
@@ -505,6 +550,7 @@ def integritaet_pruefen(con, daten_dir):
             ergebnisse["pdf"].append(f"Eingangsrechnung {e['lfd_nr']}: Originaldatei fehlt.")
         elif hashlib.sha256(pfad.read_bytes()).hexdigest() != e["datei_sha256"]:
             ergebnisse["pdf"].append(f"Eingangsrechnung {e['lfd_nr']}: Originaldatei wurde verändert.")
+    ergebnisse["pfade"] = dateipfade_pruefen(con, daten_dir)
     from .lager import integritaet as lager_integritaet
     ergebnisse["lager"] = lager_integritaet(con)
     from .kasse import integritaet as kasse_integritaet

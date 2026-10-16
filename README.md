@@ -87,6 +87,9 @@ Backups, Wiederherstellung und NAS-Kopie: siehe [docs/ANLEITUNG.md](docs/ANLEITU
 
 ## Technik (kurz)
 
+Regeln für Änderungen am Programm: [docs/ENTWICKLUNG.md](docs/ENTWICKLUNG.md).
+
+
 Python 3 · Flask (Weboberfläche) · Waitress (lokaler Webserver) · SQLite (Datenbank in einer Datei) ·
 ReportLab (PDF) · cryptography (Verschlüsselung) · PyInstaller (EXE) – alles Open Source und kostenlos.
 Die Windows-EXE baut GitHub Actions bei jeder neuen Versionsnummer automatisch, testet sie und veröffentlicht

@@ -10,7 +10,8 @@ from pathlib import Path
 
 from . import db as dbm
 from . import zahlungen as zlg
-from .hilfen import EingabeFehler, anrede_brief, anschrift_zeilen, datum_de, euro, kunde_name, platzhalter_ersetzen
+from .hilfen import (EingabeFehler, anrede_brief, anschrift_zeilen, datum_de, euro, kunde_name, platzhalter_ersetzen,
+                     sicherer_dateiname)
 
 TITEL = {0: "Zahlungserinnerung", 1: "1. Mahnung", 2: "2. Mahnung"}
 
@@ -159,7 +160,7 @@ def erstellen(con, dok_id, stufe, daten_dir, heute=None):
             "summen": {"netto": gesamt, "steuer": 0, "brutto": gesamt, "gruppen": []},
         }
         pdf = pdf_erzeugen(snap, daten_dir=daten_dir)
-        rel = Path("dokumente") / heute[:4] / f"{nummer}.pdf"
+        rel = Path("dokumente") / heute[:4] / f"{sicherer_dateiname(nummer)}.pdf"
         ziel = Path(daten_dir) / rel
         ziel.parent.mkdir(parents=True, exist_ok=True)
         ziel.write_bytes(pdf)

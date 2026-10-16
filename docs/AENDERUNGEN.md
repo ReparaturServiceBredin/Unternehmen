@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.23.1 | 16.10.2026 | Technik: feste Versionen, sichere Dateinamen, Pfadprüfung, Entwickler-Regeln |
 | 0.23.0 | 16.10.2026 | Fester Datenordner – egal, von wo das Programm gestartet wird |
 | 0.22.2 | 16.10.2026 | Sicherung wiederherstellen mit Inhaltsvorschau, Hinweis bei OneDrive |
 | 0.22.1 | 16.10.2026 | Fehlerbehebung: Einstellungen werden nie mehr leer angezeigt |
@@ -44,6 +45,29 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.23.1 – 16.10.2026
+Technische Vorbereitung für den späteren Betrieb unter Linux/Docker. An der Bedienung ändert sich nichts.
+
+### Neu
+- **Datenprüfung:** Neuer Abschnitt „Gespeicherte Dateipfade“. Er prüft, dass alle in der Datenbank gespeicherten
+  Dateipfade relativ zum Datenordner sind, nur `/` enthalten (also unter Windows und Linux lesbar) und dass
+  Fotos, Kassenbelege und DATEV-Exporte vorhanden sind.
+
+### Geändert
+- Präfixe und Nummernformat werden beim Speichern auf Zeichen geprüft, die in Dateinamen unter Windows oder Linux
+  nicht erlaubt sind (`\ / : * ? " < > |`).
+- Dateinamen für Belege, Mahnungen und Annahme-/Abholscheine werden immer gültig gebildet. Bestehende Namen bleiben
+  unverändert.
+- Alle Abhängigkeiten haben feste, getestete Versionen (`requirements.txt`). Geprüft für Windows (Python 3.12/3.13)
+  und Linux.
+
+### Technisch
+- Neue Entwickler-Regeln in `docs/ENTWICKLUNG.md`: keine Windows-Pfade oder -Bibliotheken außerhalb der dafür
+  vorgesehenen Module, alle Daten im Datenordner, Konfiguration über Umgebung, Zeitzone und Zeichensatz ausdrücklich.
+- `tests/test_regeln.py` prüft diese Regeln bei jedem Testlauf.
 
 ---
 

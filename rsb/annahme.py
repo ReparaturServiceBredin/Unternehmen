@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import db as dbm
-from .hilfen import EingabeFehler, euro, kunde_name
+from .hilfen import EingabeFehler, euro, kunde_name, sicherer_dateiname
 
 ARTEN = {"annahme": "Annahmeschein", "abholung": "Abholschein"}
 KUERZEL = {"annahme": "AN", "abholung": "AB"}
@@ -237,13 +237,13 @@ def beleg_erstellen(con, auftrag_id, art, daten_url, unterzeichner, daten_dir, q
     snap.update({"nummer": nummer, "unterzeichner": unterzeichner, "unterschrieben_am": zeitpunkt, "quelle": quelle})
     pdf = annahme_pdf.erstellen(snap, daten_dir, dbm.einstellungen(con), unterschrift=png)
     ordner = _ordner(daten_dir, zeitpunkt[:4])
-    pdf_datei = ordner / f"{nummer}.pdf"
+    pdf_datei = ordner / f"{sicherer_dateiname(nummer)}.pdf"
     if pdf_datei.exists():
         raise EingabeFehler("Für diese Nummer liegt bereits ein archiviertes PDF vor. Bitte den Vorgang wiederholen.")
     pdf_datei.write_bytes(pdf)
-    (ordner / f"{nummer}_unterschrift.png").write_bytes(png)
+    (ordner / f"{sicherer_dateiname(nummer)}_unterschrift.png").write_bytes(png)
     snap_text = json.dumps(snap, ensure_ascii=False, sort_keys=True, indent=1)
-    (ordner / f"{nummer}.json").write_text(snap_text, encoding="utf-8")
+    (ordner / f"{sicherer_dateiname(nummer)}.json").write_text(snap_text, encoding="utf-8")
     rel = pdf_datei.relative_to(Path(daten_dir)).as_posix()
     cur = con.execute(
         "INSERT INTO auftrag_belege (auftrag_id, art, nummer, unterzeichner, unterschrieben_am, unterschrift_sha256, "

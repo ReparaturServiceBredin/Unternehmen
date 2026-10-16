@@ -136,3 +136,14 @@ def anschrift_zeilen(k):
 def iban_format(iban):
     iban = (iban or "").replace(" ", "").upper()
     return " ".join(iban[i:i + 4] for i in range(0, len(iban), 4))
+
+
+UNERLAUBT_IM_DATEINAMEN = '\\/:*?"<>|'
+
+
+def sicherer_dateiname(name):
+    """Dateiname, der unter Windows und Linux gültig ist: ohne \\ / : * ? " < > |, Steuerzeichen und Punkt/Leerzeichen
+    am Ende. Gültige Namen (z. B. „RE-2026-0001“) bleiben unverändert – vorhandene Dateien werden also weiter gefunden."""
+    t = "".join("_" if c in UNERLAUBT_IM_DATEINAMEN or ord(c) < 32 else c for c in str(name or ""))
+    t = t.rstrip(" .")
+    return t or "datei"
