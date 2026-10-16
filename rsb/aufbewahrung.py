@@ -34,11 +34,18 @@ def pruefen(con, kunde_id, einst=None):
     if leihen:
         bis = max(_bis(le["ausgabe_am"][:4], briefe) for le in leihen)
         behalten.append({"was": f"{len(leihen)} Leihvertrag/-verträge mit Übergabe- und Rückgabeprotokoll", "bis": bis})
-    fotos = con.execute("SELECT COUNT(*), MAX(a.eingang_am) FROM auftrag_fotos f JOIN auftraege a ON a.id=f.auftrag_id "
-                        "WHERE a.kunde_id=?", (kunde_id,)).fetchone()
+    fotos = con.execute("SELECT COUNT(*), MAX(COALESCE(a.abgeholt_am, a.erledigt_am, a.eingang_am)) FROM auftrag_fotos f "
+                        "JOIN auftraege a ON a.id=f.auftrag_id WHERE a.kunde_id=? AND f.geloescht_am IS NULL",
+                        (kunde_id,)).fetchone()
     if fotos[0]:
+        monate = int(einst.get("ds_fotos_monate") or 0)
+        if monate:  # Löschfrist für Fotos (Datenschutz) statt pauschal 6 Jahre
+            from .garantie import plus_monate
+            bis = plus_monate(date.fromisoformat(fotos[1][:10]), monate).isoformat()
+        else:
+            bis = _bis(fotos[1][:4], briefe)
         behalten.append({"was": f"{fotos[0]} Foto(s) der Reparaturdokumentation (unveränderbar gespeichert)",
-                         "bis": _bis(fotos[1][:4], briefe)})
+                         "bis": bis})
     mails = con.execute("SELECT COUNT(*), MAX(n.datum) FROM email_nachrichten n JOIN email_kunden k "
                         "ON k.nachricht_id=n.id WHERE k.kunde_id=? AND n.dokument_id IS NOT NULL", (kunde_id,)).fetchone()
     if mails[0]:

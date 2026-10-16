@@ -73,7 +73,26 @@ def vertraege_hintergrund(app):
                 con.close()
         except Exception as e:  # Hintergrund darf nie abstürzen
             print(f"{datetime.now():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
+        datenschutz_lauf(app)
         time.sleep(3600)
+
+
+def datenschutz_lauf(app):
+    """Einmal täglich die Löschfristen anwenden, wenn in den Einstellungen eingeschaltet."""
+    from .datenschutz import loeschlauf
+    try:
+        con = dbm.verbinden(app.config["DB_PFAD"])
+        try:
+            einst = dbm.einstellungen(con)
+            if einst.get("ds_auto") and (einst.get("ds_letzter_lauf") or "")[:10] != datetime.now().date().isoformat():
+                with app.app_context(), dbm.Transaktion(con):
+                    z = loeschlauf(con, app.config["DATEN"])
+                if any(z.values()):
+                    print(f"{datetime.now():%H:%M} Datenschutz-Löschlauf: {z}")
+        finally:
+            con.close()
+    except Exception as e:  # Hintergrund darf nie abstürzen
+        print(f"{datetime.now():%H:%M} Datenschutz-Löschlauf fehlgeschlagen: {e}")
 
 
 def update_pruefen(app):

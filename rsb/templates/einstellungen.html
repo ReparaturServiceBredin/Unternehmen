@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('einkauf','Einkauf'),('datev','DATEV'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('einkauf','Einkauf'),('datev','DATEV'),('datenschutz','Datenschutz'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -266,6 +266,21 @@
   <p class="klein">Dieser Text steht im Leihvertrag / Übergabeprotokoll, das der Kunde bei der Ausgabe eines Leihgeräts unterschreibt. <code>{firma}</code> wird durch Ihren Firmennamen ersetzt. Lassen Sie die Bedingungen im Zweifel einmal rechtlich prüfen.</p>
   <textarea name="leihbedingungen" style="min-height:360px">{{ einst.leihbedingungen or '' }}</textarea><br><br>
   <button>Speichern</button>
+</form>
+
+{% elif bereich == 'datenschutz' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Löschfristen (DSGVO)</h2>
+  <p class="klein">0 = keine automatische Löschung. Aufbewahrungspflichtige Belege (Rechnungen {{ einst.aufbewahrung_belege_jahre }} Jahre, Geschäftsbriefe {{ einst.aufbewahrung_briefe_jahre }} Jahre) werden nie vorzeitig gelöscht – betroffene Kunden werden dann anonymisiert. Die Vorschläge sind übliche Werte; bitte prüfen, ob sie zu Ihrem Betrieb passen.</p>
+  <div class="felder">
+    <div class="s12">{{ haken('ds_auto', 'Löschlauf automatisch einmal täglich ausführen (sonst manuell unter Datenschutz)') }}</div>
+    <div class="s4"><label>Interessenten ohne Auftrag (Monate)</label><input type="number" min="0" name="interessent_loeschen_monate" value="{{ einst.interessent_loeschen_monate }}"></div>
+    <div class="s4"><label>Inaktive Kunden (Jahre ohne Kontakt)</label><input type="number" min="0" name="ds_kunde_inaktiv_jahre" value="{{ einst.ds_kunde_inaktiv_jahre }}"><div class="hilfe">z. B. 3 (regelmäßige Verjährungsfrist)</div></div>
+    <div class="s4"><label>Fotos (Monate nach Abholung)</label><input type="number" min="0" name="ds_fotos_monate" value="{{ einst.ds_fotos_monate }}"><div class="hilfe">nicht kürzer als Ihre Garantie ({{ einst.garantie_monate }} Monate)</div></div>
+    <div class="s4"><label>Gerätezugangsdaten bei offenen Aufträgen (Tage)</label><input type="number" min="0" name="ds_zugang_tage" value="{{ einst.ds_zugang_tage }}"><div class="hilfe">bei Abschluss werden sie ohnehin sofort gelöscht</div></div>
+    <div class="s4"><label>E-Mail-Verlauf ohne Belegbezug (Jahre)</label><input type="number" min="0" name="ds_email_jahre" value="{{ einst.ds_email_jahre }}"></div>
+    <div class="s12"><label>Verantwortlicher für das Verzeichnis (optional, sonst aus den Firmendaten)</label><input type="text" name="ds_verantwortlicher" value="{{ einst.ds_verantwortlicher }}"></div>
+  </div><br><button>Speichern</button>
 </form>
 
 {% elif bereich == 'datev' %}

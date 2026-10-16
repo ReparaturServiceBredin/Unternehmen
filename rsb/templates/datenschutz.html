@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "_status.html" import csrf %}
+{% block titel %}Datenschutz{% endblock %}
+{% block inhalt %}
+<div class="kopf"><h1>Datenschutz</h1>
+  <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.datenschutz_verzeichnis') }}">Verzeichnis der Verarbeitungstätigkeiten</a>
+    <a class="knopf zweit" href="{{ url_for('main.einstellungen', bereich='datenschutz') }}">Löschfristen einstellen</a></div></div>
+<p class="klein">Aufbewahrungspflichten (GoBD) haben Vorrang: Kunden mit aufbewahrungspflichtigen Belegen werden anonymisiert statt gelöscht. Auskunft (Art. 15) und Löschung auf Anfrage (Art. 17) starten Sie beim jeweiligen Kunden.
+  Automatischer Löschlauf: <b>{{ 'täglich eingeschaltet' if einst.ds_auto else 'aus' }}</b>{% if einst.ds_letzter_lauf %} · zuletzt {{ einst.ds_letzter_lauf|zeit_sek }}{% endif %}.</p>
+<div class="karte"><h2>Heute fällig (Vorschau)</h2>
+  <table class="liste">
+    <tr><td>Interessenten ohne Auftrag (älter als {{ einst.interessent_loeschen_monate }} Monate)</td><td class="zahl"><b>{{ k.interessenten|length }}</b></td><td class="klein">{% for x in k.interessenten[:8] %}{{ x.kundennr }} {% endfor %}</td></tr>
+    <tr><td>Inaktive Kunden (seit {{ einst.ds_kunde_inaktiv_jahre }} Jahren) – löschen bzw. anonymisieren</td><td class="zahl"><b>{{ k.kunden|length }}</b></td><td class="klein">{% for x in k.kunden[:8] %}{{ x.k.kundennr }} (zuletzt {{ x.letzte|datum }}) {% endfor %}</td></tr>
+    <tr><td>Fotos (älter als {{ einst.ds_fotos_monate }} Monate nach Abholung)</td><td class="zahl"><b>{{ k.fotos|length }}</b></td><td class="klein">{% for x in k.fotos|map(attribute='auftragsnr')|unique|list %}{{ x }} {% endfor %}</td></tr>
+    <tr><td>Gerätezugangsdaten (offene Aufträge, älter als {{ einst.ds_zugang_tage }} Tage)</td><td class="zahl"><b>{{ k.zugaenge|length }}</b></td><td class="klein">{% for x in k.zugaenge %}{{ x.auftragsnr }} {% endfor %}</td></tr>
+    <tr><td>E-Mails ohne Belegbezug (älter als {{ einst.ds_email_jahre }} Jahre)</td><td class="zahl"><b>{{ k.emails }}</b></td><td></td></tr>
+  </table>
+  <form method="post" style="margin-top:10px" onsubmit="return confirm('Löschlauf jetzt ausführen? Gelöschte Daten können nicht wiederhergestellt werden (außer aus einer Datensicherung).')">{{ csrf() }}<button class="gefahr">Löschlauf jetzt ausführen</button></form>
+</div>
+<div class="karte" id="protokolle"><h2>Löschprotokolle</h2>
+  <table class="liste"><thead><tr><th>Zeitpunkt</th><th>Anlass</th><th>Betroffen</th><th>Gelöscht</th><th>Aufbewahrt bis</th><th></th></tr></thead><tbody>
+  {% for p in protokolle %}<tr {% if p.id == gewaehlt %}class="gewaehlt"{% endif %}><td>{{ p.zeitpunkt|zeit_sek }}<div class="klein">{{ p.benutzer }}</div></td><td>{{ p.anlass }}</td><td>{{ p.betroffen }}</td>
+    <td class="klein">{{ json.loads(p.geloescht)|join('; ') }}</td>
+    <td class="klein">{% for b in json.loads(p.behalten) %}{{ b.was }} – bis {{ b.bis|datum }}<br>{% else %}–{% endfor %}</td>
+    <td><a class="knopf zweit klein" href="{{ url_for('main.datenschutz_protokoll', pid=p.id) }}" target="_blank">Bestätigung (PDF)</a></td></tr>
+  {% else %}<tr><td colspan="6" class="klein">Noch keine Löschungen.</td></tr>{% endfor %}</tbody></table>
+  <p class="klein">Löschprotokolle sind unveränderlich. Sie enthalten nur Kundennummer und gekürzten Namen – als Nachweis, dass eine Löschung erfolgt ist (Rechenschaftspflicht).</p>
+</div>
+{% endblock %}

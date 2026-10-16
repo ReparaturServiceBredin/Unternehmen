@@ -160,6 +160,7 @@
       {% if k.archiviert %}<input type="hidden" name="zurueck" value="1"><button class="zweit">Wieder aktivieren</button>
       {% else %}<button class="zweit">Archivieren</button>{% endif %}
     </form>
+    <a class="knopf zweit" href="{{ url_for('main.kunde_auskunft', kid=k.id) }}">Auskunft (Art. 15 DSGVO) herunterladen</a>
     {% if not k.anonymisiert_am %}<a class="knopf gefahr" href="{{ url_for('main.kunde_loeschen', kid=k.id) }}">Löschen …</a>{% endif %}
   </div>
 </div>

@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.20.0 | 16.10.2026 | Datenschutz: Löschfristen, Auskunft, Löschprotokoll, Verzeichnis |
 | 0.19.0 | 16.10.2026 | Kassenbuch mit Tagesabschluss, DATEV-Export |
 | 0.18.0 | 16.10.2026 | E-Rechnung: ZUGFeRD/Factur-X und XRechnung erzeugen und empfangen |
 | 0.17.0 | 15.10.2026 | Lieferanten, Bestellungen, Wareneingang, Eingangsrechnungen |
@@ -40,6 +41,47 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.20.0 – 16.10.2026
+Datenschutz nach DSGVO (Ausbaustufe 10 von 10).
+
+### Neu
+
+**Löschfristen** (*Einstellungen → Datenschutz*):
+
+| Daten | Frist (Vorschlag) |
+|---|---|
+| Interessenten ohne Auftrag | 6 Monate |
+| inaktive Kunden | 3 Jahre ohne Kontakt |
+| Eingangs- und Reparaturfotos | 24 Monate nach Abholung |
+| Gerätezugangsdaten bei liegengebliebenen Aufträgen | 90 Tage (bei Abschluss ohnehin sofort) |
+| E-Mails ohne Belegbezug | 6 Jahre |
+
+**Löschlauf:** Unter *Verwaltung → Datenschutz* sehen Sie, was heute fällig wäre. Mit „Löschlauf jetzt ausführen“
+oder automatisch täglich (einschaltbar) wird gelöscht.
+- **Aufbewahrungspflichten haben Vorrang:** Ein inaktiver Kunde mit Rechnungen wird anonymisiert, nicht gelöscht.
+- Kunden mit offenen Rechnungen, laufenden Verträgen oder offenen Aufträgen bleiben unberührt.
+- Bei Fotos verschwindet die Datei. Der Eintrag bleibt als „gelöscht (Löschfrist)“ nachvollziehbar.
+
+**Auskunft nach Art. 15 DSGVO:** Beim Kunden den Knopf **„Auskunft herunterladen“** drücken. Sie bekommen ein ZIP
+mit:
+- Auskunftsschreiben (Zwecke, Empfänger, Speicherdauer, Rechte)
+- allen gespeicherten Daten (JSON)
+- Rechnungen, Annahme-/Abholscheinen und Fotos
+
+Gerätezugangsdaten sind nie im Klartext enthalten.
+
+**Löschanfrage (Art. 17):** Beim Löschen eines Kunden „Der Kunde hat die Löschung verlangt“ anhaken. Ins
+unveränderliche **Löschprotokoll** kommt, was gelöscht und was bis wann aufbewahrt wird. Dazu gibt es eine
+**Bestätigung als PDF** für den Kunden.
+
+**Verzeichnis der Verarbeitungstätigkeiten (Art. 30):** Vorlage, erzeugt aus den tatsächlich gespeicherten Daten
+und Ihren Löschfristen. Sie enthält Zwecke, Rechtsgrundlagen, Datenkategorien, Empfänger, Bestand, technische
+Maßnahmen und Auftragsverarbeiter, als Seite und als PDF.
+
+### Technisch
+- Neue Tabelle `loeschprotokolle` (unveränderlich).
+- Der Löschlauf läuft im vorhandenen Hintergrund-Thread einmal täglich, wenn eingeschaltet.
 
 ## 0.19.0 – 16.10.2026
 Kassenbuch und DATEV-Export (Ausbaustufe 9 von 10).

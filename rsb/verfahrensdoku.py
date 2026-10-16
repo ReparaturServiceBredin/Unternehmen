@@ -138,7 +138,7 @@ def markiert(text):
     return Markup(str(escape(text)).replace(ERGAENZEN, f"<mark>{ERGAENZEN}</mark>"))
 
 
-def pdf(abschnitte, firma=""):
+def pdf(abschnitte, firma="", titel="Verfahrensdokumentation – Rechnungsstellung und Belegarchivierung"):
     from xml.sax.saxutils import escape
 
     from reportlab.lib import colors
@@ -155,8 +155,8 @@ def pdf(abschnitte, firma=""):
     st_t = ParagraphStyle("t", fontName=f_fett, fontSize=17, leading=22, textColor=colors.HexColor("#1C54A3"))
     puffer = io.BytesIO()
     doc = SimpleDocTemplate(puffer, pagesize=A4, leftMargin=20 * mm, rightMargin=20 * mm, topMargin=18 * mm,
-                            bottomMargin=18 * mm, title="Verfahrensdokumentation", author=firma)
-    teile = [Paragraph("Verfahrensdokumentation – Rechnungsstellung und Belegarchivierung", st_t),
+                            bottomMargin=18 * mm, title=titel.split(" – ")[0], author=firma)
+    teile = [Paragraph(escape(titel), st_t),
              Paragraph(escape(firma), st), Spacer(1, 4 * mm)]
     for titel, bausteine in abschnitte:
         teile.append(Paragraph(escape(titel), st_h))

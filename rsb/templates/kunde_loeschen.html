@@ -15,9 +15,10 @@
   {% endif %}
   <h3>Wird gelöscht</h3>
   {% if bericht.loeschen %}<ul>{% for l in bericht.loeschen %}<li>{{ l }}</li>{% endfor %}</ul>{% else %}<p class="klein">Keine weiteren Daten.</p>{% endif %}
-  <p class="klein">Ihr E-Mail-Postfach bleibt unverändert. Der Vorgang wird im Protokoll festgehalten (ohne personenbezogene Daten).</p>
-  <form method="post" class="leiste" onsubmit="return confirm('{{ 'Kunden jetzt anonymisieren?' if bericht.anonymisieren else 'Kunden jetzt endgültig löschen?' }} Das kann nicht rückgängig gemacht werden.')">{{ csrf() }}
-    <button class="gefahr">{{ 'Jetzt anonymisieren' if bericht.anonymisieren else 'Endgültig löschen' }}</button>
-    <a class="knopf zweit" href="{{ url_for('main.kunde', kid=k.id) }}">Abbrechen</a></form>
+  <p class="klein">Ihr E-Mail-Postfach bleibt unverändert. Der Vorgang wird im Löschprotokoll festgehalten (Kundennummer und gekürzter Name, was gelöscht und was bis wann aufbewahrt wird).</p>
+  <form method="post" onsubmit="return confirm('{{ 'Kunden jetzt anonymisieren?' if bericht.anonymisieren else 'Kunden jetzt endgültig löschen?' }} Das kann nicht rückgängig gemacht werden.')">{{ csrf() }}
+    <label class="check" style="margin-bottom:10px"><input type="checkbox" name="anfrage" value="1"> Der Kunde hat die Löschung verlangt (Art. 17 DSGVO) – Bestätigung für den Kunden erstellen</label>
+    <div class="leiste"><button class="gefahr">{{ 'Jetzt anonymisieren' if bericht.anonymisieren else 'Endgültig löschen' }}</button>
+    <a class="knopf zweit" href="{{ url_for('main.kunde', kid=k.id) }}">Abbrechen</a></div></form>
 </div>
 {% endblock %}

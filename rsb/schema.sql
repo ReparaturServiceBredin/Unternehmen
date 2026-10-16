@@ -1175,3 +1175,23 @@ CREATE TRIGGER IF NOT EXISTS datev_export_schutz BEFORE DELETE ON datev_exporte
 BEGIN
     SELECT RAISE(ABORT, 'Das Exportprotokoll darf nicht gelöscht werden.');
 END;
+
+-- Löschprotokolle (DSGVO): was gelöscht, was behalten und bis wann (unveränderlich)
+CREATE TABLE IF NOT EXISTS loeschprotokolle (
+    id          INTEGER PRIMARY KEY,
+    zeitpunkt   TEXT NOT NULL,
+    benutzer    TEXT,
+    anlass      TEXT NOT NULL,
+    betroffen   TEXT,
+    geloescht   TEXT NOT NULL,             -- JSON-Liste
+    behalten    TEXT NOT NULL,             -- JSON-Liste [{was, bis}]
+    bis         TEXT
+);
+CREATE TRIGGER IF NOT EXISTS loeschprotokoll_schutz_update BEFORE UPDATE ON loeschprotokolle
+BEGIN
+    SELECT RAISE(ABORT, 'Löschprotokolle dürfen nicht geändert werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS loeschprotokoll_schutz_delete BEFORE DELETE ON loeschprotokolle
+BEGIN
+    SELECT RAISE(ABORT, 'Löschprotokolle dürfen nicht gelöscht werden.');
+END;

@@ -274,14 +274,66 @@ def kunde_loeschen(kid):
         raise EingabeFehler("Dieser Kunde wurde bereits anonymisiert.")
     if request.method == "GET":
         return render_template("kunde_loeschen.html", k=k, bericht=aufbewahrung.pruefen(con, kid))
+    from . import datenschutz as ds
+    anlass = "Löschanfrage des Kunden (Art. 17 DSGVO)" if request.form.get("anfrage") else "manuell"
     with dbm.Transaktion(con):
-        bericht = aufbewahrung.kunde_loeschen(con, kid)
+        bericht, pid = ds.kunde_loeschen(con, kid, anlass)
     if bericht["anonymisieren"]:
         flash(f"Kunde anonymisiert. Wegen Aufbewahrungspflichten bleiben die Belege bis "
               f"{datum_de(bericht['bis'])} erhalten; Name und Anschrift stehen nur noch darin.", "ok")
-        return redirect(url_for("main.kunde", kid=kid))
-    flash("Kunde vollständig gelöscht.", "ok")
-    return redirect(url_for("main.kunden"))
+    else:
+        flash("Kunde vollständig gelöscht.", "ok")
+    flash("Das Löschprotokoll und die Bestätigung für den Kunden finden Sie unter Datenschutz.", "info")
+    return redirect(url_for("main.datenschutz", protokoll=pid) + "#protokolle")
+
+
+@bp.route("/kunden/<int:kid>/auskunft")
+def kunde_auskunft(kid):
+    """Auskunft nach Art. 15 DSGVO: ZIP mit Auskunftsschreiben, allen Daten und Kopien."""
+    from . import datenschutz as ds
+    con = dbm.get_db()
+    k = con.execute("SELECT * FROM kunden WHERE id=?", (kid,)).fetchone() or abort(404)
+    daten = ds.auskunft_zip(con, kid, daten_dir())
+    with dbm.Transaktion(con):
+        dbm.protokollieren("datenschutz_auskunft", "kunde", kid, {"kundennr": k["kundennr"]}, con=con)
+        dbm.ereignis_erfassen(con, "kunde", kid, "Auskunft nach Art. 15 DSGVO erstellt", None)
+    return send_file(io.BytesIO(daten), mimetype="application/zip", as_attachment=True,
+                     download_name=f"Auskunft_{k['kundennr']}_{date.today().isoformat()}.zip")
+
+
+@bp.route("/datenschutz", methods=["GET", "POST"])
+def datenschutz():
+    from . import datenschutz as ds
+    con = dbm.get_db()
+    if request.method == "POST":
+        with dbm.Transaktion(con):
+            z = ds.loeschlauf(con, daten_dir())
+        flash("Löschlauf ausgeführt: " + ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in z.items() if v)
+              if any(z.values()) else "Löschlauf ausgeführt – nichts war fällig.", "ok")
+        return redirect(url_for("main.datenschutz") + "#protokolle")
+    return render_template("datenschutz.html", k=ds.kandidaten(con), protokolle=ds.protokolle(con),
+                           fristen=ds.FRISTEN, gewaehlt=request.args.get("protokoll", type=int), json=json)
+
+
+@bp.route("/datenschutz/protokoll/<int:pid>.pdf")
+def datenschutz_protokoll(pid):
+    from . import datenschutz as ds
+    con = dbm.get_db()
+    p = con.execute("SELECT * FROM loeschprotokolle WHERE id=?", (pid,)).fetchone() or abort(404)
+    return send_file(io.BytesIO(ds.loeschbestaetigung_pdf(con, p)), mimetype="application/pdf",
+                     download_name=f"Loeschbestaetigung_{pid}.pdf")
+
+
+@bp.route("/datenschutz/verzeichnis")
+def datenschutz_verzeichnis():
+    from . import datenschutz as ds
+    from . import verfahrensdoku as vd
+    abschnitte = ds.verzeichnis(dbm.get_db())
+    if request.args.get("pdf"):
+        return send_file(io.BytesIO(vd.pdf(abschnitte, dbm.einstellung("firma_name") or "",
+                                           titel="Verzeichnis der Verarbeitungstätigkeiten (Art. 30 DSGVO)")),
+                         mimetype="application/pdf", download_name=f"VVT_{date.today().isoformat()}.pdf")
+    return render_template("vvt.html", abschnitte=abschnitte, ergaenzen=vd.ERGAENZEN, markiert=vd.markiert)
 
 
 # ====================================================================== Leistungen & Artikel
@@ -1453,6 +1505,8 @@ EINSTELLUNGS_BEREICHE = {
     + [f"ben_{a}_{t}" for a in ben.ANLAESSE for t in ("aktiv", "betreff", "text")],
     "datev": ["datev_beraternr", "datev_mandantennr", "datev_skr", "datev_wj_beginn", "datev_kontenlaenge",
               "datev_debitor_start", "datev_kreditor_start", "datev_konten", "datev_kostenarten"],
+    "datenschutz": ["ds_auto", "interessent_loeschen_monate", "ds_kunde_inaktiv_jahre", "ds_fotos_monate",
+                    "ds_zugang_tage", "ds_email_jahre", "ds_verantwortlicher"],
     "einkauf": ["mindest_marge_prozent", "praefix_bestellung", "praefix_eingangsrechnung", "kostenarten",
                 "er_imap_ordner"],
     "annahme": ["garantie_monate", "annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
@@ -1468,9 +1522,9 @@ EINSTELLUNGS_BEREICHE = {
                  "anfrage_schwelle_unsicher", "anfrage_schwelle_spam", "anfrage_namensreihenfolge",
                  "interessent_loeschen_monate"],
 }
-JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
+JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"ds_auto", "benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"ds_kunde_inaktiv_jahre", "ds_fotos_monate", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}

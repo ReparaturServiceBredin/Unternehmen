@@ -548,3 +548,14 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
      technisch möglich, aber kostenpflichtig. Dazu kommen Meldung ans Finanzamt, Belegdruck und
      Verfahrensdokumentation. Lohnt sich nur bei vielen Barverkäufen ohne Rechnung.
 - **Unabhängig davon:** Kartenzahlungen und Überweisungen sind keine Bargeldvorgänge im Sinne der TSE-Pflicht.
+
+## 26. Datenschutz
+
+- **Löschfristen** einmal prüfen: *Einstellungen → Datenschutz*. Wenn alles passt, „Löschlauf automatisch“
+  einschalten.
+- **Kunde fragt, welche Daten Sie haben (Art. 15):** Kunde öffnen → **Auskunft (Art. 15 DSGVO) herunterladen** → das
+  ZIP dem Kunden geben (Frist: 1 Monat).
+- **Kunde will gelöscht werden (Art. 17):** Kunde öffnen → **Löschen …** → Haken „Der Kunde hat die Löschung
+  verlangt“ → bestätigen. Unter *Datenschutz → Löschprotokolle* steht die **Bestätigung (PDF)** für den Kunden.
+- **Verzeichnis der Verarbeitungstätigkeiten:** *Datenschutz → Verzeichnis*. Die Stellen mit [bitte ergänzen]
+  ausfüllen, als PDF speichern und aufbewahren.
