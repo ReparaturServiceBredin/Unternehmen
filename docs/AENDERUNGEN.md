@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.22.2 | 16.10.2026 | Sicherung wiederherstellen mit Inhaltsvorschau, Hinweis bei OneDrive |
 | 0.22.1 | 16.10.2026 | Fehlerbehebung: Einstellungen werden nie mehr leer angezeigt |
 | 0.22.0 | 16.10.2026 | Neue Navigation: Gruppen, Schnellsuche (Strg+K), Glocke, Einstellungen mit Suche, Dunkelmodus |
 | 0.21.0 | 16.10.2026 | KVA-Pauschale je Gerätetyp, freiwillige Garantie ab Abholung, Löschvorschau, Kassen-Fehlbetrag |
@@ -42,6 +43,23 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.22.2 – 16.10.2026
+Neu: Sicherungen selbst wiederherstellen.
+
+### Neu
+- *Einstellungen → Backup → Sicherung wiederherstellen* listet jede Sicherung mit Inhalt: Kunden, Aufträge,
+  Artikel, Belege, Fotos und Firmendaten. Ein Klick spielt die gewählte Sicherung ein.
+  - Vorher wird der aktuelle Stand **vollständig** gesichert (`vor_wiederherstellung_….zip`). Diese Sicherung erscheint
+    danach ebenfalls in der Liste und lässt sich zurückspielen.
+  - Fotos und PDFs werden ergänzt, nie gelöscht. Das Programm startet dafür kurz neu.
+  - „Auch andere Datenordner suchen“ findet Datenordner unter Desktop, Downloads, Dokumente und OneDrive, etwa wenn
+    das Programm früher an einem anderen Ort lag.
+- Liegt der Datenordner in OneDrive, erscheint ein Hinweis mit Empfehlung. OneDrive kann eine geöffnete Datenbank
+  durch eine ältere Fassung ersetzen.
+- DATEV-Exporte (`Daten/exporte`) sind jetzt in jedem Backup enthalten.
 
 ---
 

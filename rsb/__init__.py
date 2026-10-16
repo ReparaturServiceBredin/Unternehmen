@@ -11,7 +11,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.22.1"
+VERSION_NUMMER = "0.22.2"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -36,7 +36,17 @@ def create_app(daten_dir=None, testing=False):
         MAX_CONTENT_LENGTH=60 * 1024 * 1024,  # Fotos vom Handy können groß sein
         TESTING=testing,
     )
+    from . import wiederherstellung
+    bericht = wiederherstellung.ausfuehren(daten)  # vorgemerkte Wiederherstellung – bevor die Datenbank offen ist
     dbm.initialisieren(app.config["DB_PFAD"])
+    app.config["GESTARTET"] = datetime.now().isoformat(timespec="seconds")
+    if bericht:
+        con = dbm.verbinden(app.config["DB_PFAD"])
+        try:
+            dbm.einstellungen_speichern({"wiederherstellung_bericht": bericht}, con)
+            dbm.protokollieren("wiederherstellung", "system", None, bericht, con=con)
+        finally:
+            con.close()
     app.teardown_appcontext(dbm.schliessen)
 
     def tage_seit(iso):

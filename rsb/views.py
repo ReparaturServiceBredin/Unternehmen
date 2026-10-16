@@ -1724,7 +1724,12 @@ def _bereich_gueltig(bereich):
 
 
 def _einstellungs_werte(bereich):
-    return dict(bereich=bereich, bereich_titel=nav.BEREICHS_TITEL.get(bereich, "Einstellungen"),
+    extra = {}
+    if bereich == "backup":
+        from . import wiederherstellung as wh
+        extra = dict(wh_quellen=wh.quellen(daten_dir(), None if request.args.get("suche") else []),
+                     daten_ordner=daten_dir(), onedrive="onedrive" in str(daten_dir()).lower())
+    return dict(**extra,bereich=bereich, bereich_titel=nav.BEREICHS_TITEL.get(bereich, "Einstellungen"),
                 schriften=list(SCHRIFTEN), smtp_passwort_gesetzt=bool(dbm.einstellung("smtp_passwort_enc")),
                 gesendet_passwort_gesetzt=bool(dbm.einstellung("gesendet_imap_passwort_enc")),
                 imap_passwort_gesetzt=bool(dbm.einstellung("imap_passwort_enc")), backups=_backup_liste())
@@ -3468,7 +3473,7 @@ from . import update as upd  # noqa: E402
 @bp.route("/version")
 def version_info():
     from . import VERSION_NUMMER
-    return jsonify(version=VERSION_NUMMER)
+    return jsonify(version=VERSION_NUMMER, gestartet=current_app.config.get("GESTARTET"))
 
 
 @bp.route("/update/pruefen", methods=["POST"])
@@ -4036,3 +4041,25 @@ def schnellsuche():
             gruppen.append({"art": art, "eintraege": [dict(zip(("titel", "unter", "url"), form(z)), symbol=sym)
                                                       for z in zeilen]})
     return jsonify(gruppen)
+
+
+# ====================================================================== Wiederherstellung aus einer Sicherung
+
+@bp.route("/einstellungen/backup/wiederherstellen", methods=["POST"])
+def wiederherstellen():
+    from . import wiederherstellung as wh
+    quelle = request.form.get("quelle", "")
+    try:
+        wh.vormerken(daten_dir(), quelle)
+    except ValueError as e:
+        raise EingabeFehler(str(e))
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        dbm.protokollieren("wiederherstellung_vorgemerkt", "system", None, {"quelle": quelle}, con=con)
+    if not upd.ist_exe():
+        flash("Wiederherstellung vorgemerkt. Bitte das Programm jetzt beenden und neu starten – vorher wird der "
+              "aktuelle Stand vollständig gesichert.", "warnung")
+        return redirect(url_for("main.einstellungen", bereich="backup"))
+    dbm.festschreiben(current_app.config["DB_PFAD"])
+    upd.neu_starten(verzoegerung=1.5)
+    return render_template("wiederherstellung_laeuft.html", gestartet=current_app.config.get("GESTARTET"))

@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import db as dbm
 
-ORDNER_IM_BACKUP = ["dokumente", "belege", "bilder", "fotos"]
+ORDNER_IM_BACKUP = ["dokumente", "belege", "bilder", "fotos", "exporte"]
 
 
 def backup_erstellen(daten_dir, db_pfad, einst=None):

@@ -202,6 +202,23 @@
     {% for name, groesse in backups %}<tr><td><a href="{{ url_for('main.backup_herunterladen', name=name) }}">{{ name }}</a></td><td class="zahl">{{ (groesse / 1024)|round|int }} KB</td></tr>
     {% else %}<tr><td colspan="2" class="klein">Noch keine Backups.</td></tr>{% endfor %}</table>
 </div>
+<div class="karte" id="wiederherstellen">
+  <h2>Sicherung wiederherstellen</h2>
+  {% set wb = einst.wiederherstellung_bericht %}
+  {% if wb %}<div class="meldung {{ 'ok' if wb.ok else 'fehler' }}">{% if wb.ok %}Zuletzt eingespielt: <b>{{ wb.quelle }}</b> – jetzt {{ wb.inhalt.anzahl.kunden or 0 }} Kunden, {{ wb.inhalt.anzahl.auftraege or 0 }} Aufträge, {{ wb.inhalt.anzahl.artikel or 0 }} Artikel. Der vorherige Stand liegt in {{ wb.sicherung }}.{% else %}{{ wb.meldung }}{% endif %}</div>{% endif %}
+  {% if onedrive %}<div class="meldung warnung"><b>Ihr Datenordner liegt in OneDrive</b> ({{ daten_ordner }}). OneDrive kann eine geöffnete Datenbank durch eine ältere Fassung ersetzen. Empfehlung: Programm samt Ordner „Daten“ in einen Ordner außerhalb von OneDrive verschieben, z. B. C:\RSB-Buchhaltung, und Sicherungen über „Zusätzlicher Backup-Ordner“ anlegen.</div>{% endif %}
+  <p class="klein">Zeigt jede Sicherung mit ihrem Inhalt. Beim Einspielen wird der aktuelle Stand vorher vollständig gesichert (vor_wiederherstellung_….zip, erscheint danach ebenfalls hier). Fotos und PDFs werden ergänzt, nie gelöscht. Das Programm startet dafür kurz neu.</p>
+  <div style="overflow-x:auto"><table class="liste"><thead><tr><th>Stand</th><th>Quelle</th><th class="zahl">Kunden</th><th class="zahl">Aufträge</th><th class="zahl">Artikel</th><th class="zahl">Belege</th><th class="zahl">Fotos</th><th>Firmendaten</th><th></th></tr></thead><tbody>
+  {% for q in wh_quellen %}{% set i = q.inhalt %}<tr>
+    <td>{{ q.zeit|zeit_sek }}</td><td style="word-break:break-all;min-width:160px"><span class="klein">{{ q.art }}</span><br>{{ q.name }}</td>
+    {% if i.fehler %}<td colspan="6" class="klein">{{ i.fehler }}</td>{% else %}
+    <td class="zahl">{{ i.anzahl.kunden or 0 }}</td><td class="zahl">{{ i.anzahl.auftraege or 0 }}</td><td class="zahl">{{ i.anzahl.artikel or 0 }}</td><td class="zahl">{{ i.anzahl.dokumente or 0 }}</td>
+    <td class="zahl">{{ i.anzahl.auftrag_fotos or 0 }}{% if i.dateien is not none %}<div class="klein">{{ i.dateien }} Datei(en)</div>{% endif %}</td>
+    <td class="klein">{{ i.firma }}{% if i.strasse %}<br>{{ i.strasse }}{% endif %}{% if i.imap %}<br>IMAP: {{ i.imap }}{% endif %}</td>{% endif %}
+    <td>{% if not i.fehler %}<form method="post" action="{{ url_for('main.wiederherstellen') }}" onsubmit="return confirm('Diese Sicherung einspielen? Der aktuelle Stand wird vorher vollständig gesichert.')">{{ csrf() }}<input type="hidden" name="quelle" value="{{ q.pfad }}"><button class="zweit klein">Wiederherstellen</button></form>{% endif %}</td></tr>
+  {% else %}<tr><td colspan="9" class="klein">Keine Sicherungen gefunden.</td></tr>{% endfor %}</tbody></table></div>
+  <p class="klein"><a href="{{ url_for('main.einstellungen', bereich='backup', suche=1) }}#wiederherstellen">Auch andere Datenordner suchen</a> (Desktop, Downloads, Dokumente, OneDrive – z. B. falls das Programm früher an einem anderen Ort lag)</p>
+</div>
 
 {% elif bereich == 'vertraege' %}
 <form method="post" class="karte">{{ csrf() }}
