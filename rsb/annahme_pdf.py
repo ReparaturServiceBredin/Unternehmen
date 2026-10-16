@@ -126,9 +126,16 @@ def erstellen(snap, daten_dir, einst, unterschrift=None):
             ("Kosten-Obergrenze", f"Reparatur ohne Rückfrage bis {euro(grenze)} (brutto)" if grenze
              else "keine – vor kostenpflichtigen Arbeiten wird Rücksprache gehalten"),
             ("Kostenvoranschlag", "gewünscht" if snap["kva_gewuenscht"] else "nicht gewünscht"),
-            ("Gebühr bei abgelehntem KVA", euro(snap["kva_gebuehr"]) if snap["kva_gebuehr"] else "keine"),
+            ("KVA-Pauschale", (euro(snap["kva_gebuehr"]) if snap["kva_gebuehr"] else "kostenlos")
+             if snap["kva_gebuehr"] is not None else "keine"),
             ("Voraussichtliche Fertigstellung", datum_de(snap["fertig_bis"]) if snap["fertig_bis"] else "offen"),
         ]))
+        if snap.get("kva_text"):  # Pauschale deutlich ausweisen
+            kasten = Table([[p(snap["kva_text"], st_f)]], colWidths=[170 * mm])
+            kasten.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 0.8, blau), ("BACKGROUND", (0, 0), (-1, -1),
+                                                                               colors.HexColor("#EEF3FB")),
+                                        ("TOPPADDING", (0, 0), (-1, -1), 5), ("BOTTOMPADDING", (0, 0), (-1, -1), 5)]))
+            inhalt += [Spacer(1, 2 * mm), kasten]
     else:
         r = snap.get("rechnung")
         zeilen = [("Abgeholt am", _zeit(snap.get("unterschrieben_am")) if snap.get("unterschrieben_am") else "–")]
@@ -136,7 +143,7 @@ def erstellen(snap, daten_dir, einst, unterschrift=None):
             zeilen.append(("Rechnung", f"{r['nummer']} vom {datum_de(r['datum'])} über {euro(r['betrag'])} – {r['status']}"
                            + (f", offen {euro(r['offen'])}" if r["offen"] else "")))
         if snap.get("garantie"):
-            zeilen.append(("Gewährleistung / Garantie", snap["garantie"]))
+            zeilen.append(("Freiwillige Garantie", snap["garantie"]))
         inhalt.append(p("Abholung", st_h))
         inhalt.append(tabelle(zeilen))
 

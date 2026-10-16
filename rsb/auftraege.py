@@ -31,7 +31,8 @@ def naechste_auftragsnr(con):
 
 
 ANNAHME_FELDER = ("zustand_eingang", "kosten_obergrenze", "kva_gewuenscht", "kva_gebuehr", "fertig_bis", "zugang_art",
-                  "auftragsart", "garantie_bezug_id", "garantie_monate", "interne_kosten", "interne_kosten_notiz")
+                  "auftragsart", "garantie_bezug_id", "garantie_monate", "interne_kosten", "interne_kosten_notiz",
+                  "geraetetyp")
 
 
 def anlegen(con, kunde_id, geraet="", fehler="", leistungsart="", seriennummer="", zubehoer="", notizen="",
@@ -150,8 +151,62 @@ def kva_status_setzen(con, kva_id, status):
     dbm.aenderungen_erfassen(con, "dokument", kva_id, {"kva_status": d["kva_status"] or "offen"}, {"kva_status": status},
                              namen={"kva_status": "KVA-Status"})
     dbm.protokollieren("kva_status", "dokument", kva_id, {"status": status}, con=con)
-    for a in con.execute("SELECT id FROM auftraege WHERE kva_id=?", (kva_id,)).fetchall():
+    neue_rechnungen = []
+    for a in con.execute("SELECT * FROM auftraege WHERE kva_id=?", (kva_id,)).fetchall():
         verlauf(con, a["id"], f"KVA {status}", _kva_text(d))
+        if status == "angenommen" and a["kva_gebuehr"]:
+            verlauf(con, a["id"], "KVA-Pauschale entfällt", f"{_euro(a['kva_gebuehr'])} wird mit der Reparatur verrechnet")
+        if status == "abgelehnt" and a["kva_gebuehr"] and a["auftragsart"] != "garantie":
+            did, neu = rechnung_erstellen(con, a["id"])  # Rechnungsentwurf über die fällige Pauschale vorschlagen
+            if neu:
+                neue_rechnungen.append(did)
+    return neue_rechnungen
+
+
+def _euro(cent):
+    from .hilfen import euro
+    return euro(cent)
+
+
+# ---------------------------------------------------------------------- KVA-Pauschale je Gerätetyp
+
+SONSTIGE = "Sonstige Geräte"
+KVA_ARTIKEL = "Kostenvoranschlag / Fehlerdiagnose"
+
+
+def kva_gebuehren(einst):
+    """Einstellung „Gerätetyp = Betrag“ je Zeile → Liste [(Gerätetyp, Cent brutto)] in der eingetragenen Reihenfolge."""
+    from .hilfen import cent_aus_text
+    liste = []
+    for zeile in (einst.get("kva_gebuehren") or "").splitlines():
+        if "=" not in zeile:
+            continue
+        typ, betrag = zeile.rsplit("=", 1)
+        try:
+            cent = cent_aus_text(betrag.strip(), None)
+        except EingabeFehler:
+            continue
+        if typ.strip() and cent is not None:
+            liste.append((typ.strip(), cent))
+    return liste
+
+
+def kva_gebuehr_fuer(einst, geraetetyp):
+    """Standard-Pauschale für einen Gerätetyp (unbekannt → „Sonstige Geräte“, sonst 0)."""
+    werte = dict(kva_gebuehren(einst))
+    if geraetetyp in werte:
+        return werte[geraetetyp]
+    return werte.get(SONSTIGE, 0)
+
+
+def kva_text(einst, kva_gebuehr):
+    """Hinweis für den Annahmeschein (vor der Unterschrift sichtbar)."""
+    if kva_gebuehr is None:
+        return ""
+    if not kva_gebuehr:
+        return "Der Kostenvoranschlag ist für Sie kostenlos."
+    from .hilfen import euro
+    return (einst.get("annahme_kva_text") or "").replace("{KVA-Gebühr}", euro(kva_gebuehr))
 
 
 def dokument_ereignis(con, dokument_id, ereignis_kva, ereignis_rechnung):
@@ -202,8 +257,8 @@ def rechnung_erstellen(con, auftrag_id):
     einst = dbm.einstellungen(con)
     kva = con.execute("SELECT * FROM dokumente WHERE id=?", (a["kva_id"],)).fetchone() if a["kva_id"] else None
     if kva and kva["kva_status"] == "abgelehnt" and a["kva_gebuehr"]:
-        positionen = [kva_gebuehr_position(einst, a["kva_gebuehr"], kva)]
-        art = "Entwurf mit der Gebühr für den abgelehnten KVA"
+        positionen = [kva_gebuehr_position(con, einst, a["kva_gebuehr"], kva, a)]
+        art = "Entwurf über die KVA-Pauschale (KVA abgelehnt)"
     elif kva:
         positionen = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (a["kva_id"],)).fetchall()
         art = "Entwurf mit Positionen aus dem KVA"
@@ -216,14 +271,29 @@ def rechnung_erstellen(con, auftrag_id):
     return did, True
 
 
-def kva_gebuehr_position(einst, brutto, kva):
-    """Rechnungsposition „Gebühr Kostenvoranschlag“ (Betrag auf dem Annahmeschein ist brutto)."""
+def kva_artikel(con, einst):
+    """Leistung „Kostenvoranschlag / Fehlerdiagnose“ im Katalog (wird bei Bedarf angelegt). Gibt die ID zurück."""
+    a = con.execute("SELECT id FROM artikel WHERE lower(name)=lower(?)", (KVA_ARTIKEL,)).fetchone()
+    if a:
+        return a["id"]
+    cur = con.execute("INSERT INTO artikel (name, beschreibung, leistungsart, typ, einheit, preis, teilekosten, "
+                      "steuersatz, ek_unbekannt, erstellt_am, geaendert_am) VALUES (?,?,?,'leistung','pauschal',0,0,?,1,?,?)",
+                      (KVA_ARTIKEL, "Pauschale für Fehlerdiagnose und Kostenvoranschlag; wird bei Annahme des KVA "
+                                    "verrechnet", "Sonstiges", float(einst.get("regel_steuersatz") or 19),
+                       dbm.jetzt(), dbm.jetzt()))
+    dbm.ereignis_erfassen(con, "artikel", cur.lastrowid, "angelegt", "automatisch für die KVA-Pauschale")
+    return cur.lastrowid
+
+
+def kva_gebuehr_position(con, einst, brutto, kva, a):
+    """Rechnungsposition über die KVA-Pauschale (der Betrag auf dem Annahmeschein ist brutto)."""
     satz = float(einst.get("regel_steuersatz") or 19)
     netto = int(round(brutto * 100 / (100 + satz))) if einst["steuer_modus"] == "regel" else brutto
-    return {"artikel_id": None, "bezeichnung": "Gebühr Kostenvoranschlag",
-            "beschreibung": f"Kostenvoranschlag {kva['nummer'] or ''} wurde nicht angenommen (Vereinbarung lt. "
-                            "Annahmeschein)", "menge": 1, "einheit": "pauschal", "einzelpreis": netto,
-            "teilekosten": 0, "steuersatz": satz, "leistungsart": "Sonstiges"}
+    return {"artikel_id": kva_artikel(con, einst),
+            "bezeichnung": f"{KVA_ARTIKEL} – Gerät: {a['geraet'] or 'ohne Angabe'}",
+            "beschreibung": f"Kostenvoranschlag {kva['nummer'] or ''} wurde nicht angenommen; Pauschale laut "
+                            f"Annahmeschein (Auftrag {a['auftragsnr']})", "menge": 1, "einheit": "pauschal",
+            "einzelpreis": netto, "teilekosten": 0, "steuersatz": satz, "leistungsart": "Sonstiges"}
 
 
 def status_setzen(con, auftrag_id, status, vor_id=None):

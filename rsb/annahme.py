@@ -74,15 +74,20 @@ def zugang_setzen(con, auftrag_id, art, wert="", loeschen=False):
         zugang_loeschen(con, auftrag_id, "manuell gelöscht" if loeschen else "Zugangsart geändert")
 
 
-def zugang_loeschen(con, auftrag_id, grund):
+def zugang_loeschen(con, auftrag_id, grund, frist=None):
+    """Gerätezugangsdaten endgültig löschen (Feld geleert, secure_delete überschreibt die alten Seiten) und im
+    Löschprotokoll vermerken – ohne die Daten selbst."""
     from .auftraege import verlauf
-    a = con.execute("SELECT zugang_geheim FROM auftraege WHERE id=?", (auftrag_id,)).fetchone()
+    from .datenschutz import _protokoll
+    a = con.execute("SELECT zugang_geheim, auftragsnr FROM auftraege WHERE id=?", (auftrag_id,)).fetchone()
     if not a or not a["zugang_geheim"]:
         return False
     con.execute("UPDATE auftraege SET zugang_geheim=NULL, zugang_geloescht_am=? WHERE id=?",
                 (dbm.jetzt_berlin(), auftrag_id))
     verlauf(con, auftrag_id, "Gerätezugang gelöscht", grund)
     dbm.protokollieren("geraetezugang_geloescht", "auftrag", auftrag_id, {"grund": grund}, con=con)
+    _protokoll(con, grund, f"Auftrag {a['auftragsnr']}", ["Gerätezugangsdaten (PIN/Passwort/Muster)"], [], None,
+               frist or "sofort bei Abholung, Abschluss oder Stornierung")
     return True
 
 
@@ -172,6 +177,7 @@ def snapshot(con, auftrag_id, art):
         "zubehoer": [{"name": v, "dabei": v in gewaehlt} for v in vorlagen], "zubehoer_sonstiges": sonstiges,
         "kosten_obergrenze": a["kosten_obergrenze"], "kva_gewuenscht": bool(a["kva_gewuenscht"]),
         "kva_gebuehr": a["kva_gebuehr"], "fertig_bis": a["fertig_bis"] or "",
+        "kva_text": _kva_text(einst, a["kva_gebuehr"]),
         "zugang": zugang_text(a), "datenschutz": einst.get("annahme_datenschutz") or "",
         "abholbedingungen": einst.get("annahme_abholbedingungen") or "",
         "fotos": [dict(f) for f in fotos],
@@ -187,6 +193,11 @@ def snapshot(con, auftrag_id, art):
                                     "offen": s["offen"], "status": s["status_text"]}
         snap["garantie"] = garantie_info(con, a)
     return snap
+
+
+def _kva_text(einst, kva_gebuehr):
+    from .auftraege import kva_text
+    return kva_text(einst, kva_gebuehr)
 
 
 def garantie_info(con, a):
@@ -244,6 +255,8 @@ def beleg_erstellen(con, auftrag_id, art, daten_url, unterzeichner, daten_dir, q
                        {"nummer": nummer, "art": art, "pdf_sha256": hashlib.sha256(pdf).hexdigest()}, con=con)
     if art == "abholung":
         con.execute("UPDATE auftraege SET abgeholt_am=COALESCE(abgeholt_am, ?) WHERE id=?", (zeitpunkt, auftrag_id))
+        from .garantie import ende_speichern
+        ende_speichern(con, auftrag_id)
         zugang_loeschen(con, auftrag_id, "Gerät abgeholt")
         from .benachrichtigung import verwerfen
         for b in con.execute("SELECT id FROM benachrichtigungen WHERE auftrag_id=? AND anlass='erinnerung' "

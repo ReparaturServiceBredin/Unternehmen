@@ -38,10 +38,9 @@ def pruefen(con, kunde_id, einst=None):
                         "JOIN auftraege a ON a.id=f.auftrag_id WHERE a.kunde_id=? AND f.geloescht_am IS NULL",
                         (kunde_id,)).fetchone()
     if fotos[0]:
-        monate = int(einst.get("ds_fotos_monate") or 0)
-        if monate:  # Löschfrist für Fotos (Datenschutz) statt pauschal 6 Jahre
-            from .garantie import plus_monate
-            bis = plus_monate(date.fromisoformat(fotos[1][:10]), monate).isoformat()
+        jahre = int(einst.get("ds_fotos_jahre") or 0)
+        if jahre:  # Löschfrist für Fotos (Datenschutz): ab Ende des Kalenderjahres der Abholung
+            bis = date(int(fotos[1][:4]) + jahre + 1, 1, 1).isoformat()
         else:
             bis = _bis(fotos[1][:4], briefe)
         behalten.append({"was": f"{fotos[0]} Foto(s) der Reparaturdokumentation (unveränderbar gespeichert)",

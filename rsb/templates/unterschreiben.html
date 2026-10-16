@@ -15,12 +15,12 @@
     <tr><th>Zubehör</th><td>{% set zb = snap.zubehoer|selectattr('dabei')|map(attribute='name')|list %}{{ (zb + ([snap.zubehoer_sonstiges] if snap.zubehoer_sonstiges else []))|join(', ') or 'keines' }}</td></tr>
     {% if art == 'annahme' %}
     <tr><th>Kosten-Obergrenze</th><td>{{ ('ohne Rückfrage bis ' ~ (snap.kosten_obergrenze|euro)) if snap.kosten_obergrenze else 'keine – vorher Rücksprache' }}</td></tr>
-    <tr><th>Kostenvoranschlag</th><td>{{ 'gewünscht' if snap.kva_gewuenscht else 'nicht gewünscht' }}{% if snap.kva_gebuehr %} · Gebühr bei Ablehnung {{ snap.kva_gebuehr|euro }}{% endif %}</td></tr>
+    <tr><th>Kostenvoranschlag</th><td>{{ 'gewünscht' if snap.kva_gewuenscht else 'nicht gewünscht' }}{% if snap.kva_gebuehr is not none %} · Pauschale <b>{{ snap.kva_gebuehr|euro if snap.kva_gebuehr else 'kostenlos' }}</b>{% endif %}</td></tr>
     <tr><th>Voraussichtlich fertig</th><td>{{ snap.fertig_bis|datum if snap.fertig_bis else 'offen' }}</td></tr>
     <tr><th>Gerätezugang</th><td>{{ snap.zugang }}</td></tr>
     {% else %}
     {% if snap.rechnung %}<tr><th>Rechnung</th><td>{{ snap.rechnung.nummer }} · {{ snap.rechnung.betrag|euro }} · {{ snap.rechnung.status }}</td></tr>{% endif %}
-    {% if snap.garantie %}<tr><th>Gewährleistung / Garantie</th><td>{{ snap.garantie }}</td></tr>{% endif %}
+    {% if snap.garantie %}<tr><th>Freiwillige Garantie</th><td>{{ snap.garantie }}</td></tr>{% endif %}
     {% endif %}
   </table>
 </div>
@@ -28,6 +28,7 @@
 <div class="karte"><h2>Datenschutz und Datensicherung</h2><div class="schein-text">{{ snap.datenschutz }}</div></div>
 <div class="karte"><h2>Abholbedingungen</h2><div class="schein-text">{{ snap.abholbedingungen }}</div></div>
 {% endif %}
+{% if art == 'annahme' and snap.kva_text %}<div class="meldung warnung" style="font-size:15px"><b>Kostenvoranschlag:</b> {{ snap.kva_text }}</div>{% endif %}
 <form method="post" action="{{ ziel }}" class="karte">{{ csrf() }}
   <h2>Unterschrift</h2>
   <label class="check" style="font-weight:400;align-items:flex-start"><input type="checkbox" name="bestaetigt" value="1" required style="margin-top:3px">

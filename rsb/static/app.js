@@ -215,3 +215,20 @@ document.querySelectorAll('.unterschrift').forEach(box => {
   sn.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(pruefen, 400); });
   pruefen();
 })();
+
+// ---------------------------------------------------------------- KVA-Pauschale nach Gerätetyp vorschlagen
+(function () {
+  const typ = document.getElementById('f_geraetetyp'), betrag = document.getElementById('f_kva_gebuehr');
+  const frei = document.getElementById('f_kva_kostenlos');
+  if (!typ || !betrag) return;
+  let selbst = !!betrag.value;   // einmal von Hand geändert → nicht mehr überschreiben
+  betrag.addEventListener('input', () => { selbst = !!betrag.value; });
+  typ.addEventListener('change', () => {
+    const o = typ.selectedOptions[0];
+    if (!selbst && o && o.dataset.cent) betrag.value = euroText(parseInt(o.dataset.cent) / 100);
+  });
+  if (frei) {
+    const sperren = () => { betrag.disabled = frei.checked; };
+    frei.addEventListener('change', sperren); sperren();
+  }
+})();

@@ -30,7 +30,7 @@
         <tr><td>Rückgabe bis</td><td {% if ueberfaellig %}style="color:var(--rot);font-weight:700"{% endif %}>{{ le.rueckgabe_geplant|datum if le.rueckgabe_geplant else 'offen' }}</td></tr>
         <tr><td>Leihgebühr</td><td>{{ gebuehr }}</td></tr>
         <tr><td>Kaution</td><td>{% if le.kaution_erhalten %}{{ le.kaution_betrag|euro }} ({{ le.kaution_zahlart }}) · <b>{{ kaution_status[le.kaution_status] }}</b>{% if le.kaution_erledigt_am %} am {{ le.kaution_erledigt_am|zeit }}{% endif %}{% else %}keine{% endif %}</td></tr>
-        <tr><td>Zustand</td><td style="white-space:pre-wrap">{{ le.zustand_ausgabe or '–' }}</td></tr>
+        <tr><td>Zustand</td><td style="white-space:pre-wrap">{% if le.protokoll_geloescht_am %}<span class="klein">Protokoll gelöscht (Löschfrist) am {{ le.protokoll_geloescht_am|zeit }}</span>{% else %}{{ le.zustand_ausgabe or '–' }}{% endif %}</td></tr>
       </table><br>
       <div class="leiste">
         <a class="knopf zweit" href="{{ url_for('main.leihe_pdf', lid=le.id, art='ausgabe') }}" target="_blank">Leihvertrag / Übergabeprotokoll (PDF)</a>

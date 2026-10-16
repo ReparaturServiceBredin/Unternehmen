@@ -138,7 +138,8 @@ def protokoll_pdf(con, leihe_id, art, daten_dir):
     inhalt.append(tabelle([
         ("Ausgabe am", _zeit(le["ausgabe_am"]) + f" (durch {le['ausgegeben_von'] or ''})"),
         ("Rückgabe bis", datum_de(le["rueckgabe_geplant"]) if le["rueckgabe_geplant"] else "nach Abschluss der Reparatur"),
-        ("Zustand bei Ausgabe", le["zustand_ausgabe"] or "–"),
+        ("Zustand bei Ausgabe", f"Protokoll gelöscht (Löschfrist) am {_zeit(le['protokoll_geloescht_am'])}"
+         if le["protokoll_geloescht_am"] else le["zustand_ausgabe"] or "–"),
         ("Leihgebühr", lg.gebuehr_beschreibung(le["gebuehr_art"], le["gebuehr_betrag"], le["frei_tage"])),
         ("Kaution", kaution),
     ]))

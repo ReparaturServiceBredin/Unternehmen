@@ -51,6 +51,38 @@ def test_kassenbuch_grundregeln(client, con):
     assert "Wechselgeld" in client.get(f"/kasse?von={GESTERN}&druck=1").get_data(as_text=True)
 
 
+def test_rueckdatierte_buchung_fehlbetrag_und_nachholen(client, con):
+    tag = lambda n: (date.today() - timedelta(days=n)).isoformat()  # noqa: E731
+    buchen(client, datum=tag(3), art="anfangsbestand", betrag="100,00", text="Wechselgeld")
+    buchen(client, datum=tag(1), art="ausgabe", betrag="80,00", text="Ersatzteil bar")
+    # rückdatiert: am Buchungstag noch gedeckt, aber am Folgetag negativ
+    r = buchen(client, datum=tag(2), art="ausgabe", betrag="50,00", text="Werkzeug bar")
+    assert len(kb(con)) == 2 and "#fehlbetrag" in r.headers["Location"]
+    tag_de = date.fromisoformat(tag(1)).strftime("%d.%m.%Y")
+    seite = client.get(r.headers["Location"]).get_data(as_text=True)
+    assert (f"Kassenbestand wäre am {tag_de} um 30,00 € negativ. Wahrscheinlich fehlt eine Einnahme oder eine "
+            "Privateinlage.") in seite
+    assert "Fehlende Einnahme erfassen" in seite and "Privateinlage buchen" in seite
+    assert f'name="datum" value="{tag(1)}"' in seite and 'value="30,00"' in seite
+    # zu wenig nachgebucht → bleibt vorgemerkt mit neuem Fehlbetrag
+    post(client, "/kasse/buchen", nachholen="1", art="einnahme", datum=tag(1), betrag="10,00", text="Barverkauf Folie")
+    with client.session_transaction() as sess:
+        assert sess["kasse_offen"]["fehlbetrag"] == 2000 and sess["kasse_offen"]["buchung"]["text"] == "Werkzeug bar"
+    # Privateinlage (ohne USt) → ursprüngliche Buchung wird automatisch nachgeholt
+    post(client, "/kasse/buchen", nachholen="1", art="einlage", datum=tag(1), betrag="20,00", steuersatz="19",
+         text="Wechselgeld aus Privatvermögen")
+    z = kb(con)
+    assert [(b["art"], b["betrag"], b["datum"]) for b in z[2:]] == [
+        ("einnahme", 1000, tag(1)), ("einlage", 2000, tag(1)), ("ausgabe", -5000, tag(2))]
+    assert z[3]["steuersatz"] is None and [b["lfd_nr"] for b in z] == [1, 2, 3, 4, 5]
+    with client.session_transaction() as sess:
+        assert "kasse_offen" not in sess
+    assert kb(con) and con.execute("SELECT SUM(betrag) FROM kassenbuch").fetchone()[0] == 0
+    # Privatentnahme braucht eine Begründung
+    buchen(client, art="entnahme", betrag="1,00", text="")
+    assert len(kb(con)) == 5
+
+
 def test_tagesabschluss_kassensturz(client, con):
     buchen(client, datum=GESTERN, art="anfangsbestand", betrag="200,00", text="Anfang")
     post(client, "/kasse/abschluss", datum=GESTERN, ist="195,00")  # Differenz ohne Begründung → abgelehnt

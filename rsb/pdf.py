@@ -359,8 +359,8 @@ def _positionstabelle(snap, st, primaer, sekundaer):
         while teile and isinstance(teile[-1], Spacer):
             teile.pop()
         if p.get("garantie_monate") is not None:
-            teile.append(Paragraph(f"Garantie: {p['garantie_monate']} Monate" if p["garantie_monate"]
-                                   else "ohne Garantie", st["beschreibung"]))
+            teile.append(Paragraph(f"Freiwillige Garantie: {p['garantie_monate']} Monate ab Abholung"
+                                   if p["garantie_monate"] else "ohne freiwillige Garantie", st["beschreibung"]))
         erste = [Paragraph(f"<b>{escape(p['bezeichnung'])}</b>", st["zelle"])] + teile[:4]
         zeile = [Paragraph(str(p["pos"]), st["zelle"]), erste,
                  Paragraph(menge_text(p["menge"]), st["zelle_r"]), Paragraph(escape(p["einheit"]), st["zelle"])]

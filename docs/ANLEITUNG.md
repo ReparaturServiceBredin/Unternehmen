@@ -426,11 +426,19 @@ und „per Post versendet“ anklicken. Fristen, Gebühren, Texte und optionale 
 
 **Ohne digitale Unterschrift:** „Vorschau / Papier zum Unterschreiben“ ausdrucken.
 
-**Abholung:** Im selben Reiter den Abholschein unterschreiben lassen. Das Abholdatum wird eingetragen, gespeicherte
-Zugangsdaten werden gelöscht.
+**KVA-Pauschale:** Im Auftrag den **Gerätetyp** wählen. Die Pauschale laut *Einstellungen → Annahme & Abholung →
+KVA-Pauschalen* wird vorgeschlagen. Sie lässt sich ändern oder mit „kostenlos“ streichen. Der Hinweistext dazu steht
+vor der Unterschrift auf dem Annahmeschein.
+- Wird der KVA **angenommen**, entfällt die Pauschale.
+- Wird er **abgelehnt**, öffnet sich ein Rechnungsentwurf „Kostenvoranschlag / Fehlerdiagnose – Gerät: …“. Prüfen
+  und festschreiben.
+
+**Abholung:** Im selben Reiter den Abholschein unterschreiben lassen. Das Abholdatum und das Garantieende werden
+eingetragen. Gespeicherte Zugangsdaten werden endgültig gelöscht. Die Löschung steht im Löschprotokoll, ohne die
+Daten selbst.
 
 **Gerätezugang:** Hinterlegte Daten zeigt der Knopf „Gespeicherten Zugang anzeigen“. Jeder Aufruf wird protokolliert.
-Wenn der Auftrag erledigt ist, löscht das Programm die Daten automatisch.
+Wenn der Auftrag erledigt, abgeholt oder storniert (gelöscht) ist, löscht das Programm die Daten automatisch.
 
 **Handy im WLAN freischalten (einmalig):**
 1. *Einstellungen → Annahme & Abholung → „Programm im WLAN erreichbar machen“* anhaken.
@@ -461,7 +469,10 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
 
 ## 20. Garantie und Garantiefälle
 
-- **Standard-Garantie:** *Einstellungen → Annahme & Abholung → Garantie auf Reparaturen*.
+- **Freiwillige Garantie:** Sie beginnt mit der **Abholung**, nicht mit dem Rechnungsdatum. Das Garantieende wird
+  bei der Abholung im Auftrag gespeichert. Der Garantietext auf Rechnung und Abholschein ist unter
+  *Einstellungen → Annahme & Abholung* änderbar. Er stellt klar, dass die gesetzliche Gewährleistung unberührt bleibt.
+- **Standard-Garantie:** *Einstellungen → Annahme & Abholung → Garantie auf Reparaturen* (0 = keine Garantie).
 - **Abweichende Garantie:**
   - im Auftrag: „Garantie auf diese Reparatur (Monate)“
   - in der Rechnung je Position: Feld „Garantie … Monate“ (leer = Standard, 0 = ohne Garantie)
@@ -521,6 +532,12 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
    „Barzahlung zu Rechnung“ die Rechnung wählen.
 3. Abends **Tag abschließen**: Kasse zählen und den Betrag eintragen. Bei einer Differenz die Begründung angeben.
 4. Fehler korrigieren Sie mit „korrigieren … → Gegenbuchung“. Löschen geht bewusst nicht.
+5. **Bestand würde negativ?** Das Programm prüft jeden Tag ab dem Buchungsdatum, auch bei nachgetragenen Buchungen.
+   - Die Meldung nennt den Tag und den Fehlbetrag. Ihre Buchung bleibt vorgemerkt.
+   - Mit **„Fehlende Einnahme erfassen“** oder **„Privateinlage buchen“** die Lücke schließen. Datum und Betrag sind
+     vorbelegt. Danach wird die vorgemerkte Buchung automatisch nachgeholt.
+6. **Privateinlage / Privatentnahme:** Eigenes Geld in die Kasse legen oder entnehmen. Datum, Betrag und Begründung
+   angeben. Gebucht wird immer ohne Umsatzsteuer.
 
 **DATEV-Export:**
 1. Einmalig *Einstellungen → DATEV* ausfüllen (Daten vom Steuerberater).
@@ -553,6 +570,14 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
 
 - **Löschfristen** einmal prüfen: *Einstellungen → Datenschutz*. Wenn alles passt, „Löschlauf automatisch“
   einschalten.
+  - Fotos und Annahme-/Abholscheine: 3 Jahre ab Ende des Abholjahres.
+  - Leihprotokolle: 3 Jahre ab Ende des Rückgabejahres bzw. des Abschlusses eines Schadensfalls.
+  - Inaktive Kunden: 3 Jahre ab Ende des Jahres des letzten Kontakts.
+  - Interessenten: 6 Monate.
+- **Vorschau:** *Datenschutz* zeigt, was in den nächsten 30 Tagen gelöscht wird.
+  - **Gesperrt** sind Einträge mit laufendem Auftrag, offener Rechnung, offenem Schadensfall oder laufender Garantie.
+  - Mit **Zurückstellen** (Begründung, z. B. Streitfall) nehmen Sie einen Eintrag aus dem Löschlauf. Unter
+    „Zurückgestellte Löschungen“ heben Sie das wieder auf.
 - **Kunde fragt, welche Daten Sie haben (Art. 15):** Kunde öffnen → **Auskunft (Art. 15 DSGVO) herunterladen** → das
   ZIP dem Kunden geben (Frist: 1 Monat).
 - **Kunde will gelöscht werden (Art. 17):** Kunde öffnen → **Löschen …** → Haken „Der Kunde hat die Löschung

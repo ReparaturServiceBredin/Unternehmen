@@ -312,7 +312,29 @@ def datenschutz():
               if any(z.values()) else "Löschlauf ausgeführt – nichts war fällig.", "ok")
         return redirect(url_for("main.datenschutz") + "#protokolle")
     return render_template("datenschutz.html", k=ds.kandidaten(con), protokolle=ds.protokolle(con),
+                           zurueck=ds.zurueckstellungen(con), arten=ds.ARTEN, heute=date.today(),
                            fristen=ds.FRISTEN, gewaehlt=request.args.get("protokoll", type=int), json=json)
+
+
+@bp.route("/datenschutz/zurueckstellen", methods=["POST"])
+def datenschutz_zurueckstellen():
+    from . import datenschutz as ds
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        ds.zurueckstellen(con, request.form.get("art", ""), request.form.get("objekt_id", type=int),
+                          request.form.get("grund"), request.form.get("bis") or None)
+    flash("Löschung zurückgestellt.", "ok")
+    return redirect(url_for("main.datenschutz") + "#vorschau")
+
+
+@bp.route("/datenschutz/zurueckstellung/<int:zid>/aufheben", methods=["POST"])
+def datenschutz_zurueckstellung_aufheben(zid):
+    from . import datenschutz as ds
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        ds.zurueckstellung_aufheben(con, zid)
+    flash("Zurückstellung aufgehoben – der Eintrag wird beim nächsten Löschlauf wieder berücksichtigt.", "ok")
+    return redirect(url_for("main.datenschutz") + "#vorschau")
 
 
 @bp.route("/datenschutz/protokoll/<int:pid>.pdf")
@@ -1021,26 +1043,67 @@ def kassenbuch():
     offene_re = con.execute(_zlg().RECHNUNG_SQL + "WHERE d.typ='rechnung' AND d.status='festgeschrieben' "
                             "AND d.summe_brutto > d.bezahlt_betrag ORDER BY d.datum DESC LIMIT 100").fetchall()
     return render_template("kasse.html", zeilen=zeilen, von=von, bis=bis, arten=kas.ARTEN, heute=heute_iso,
+                           offen=session.get("kasse_offen"),
                            bestand=kas.bestand(con), letzter=kas.letzter_abschluss(con), gegengebucht=gegengebucht,
                            kostenarten=_kostenarten(), scheine=kas.SCHEINE, offene_re=offene_re,
                            abschluesse=con.execute("SELECT * FROM kassen_abschluesse ORDER BY datum DESC LIMIT 15").fetchall())
 
 
+def _kasse_ausfuehren(con, b):
+    with dbm.Transaktion(con):
+        if b["art"] == "einnahme" and b.get("dokument_id"):  # Barzahlung einer Rechnung (bucht selbst in die Kasse)
+            _zlg().erfassen(con, b["dokument_id"], b["datum"], b["betrag"], "bar", b["text"])
+        else:
+            kas.buchen(con, b["datum"], b["art"], b["betrag"], b["text"], b.get("steuersatz"),
+                       beleg=tuple(b["beleg"]) if b.get("beleg") else None, kostenart=b.get("kostenart"))
+
+
 @bp.route("/kasse/buchen", methods=["POST"])
 def kasse_buchen():
+    """Kassenbuchung. Würde der Bestand an einem Tag negativ, bleibt die Buchung vorgemerkt: Nach dem Erfassen der
+    fehlenden Einnahme bzw. Privateinlage (nachholen=1) wird sie automatisch erneut versucht."""
     con = dbm.get_db()
-    art = _f("art")
-    betrag = cent_aus_text(_f("betrag"), 0)
-    satz = zahl_aus_text(_f("steuersatz"), None) if _f("steuersatz") else None
-    did = request.form.get("dokument_id", type=int)
     datei = request.files.get("beleg")
     beleg = kas.beleg_ablegen(daten_dir(), datei.read(), datei.filename) if datei and datei.filename else None
-    with dbm.Transaktion(con):
-        if art == "einnahme" and did:  # Barzahlung einer Rechnung: als Zahlung erfassen (bucht selbst in die Kasse)
-            _zlg().erfassen(con, did, _f("datum"), betrag, "bar", _f("text"))
+    b = {"datum": _f("datum"), "art": _f("art"), "betrag": cent_aus_text(_f("betrag"), 0), "text": _f("text"),
+         "steuersatz": zahl_aus_text(_f("steuersatz"), None) if _f("steuersatz") else None,
+         "dokument_id": request.form.get("dokument_id", type=int), "kostenart": _f("kostenart") or None,
+         "beleg": list(beleg) if beleg else None}
+    nachholen = request.form.get("nachholen") == "1" and session.get("kasse_offen")
+    try:
+        _kasse_ausfuehren(con, b)
+    except kas.KassenFehlbetrag as e:
+        if not nachholen:  # neue Buchung vormerken; bei einer Nachhol-Buchung bleibt die ursprüngliche vorgemerkt
+            session["kasse_offen"] = {"buchung": b, "tag": e.tag, "fehlbetrag": e.fehlbetrag}
         else:
-            kas.buchen(con, _f("datum"), art, betrag, _f("text"), satz, beleg=beleg, kostenart=_f("kostenart") or None)
-    flash("Kassenbuchung gespeichert.", "ok")
+            session["kasse_offen"] = {**session["kasse_offen"], "tag": e.tag, "fehlbetrag": e.fehlbetrag}
+        flash(str(e), "fehler")
+        return redirect(url_for("main.kassenbuch", von=min(e.tag, date.today().isoformat()[:8] + "01")) + "#fehlbetrag")
+    if not nachholen:
+        session.pop("kasse_offen", None)
+        flash("Kassenbuchung gespeichert.", "ok")
+        return redirect(url_for("main.kassenbuch"))
+    offen = session["kasse_offen"]["buchung"]
+    flash(f"{kas.ARTEN[b['art']]} über {euro(b['betrag'])} am {datum_de(b['datum'])} gebucht.", "ok")
+    try:
+        _kasse_ausfuehren(con, offen)
+    except kas.KassenFehlbetrag as e:
+        session["kasse_offen"] = {"buchung": offen, "tag": e.tag, "fehlbetrag": e.fehlbetrag}
+        flash("Die ursprüngliche Buchung ist noch nicht möglich: " + str(e), "fehler")
+        return redirect(url_for("main.kassenbuch", von=min(e.tag, date.today().isoformat()[:8] + "01")) + "#fehlbetrag")
+    except EingabeFehler as e:
+        session.pop("kasse_offen", None)
+        flash(f"Die ursprüngliche Buchung konnte nicht nachgeholt werden: {e}", "fehler")
+        return redirect(url_for("main.kassenbuch"))
+    session.pop("kasse_offen", None)
+    flash(f"Ursprüngliche Buchung „{offen['text']}“ ({euro(offen['betrag'])}) wurde automatisch nachgeholt.", "ok")
+    return redirect(url_for("main.kassenbuch", von=min(offen["datum"], date.today().isoformat()[:8] + "01")))
+
+
+@bp.route("/kasse/vormerkung-verwerfen", methods=["POST"])
+def kasse_vormerkung_verwerfen():
+    session.pop("kasse_offen", None)
+    flash("Vorgemerkte Buchung verworfen.", "ok")
     return redirect(url_for("main.kassenbuch"))
 
 
@@ -1505,11 +1568,12 @@ EINSTELLUNGS_BEREICHE = {
     + [f"ben_{a}_{t}" for a in ben.ANLAESSE for t in ("aktiv", "betreff", "text")],
     "datev": ["datev_beraternr", "datev_mandantennr", "datev_skr", "datev_wj_beginn", "datev_kontenlaenge",
               "datev_debitor_start", "datev_kreditor_start", "datev_konten", "datev_kostenarten"],
-    "datenschutz": ["ds_auto", "interessent_loeschen_monate", "ds_kunde_inaktiv_jahre", "ds_fotos_monate",
-                    "ds_zugang_tage", "ds_email_jahre", "ds_verantwortlicher"],
+    "datenschutz": ["ds_auto", "interessent_loeschen_monate", "ds_kunde_inaktiv_jahre", "ds_fotos_jahre",
+                    "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "ds_verantwortlicher"],
     "einkauf": ["mindest_marge_prozent", "praefix_bestellung", "praefix_eingangsrechnung", "kostenarten",
                 "er_imap_ordner"],
-    "annahme": ["garantie_monate", "annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
+    "annahme": ["garantie_monate", "garantie_text", "kva_gebuehren", "annahme_kva_text", "annahme_zubehoer",
+                "annahme_datenschutz", "annahme_abholbedingungen",
                 "abholschein_text", "handy_im_netz", "handy_adresse"],
     "mahnwesen": ["mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage", "mahngebuehr_cent",
                   "mahngebuehr_2_cent", "mahn_text_0", "mahn_text_1", "mahn_text_2", "mahn_email_betreff",
@@ -1524,7 +1588,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"ds_auto", "benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"ds_kunde_inaktiv_jahre", "ds_fotos_monate", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"ds_kunde_inaktiv_jahre", "ds_fotos_jahre", "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
@@ -1565,6 +1629,14 @@ def einstellungen():
                 raise EingabeFehler("Für die Ablage im Gesendet-Ordner bitte einen IMAP-Server angeben.")
         if bereich == "benachrichtigung" and neu["benachrichtigung_kanal"] not in ben.KANAELE:
             neu["benachrichtigung_kanal"] = "email"
+        if bereich == "annahme":
+            if not auf.kva_gebuehren({"kva_gebuehren": neu["kva_gebuehren"]}):
+                raise EingabeFehler("Bitte mindestens einen Gerätetyp mit Pauschale angeben, z. B. „Smartphone / Tablet "
+                                    "= 19,00“.")
+            neu["kva_gebuehren"] = "\n".join(f"{t} = {euro(c, False)}" for t, c in auf.kva_gebuehren(
+                {"kva_gebuehren": neu["kva_gebuehren"]}))
+            neu["annahme_kva_text"] = request.form.get("annahme_kva_text", "").strip()
+            neu["garantie_text"] = request.form.get("garantie_text", "").strip()
         if bereich == "datev":
             if neu["datev_skr"] not in ("03", "04"):
                 neu["datev_skr"] = "03"
@@ -2045,7 +2117,13 @@ def _auftrag_felder():
     felder["zustand_eingang"] = _f("zustand_eingang")
     felder["kosten_obergrenze"] = cent_aus_text(_f("kosten_obergrenze"), None) or None
     felder["kva_gewuenscht"] = 1 if request.form.get("kva_gewuenscht") else 0
-    felder["kva_gebuehr"] = cent_aus_text(_f("kva_gebuehr"), None) or None
+    felder["geraetetyp"] = _f("geraetetyp") or None
+    if request.form.get("kva_kostenlos"):
+        felder["kva_gebuehr"] = 0
+    elif _f("kva_gebuehr"):
+        felder["kva_gebuehr"] = cent_aus_text(_f("kva_gebuehr"))
+    else:  # leer = Pauschale des Gerätetyps laut Einstellungen
+        felder["kva_gebuehr"] = auf.kva_gebuehr_fuer(dbm.einstellungen(), felder["geraetetyp"])
     fertig = _f("fertig_bis")
     if fertig:
         try:
@@ -2077,7 +2155,7 @@ def _norm(x):
 FELD_NAMEN = {"geraet": "Gerät", "leistungsart": "Leistungsart", "seriennummer": "Seriennr./IMEI",
               "zubehoer": "Zubehör", "fehler": "Fehlerbeschreibung", "notizen": "Notizen", "kunde_id": "Kunde",
               "zustand_eingang": "Zustand bei Eingang", "kosten_obergrenze": "Kosten-Obergrenze",
-              "kva_gewuenscht": "KVA gewünscht", "kva_gebuehr": "Gebühr bei abgelehntem KVA",
+              "kva_gewuenscht": "KVA gewünscht", "kva_gebuehr": "KVA-Pauschale", "geraetetyp": "Gerätetyp",
               "fertig_bis": "voraussichtliche Fertigstellung", "teil_info": "Ersatzteil",
               "teil_erwartet": "Ersatzteil erwartet am", "auftragsart": "Auftragsart",
               "garantie_bezug_id": "Garantie-Bezug", "garantie_monate": "Garantie (Monate)",
@@ -2162,7 +2240,7 @@ def auftrag_neu():
                   "info")
             return redirect(url_for("main.auftrag", aid=aid) + "#annahmeschein")
     if request.method == "GET":
-        werte["kva_gebuehr"] = dbm.einstellung("annahme_kva_gebuehr_cent") or None
+        werte["kva_gebuehr"] = None  # wird aus dem Gerätetyp vorgeschlagen
     kva_vorauswahl = None
     if werte.get("kva_id"):
         kva_vorauswahl = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (werte["kva_id"],)).fetchone()
@@ -2204,6 +2282,8 @@ def auftrag(aid):
             con.execute(f"UPDATE auftraege SET {', '.join(f'{k}=?' for k in felder)}, geaendert_am=? WHERE id=?",
                         (*felder.values(), dbm.jetzt(), aid))
             _zugang_aus_formular(con, aid)
+            if a["abgeholt_am"]:
+                gar.ende_speichern(con, aid)  # Garantiedauer nachträglich geändert
             if geaendert:
                 dbm.protokollieren("auftrag_geaendert", "auftrag", aid, {"felder": geaendert}, con=con)
                 auf.verlauf(con, aid, "Auftragsdaten geändert", ", ".join(geaendert))
@@ -2337,8 +2417,12 @@ def auftrag_kva_loesen(aid):
 def kva_status(did):
     con = dbm.get_db()
     with dbm.Transaktion(con):
-        auf.kva_status_setzen(con, did, request.form.get("kva_status", ""))
+        neue = auf.kva_status_setzen(con, did, request.form.get("kva_status", ""))
     flash("Status des Kostenvoranschlags gespeichert.", "ok")
+    if neue:
+        flash("KVA abgelehnt – die KVA-Pauschale ist fällig. Ein Rechnungsentwurf darüber wurde vorbereitet: bitte "
+              "prüfen und festschreiben (oder löschen, falls Sie auf die Pauschale verzichten).", "warnung")
+        return redirect(url_for("main.dokument", did=neue[0]))
     return redirect(request.referrer or url_for("main.dokument", did=did))
 
 
@@ -2369,6 +2453,7 @@ def auftrag_loeschen(aid):
         raise EingabeFehler("Zu diesem Auftrag gibt es einen unterschriebenen Annahme-/Abholschein – er kann nicht "
                             "gelöscht werden.")
     with dbm.Transaktion(con):
+        ann.zugang_loeschen(con, aid, "Auftrag storniert/gelöscht")  # endgültig, mit Löschprotokoll
         con.execute("DELETE FROM mobil_zugaenge WHERE auftrag_id=?", (aid,))
         con.execute("DELETE FROM lager_reservierungen WHERE auftrag_id=?", (aid,))
         con.execute("UPDATE auftraege SET kva_id=NULL, rechnung_id=NULL WHERE id=?", (aid,))
@@ -2460,6 +2545,7 @@ def auftrag_abgeholt(aid):
         if not a["abgeholt_am"]:
             con.execute("UPDATE auftraege SET abgeholt_am=? WHERE id=?", (dbm.jetzt_berlin(), aid))
             auf.verlauf(con, aid, "Gerät abgeholt", _f("notiz") or "ohne digitalen Abholschein")
+            gar.ende_speichern(con, aid)
             ann.zugang_loeschen(con, aid, "Gerät abgeholt")
         for b in con.execute("SELECT id FROM benachrichtigungen WHERE auftrag_id=? AND anlass='erinnerung' "
                              "AND status='offen'", (aid,)).fetchall():

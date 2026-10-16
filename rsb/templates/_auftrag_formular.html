@@ -22,7 +22,11 @@
   <div class="s3"><label>Kosten-Obergrenze (€, brutto)</label><input type="text" name="kosten_obergrenze" value="{{ betrag_feld(w.kosten_obergrenze) }}" placeholder="leer = immer Rückfrage">
     <div class="hilfe">Bis zu diesem Betrag ohne Rückfrage reparieren.</div></div>
   <div class="s3"><label>Kostenvoranschlag</label><label class="check" style="margin-top:8px"><input type="checkbox" name="kva_gewuenscht" value="1" {{ 'checked' if w.kva_gewuenscht and w.kva_gewuenscht|string != '0' }}> KVA gewünscht</label></div>
-  <div class="s3"><label>Gebühr bei abgelehntem KVA (€)</label><input type="text" name="kva_gebuehr" value="{{ betrag_feld(w.kva_gebuehr) }}" placeholder="0,00"></div>
+  {% set kva_typen = kva_gebuehren_liste() %}
+  <div class="s3"><label>Gerätetyp (für die KVA-Pauschale)</label><select name="geraetetyp" id="f_geraetetyp"><option value="">– wählen –</option>{% for t, c in kva_typen %}<option value="{{ t }}" data-cent="{{ c }}" {{ 'selected' if w.geraetetyp == t }}>{{ t }} ({{ c|euro }})</option>{% endfor %}</select></div>
+  <div class="s3"><label>KVA-Pauschale (€, brutto)</label><input type="text" name="kva_gebuehr" id="f_kva_gebuehr" value="{{ betrag_feld(w.kva_gebuehr) if w.kva_gebuehr else '' }}" placeholder="laut Gerätetyp">
+    <label class="check" style="margin-top:4px"><input type="checkbox" name="kva_kostenlos" value="1" id="f_kva_kostenlos" {{ 'checked' if w.kva_gebuehr is number and w.kva_gebuehr == 0 }}> kostenlos</label>
+    <div class="hilfe">Bei Annahme des KVA verrechnet, bei Ablehnung fällig.</div></div>
   <div class="s3"><label>Gerätezugang</label><select name="zugang_art" class="zugang-art">{% for k, n in zugang_arten.items() %}<option value="{{ k }}" {{ 'selected' if (w.zugang_art or '') == k }}>{{ n if k != 'telefonisch' else 'telefonisch bei Bedarf' }}</option>{% endfor %}</select></div>
   <div class="s12 zugang-feld">
     <label>PIN / Passwort / Muster</label>

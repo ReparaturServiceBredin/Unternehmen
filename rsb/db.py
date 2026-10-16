@@ -161,7 +161,21 @@ STANDARD_EINSTELLUNGEN = {
     # Annahme-/Abholschein (Reparaturannahme)
     "annahme_zubehoer": "Ladekabel\nNetzteil\nHülle / Case\nSIM-Karte\nSpeicherkarte\nEingabestift\nTasche\n"
                         "Originalverpackung",
-    "annahme_kva_gebuehr_cent": 0,          # Vorschlag für neue Aufträge (Gebühr bei abgelehntem KVA)
+    "annahme_kva_gebuehr_cent": 0,          # (bis 0.20) Vorschlag für neue Aufträge – ersetzt durch kva_gebuehren
+    # KVA-Pauschale je Gerätetyp (brutto, „Gerätetyp = Betrag“ je Zeile); bei Annahme verrechnet, bei Ablehnung fällig
+    "kva_gebuehren": "Laptop / PC / All-in-One = 29,00\nSmartphone / Tablet = 19,00\nSonstige Geräte = 29,00",
+    "annahme_kva_text": (
+        "Für die Erstellung eines Kostenvoranschlags berechnen wir pauschal {KVA-Gebühr}. Wird der "
+        "Kostenvoranschlag angenommen, wird dieser Betrag vollständig verrechnet. Bei Ablehnung wird die Pauschale "
+        "fällig. Das Gerät wird – soweit technisch möglich – im zusammengebauten Zustand zurückgegeben."),
+    # Freiwillige Garantie (Text auf Rechnung und Abholschein)
+    "garantie_text": (
+        "Auf die durchgeführte Reparatur und die dabei verbauten Ersatzteile gewähren wir eine freiwillige Garantie "
+        "von {Garantiedauer} ab Abholung (bis {Garantieende}). Sie umfasst ausschließlich die reparierte Funktion "
+        "bzw. das getauschte Teil. Ausgeschlossen sind Schäden durch Sturz, Flüssigkeit, unsachgemäße Nutzung, "
+        "Eingriffe Dritter sowie normaler Verschleiß (z. B. nachlassende Akkukapazität). Zur Inanspruchnahme bitte "
+        "das Gerät mit Rechnung bei {Firmenname}, {Firmenanschrift} vorlegen. Ihre gesetzlichen "
+        "Gewährleistungsrechte bleiben von dieser Garantie unberührt und bestehen unabhängig davon."),
     "annahme_datenschutz": (
         "Bitte sichern Sie Ihre Daten vor der Abgabe. Bei einer Reparatur kann es trotz aller Sorgfalt zu "
         "Datenverlust kommen – für die Sicherung Ihrer Daten sind Sie selbst verantwortlich. Wir greifen auf Ihre "
@@ -255,6 +269,7 @@ def verbinden(pfad):
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA foreign_keys = ON")
     con.execute("PRAGMA journal_mode = WAL")
+    con.execute("PRAGMA secure_delete = ON")  # gelöschte Inhalte (z. B. Gerätezugangsdaten) werden überschrieben
     return con
 
 
@@ -299,6 +314,7 @@ def initialisieren(pfad):
                         "VALUES (?,?,?,?,?,?,?,?,?,?)", (*va, jetzt()))
     _verlauf_nachtragen(con)
     _leih_artikel_anlegen(con)
+    _garantie_ende_nachtragen(con)
     from .textbausteine_standard import STANDARD_TEXTBAUSTEINE
     vorhandene_typen = {r[0] for r in con.execute("SELECT DISTINCT dokumenttyp FROM textbausteine")}
     leer = not vorhandene_typen
@@ -359,6 +375,10 @@ MIGRATIONEN = [
     ("dokumente", "xml_pfad", "TEXT"),
     ("dokumente", "xml_sha256", "TEXT"),
     ("eingangsrechnungen", "e_daten", "TEXT"),
+    ("auftraege", "garantie_ende", "TEXT"),
+    ("auftraege", "geraetetyp", "TEXT"),
+    ("leihen", "protokoll_geloescht_am", "TEXT"),
+    ("loeschprotokolle", "frist", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert
@@ -368,7 +388,7 @@ NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "s
                  "lager_reservierungen", "inventuren", "inventur_positionen", "inventur_zugaenge", "lieferanten",
                  "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
                  "er_zahlungen", "kassenbuch", "kassen_abschluesse", "datev_exporte", "datev_posten",
-                 "loeschprotokolle"]
+                 "loeschprotokolle", "loeschfreigaben", "loesch_zurueckstellungen"]
 
 
 def _migrieren(con, pfad=None):
@@ -408,6 +428,21 @@ def _leih_artikel_anlegen(con):
                         "steuersatz, ek_unbekannt, erstellt_am, geaendert_am) VALUES (?,?,?,'leistung',?,0,0,?,1,?,?)",
                         (name, beschreibung, "Sonstiges", einheit, satz, jetzt(), jetzt()))
     con.execute("INSERT INTO einstellungen VALUES ('leih_artikel_angelegt', ?)", (json.dumps(jetzt()),))
+
+
+def _garantie_ende_nachtragen(con):
+    """Einmalig (0.21.0): Garantieende für bereits abgeholte Aufträge aus Abholdatum + Garantiedauer speichern."""
+    if con.execute("SELECT 1 FROM einstellungen WHERE schluessel='garantie_ende_nachgetragen'").fetchone():
+        return
+    from .garantie import ende_berechnen, _datum
+    werte = dict(STANDARD_EINSTELLUNGEN)
+    for r in con.execute("SELECT schluessel, wert FROM einstellungen"):
+        werte[r["schluessel"]] = json.loads(r["wert"])
+    for a in con.execute("SELECT * FROM auftraege WHERE abgeholt_am IS NOT NULL AND garantie_ende IS NULL").fetchall():
+        ende = ende_berechnen(a, werte, _datum(a["abgeholt_am"]))
+        if ende:
+            con.execute("UPDATE auftraege SET garantie_ende=? WHERE id=?", (ende.isoformat(), a["id"]))
+    con.execute("INSERT INTO einstellungen VALUES ('garantie_ende_nachgetragen', ?)", (json.dumps(jetzt()),))
 
 
 def _verlauf_nachtragen(con):

@@ -275,9 +275,11 @@
   <div class="felder">
     <div class="s12">{{ haken('ds_auto', 'Löschlauf automatisch einmal täglich ausführen (sonst manuell unter Datenschutz)') }}</div>
     <div class="s4"><label>Interessenten ohne Auftrag (Monate)</label><input type="number" min="0" name="interessent_loeschen_monate" value="{{ einst.interessent_loeschen_monate }}"></div>
-    <div class="s4"><label>Inaktive Kunden (Jahre ohne Kontakt)</label><input type="number" min="0" name="ds_kunde_inaktiv_jahre" value="{{ einst.ds_kunde_inaktiv_jahre }}"><div class="hilfe">z. B. 3 (regelmäßige Verjährungsfrist)</div></div>
-    <div class="s4"><label>Fotos (Monate nach Abholung)</label><input type="number" min="0" name="ds_fotos_monate" value="{{ einst.ds_fotos_monate }}"><div class="hilfe">nicht kürzer als Ihre Garantie ({{ einst.garantie_monate }} Monate)</div></div>
-    <div class="s4"><label>Gerätezugangsdaten bei offenen Aufträgen (Tage)</label><input type="number" min="0" name="ds_zugang_tage" value="{{ einst.ds_zugang_tage }}"><div class="hilfe">bei Abschluss werden sie ohnehin sofort gelöscht</div></div>
+    <div class="s4"><label>Inaktive Kunden (Jahre)</label><input type="number" min="0" name="ds_kunde_inaktiv_jahre" value="{{ einst.ds_kunde_inaktiv_jahre }}"><div class="hilfe">ab Ende des Kalenderjahres des letzten Kontakts (Auftrag, Rechnung, E-Mail); mit aufbewahrungspflichtigen Belegen nur Anonymisierung</div></div>
+    <div class="s4"><label>Fotos und Annahme-/Abholscheine (Jahre)</label><input type="number" min="0" name="ds_fotos_jahre" value="{{ einst.ds_fotos_jahre }}"><div class="hilfe">ab Ende des Kalenderjahres der Abholung (Abholung 15.10.2026, 3 Jahre → Löschung ab 01.01.2030); bei laufender Garantie gesperrt</div></div>
+    <div class="s4"><label>Leihprotokolle und -fotos (Jahre)</label><input type="number" min="0" name="ds_leihe_jahre" value="{{ einst.ds_leihe_jahre }}"><div class="hilfe">ab Ende des Kalenderjahres der Rückgabe bzw. des Abschlusses eines Schadensfalls</div></div>
+    <div class="s4"><label>Vorschau der Löschungen (Tage)</label><input type="number" min="1" name="ds_vorschau_tage" value="{{ einst.ds_vorschau_tage }}"><div class="hilfe">„Folgende Daten werden in den nächsten … Tagen gelöscht“</div></div>
+    <div class="s4"><label>Gerätezugangsdaten liegengebliebener Aufträge (Tage)</label><input type="number" min="0" name="ds_zugang_tage" value="{{ einst.ds_zugang_tage }}"><div class="hilfe">bei Abholung, Abschluss und Stornierung werden sie sofort endgültig gelöscht</div></div>
     <div class="s4"><label>E-Mail-Verlauf ohne Belegbezug (Jahre)</label><input type="number" min="0" name="ds_email_jahre" value="{{ einst.ds_email_jahre }}"></div>
     <div class="s12"><label>Verantwortlicher für das Verzeichnis (optional, sonst aus den Firmendaten)</label><input type="text" name="ds_verantwortlicher" value="{{ einst.ds_verantwortlicher }}"></div>
   </div><br><button>Speichern</button>
@@ -347,11 +349,15 @@
   <p class="klein">Diese Texte stehen auf dem Annahmeschein, den der Kunde bei der Geräteabgabe unterschreibt. Lassen Sie die Formulierungen im Zweifel einmal rechtlich prüfen. Bereits unterschriebene Scheine bleiben unverändert archiviert.</p>
   <div class="felder">
     <div class="s4"><label>Garantie auf Reparaturen (Monate)</label><input type="number" min="0" max="60" name="garantie_monate" value="{{ einst.garantie_monate }}">
-      <div class="hilfe">Standard für neue Aufträge, z. B. 6 oder 12; 0 = keine. Je Auftrag und je Rechnungsposition änderbar. Freiwillige Garantie – die gesetzliche Gewährleistung bleibt unberührt (steht so auf Rechnung und Abholschein).</div></div>
+      <div class="hilfe">Freiwillige Garantie ab Abholung, Standard 12; 0 = keine. Je Auftrag und je Rechnungsposition änderbar. Die gesetzliche Gewährleistung besteht unabhängig davon.</div></div>
     <div class="s8"></div>
     <div class="s6"><label>Zubehör-Checkliste (ein Eintrag je Zeile)</label><textarea name="annahme_zubehoer" style="min-height:160px">{{ einst.annahme_zubehoer or '' }}</textarea></div>
-    <div class="s6"><label>Gebühr bei abgelehntem KVA – Vorschlag für neue Aufträge (€, brutto)</label><input type="text" name="annahme_kva_gebuehr_cent" value="{{ einst.annahme_kva_gebuehr_cent|euro(false) }}">
-      <div class="hilfe">0 = keine Gebühr. Der Betrag kann je Auftrag geändert werden. Wird der KVA abgelehnt, übernimmt der Rechnungsentwurf diese Gebühr statt der KVA-Positionen.</div></div>
+    <div class="s6"><label>KVA-Pauschale je Gerätetyp (brutto, „Gerätetyp = Betrag“ je Zeile)</label><textarea name="kva_gebuehren" style="min-height:120px">{{ einst.kva_gebuehren }}</textarea>
+      <div class="hilfe">Weitere Gerätetypen einfach als neue Zeile ergänzen. Der Typ „Sonstige Geräte“ gilt, wenn nichts gewählt ist. Pro Auftrag änderbar, auch „kostenlos“. Bei Annahme des KVA wird die Pauschale verrechnet, bei Ablehnung schlägt das Programm einen Rechnungsentwurf vor.</div></div>
+    <div class="s12"><label>Hinweis zur KVA-Pauschale auf dem Annahmeschein (Platzhalter {KVA-Gebühr})</label><textarea name="annahme_kva_text" style="min-height:80px">{{ einst.annahme_kva_text }}</textarea>
+      <div class="hilfe">Erscheint auf dem Annahmeschein und vor der Unterschrift deutlich hervorgehoben.</div></div>
+    <div class="s12"><label>Text der freiwilligen Garantie (Rechnung und Abholschein)</label><textarea name="garantie_text" style="min-height:130px">{{ einst.garantie_text }}</textarea>
+      <div class="hilfe">Platzhalter: {Garantiedauer} {Garantieende} {Firmenname} {Firmenanschrift}. Die Garantie beginnt mit der Abholung. Bitte den Satz zur gesetzlichen Gewährleistung nicht entfernen – die Garantie gilt zusätzlich und ersetzt oder verkürzt die Gewährleistung nicht.</div></div>
     <div class="s12"><label>Datenschutz-Hinweis</label><textarea name="annahme_datenschutz" style="min-height:130px">{{ einst.annahme_datenschutz or '' }}</textarea></div>
     <div class="s12"><label>Abholbedingungen (Abholfrist, Lagergebühr, Umgang mit nicht abgeholten Geräten)</label><textarea name="annahme_abholbedingungen" style="min-height:130px">{{ einst.annahme_abholbedingungen or '' }}</textarea></div>
     <div class="s12"><label>Bestätigung auf dem Abholschein</label><textarea name="abholschein_text" style="min-height:60px">{{ einst.abholschein_text or '' }}</textarea></div>

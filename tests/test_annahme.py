@@ -149,12 +149,53 @@ def test_kva_abgelehnt_gebuehr_in_rechnung(client, con):
     kid = kunde_anlegen(client)
     aid = auftrag_mit_annahme(client, kid, geraet="Xiaomi 14T Pro")
     kva = kva_mit_position(client, con, aid)
-    post(client, f"/dokumente/{kva}/kva-status", kva_status="abgelehnt")
+    r = post(client, f"/dokumente/{kva}/kva-status", kva_status="abgelehnt")
     assert con.execute("SELECT kva_status FROM dokumente WHERE id=?", (kva,)).fetchone()[0] == "abgelehnt"
-    post(client, f"/auftraege/{aid}/status", status="erledigt")
+    # Bei Ablehnung wird sofort ein Rechnungsentwurf über die Pauschale vorgeschlagen
     re_id = con.execute("SELECT rechnung_id FROM auftraege WHERE id=?", (aid,)).fetchone()[0]
+    assert re_id and r.headers["Location"].endswith(f"/dokumente/{re_id}")
     pos = con.execute("SELECT * FROM positionen WHERE dokument_id=?", (re_id,)).fetchall()
-    assert len(pos) == 1 and pos[0]["bezeichnung"] == "Gebühr Kostenvoranschlag" and pos[0]["einzelpreis"] == 1990
+    assert len(pos) == 1 and pos[0]["einzelpreis"] == 1990
+    assert pos[0]["bezeichnung"] == "Kostenvoranschlag / Fehlerdiagnose – Gerät: Xiaomi 14T Pro"
+    art = con.execute("SELECT * FROM artikel WHERE id=?", (pos[0]["artikel_id"],)).fetchone()
+    assert art["name"] == "Kostenvoranschlag / Fehlerdiagnose"  # Leistung im Katalog angelegt
+    # Abschluss erzeugt keinen zweiten Entwurf
+    post(client, f"/auftraege/{aid}/status", status="erledigt")
+    assert con.execute("SELECT rechnung_id FROM auftraege WHERE id=?", (aid,)).fetchone()[0] == re_id
+    assert con.execute("SELECT COUNT(*) FROM artikel WHERE name='Kostenvoranschlag / Fehlerdiagnose'"
+                       ).fetchone()[0] == 1
+
+
+def test_kva_angenommen_gebuehr_entfaellt(client, con):
+    kid = kunde_anlegen(client)
+    aid = auftrag_mit_annahme(client, kid, geraet="Xiaomi 14T Pro")
+    kva = kva_mit_position(client, con, aid)
+    post(client, f"/dokumente/{kva}/kva-status", kva_status="angenommen")
+    assert not con.execute("SELECT rechnung_id FROM auftraege WHERE id=?", (aid,)).fetchone()[0]
+    assert "KVA-Pauschale entfällt" in client.get(f"/auftraege/{aid}").get_data(as_text=True)
+
+
+def test_kva_gebuehr_nach_geraetetyp(client, con):
+    kid = kunde_anlegen(client)
+    # leer → Pauschale laut Gerätetyp
+    aid = auftrag_mit_annahme(client, kid, geraetetyp="Smartphone / Tablet", kva_gebuehr="")
+    assert con.execute("SELECT kva_gebuehr FROM auftraege WHERE id=?", (aid,)).fetchone()[0] == 1900
+    aid = auftrag_mit_annahme(client, kid, geraetetyp="Laptop / PC / All-in-One", kva_gebuehr="")
+    assert con.execute("SELECT kva_gebuehr FROM auftraege WHERE id=?", (aid,)).fetchone()[0] == 2900
+    # kostenlos überschreibt alles
+    aid = auftrag_mit_annahme(client, kid, geraet="Xiaomi 14T Pro", geraetetyp="Laptop / PC / All-in-One",
+                              kva_kostenlos="1")
+    assert con.execute("SELECT kva_gebuehr FROM auftraege WHERE id=?", (aid,)).fetchone()[0] == 0
+    kva = kva_mit_position(client, con, aid)
+    post(client, f"/dokumente/{kva}/kva-status", kva_status="abgelehnt")
+    assert not con.execute("SELECT rechnung_id FROM auftraege WHERE id=?", (aid,)).fetchone()[0]
+    # Text mit Pauschale auf dem Annahmeschein (vor der Unterschrift sichtbar)
+    aid = auftrag_mit_annahme(client, kid, geraetetyp="Smartphone / Tablet", kva_gebuehr="")
+    seite = client.get(f"/auftraege/{aid}/unterschreiben/annahme").get_data(as_text=True)
+    assert "pauschal 19,00 €" in seite and "vollständig verrechnet" in seite
+    unterschreiben(client, aid)
+    snap = json.loads(con.execute("SELECT snapshot FROM auftrag_belege WHERE auftrag_id=?", (aid,)).fetchone()[0])
+    assert "pauschal 19,00 €" in snap["kva_text"]
 
 
 def test_handy_qr_und_zugriffsschutz(client, con, app):
@@ -211,9 +252,15 @@ def test_handy_fotos_und_ablauf(client, con, app):
 
 def test_einstellungen_annahme(client, con):
     r = post(client, "/einstellungen?bereich=annahme", annahme_zubehoer="Ladekabel\nStift",
-             annahme_kva_gebuehr_cent="15,00", annahme_datenschutz="DS", annahme_abholbedingungen="AB",
+             kva_gebuehren="Laptop = 35\nSmartphone / Tablet = 15,00\nKonsole = 25,5", garantie_monate="12",
+             annahme_kva_text="Pauschale {KVA-Gebühr}.", garantie_text="Garantie {Garantiedauer}.",
+             annahme_datenschutz="DS", annahme_abholbedingungen="AB",
              abholschein_text="erhalten", handy_im_netz="1", handy_adresse="192.168.1.2:5000")
     assert r.status_code == 302
     e = dbm.einstellungen(con)
-    assert e["annahme_kva_gebuehr_cent"] == 1500 and e["handy_im_netz"] is True
-    assert 'value="15,00"' in client.get("/auftraege/neu").get_data(as_text=True)
+    assert e["kva_gebuehren"] == "Laptop = 35,00\nSmartphone / Tablet = 15,00\nKonsole = 25,50"
+    assert e["handy_im_netz"] is True and e["annahme_kva_text"] == "Pauschale {KVA-Gebühr}."
+    assert 'data-cent="2550"' in client.get("/auftraege/neu").get_data(as_text=True)
+    # ohne gültigen Gerätetyp wird nicht gespeichert
+    post(client, "/einstellungen?bereich=annahme", kva_gebuehren="Unsinn", garantie_monate="12")
+    assert dbm.einstellungen(con)["kva_gebuehren"].startswith("Laptop = 35,00")

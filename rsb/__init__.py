@@ -10,7 +10,7 @@ from . import db as dbm
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.20.0"
+VERSION_NUMMER = "0.21.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -60,12 +60,16 @@ def create_app(daten_dir=None, testing=False):
         return {"vorlagen": vorlagen, "gewaehlt": gewaehlt, "rest": rest}
 
     from .annahme import ZUGANG_ARTEN
+    def kva_gebuehren_liste():
+        from .auftraege import kva_gebuehren
+        return kva_gebuehren(dbm.einstellungen())
+
     def einst_garantie():
         from .garantie import standard_monate
         return standard_monate(dbm.einstellungen())
 
     app.jinja_env.globals.update(csrf_token=csrf_token, version=VERSION, zubehoer_teilen=zubehoer_teilen,
-                                 einst_garantie=einst_garantie,
+                                 einst_garantie=einst_garantie, kva_gebuehren_liste=kva_gebuehren_liste,
                                  zugang_arten=ZUGANG_ARTEN)
 
     from .views import bp

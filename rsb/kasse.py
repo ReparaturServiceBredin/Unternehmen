@@ -6,7 +6,9 @@
   übernommen.
 - Tagesabschluss: Soll-Bestand laut Kassenbuch gegen gezählten Ist-Bestand; eine Differenz wird mit Begründung als
   eigene Buchung erfasst. Abgeschlossene Tage können nicht mehr bebucht werden.
-- Der Kassenbestand darf nie negativ werden.
+- Der Kassenbestand darf nie negativ werden – geprüft chronologisch nach Buchungsdatum über die ganze Historie, also
+  auch bei rückdatierten Buchungen für jeden Tag ab dem Buchungsdatum.
+- Privateinlage und Privatentnahme sind eigene Buchungsarten (Datum, Betrag, Begründung, fortlaufende Nummer, ohne USt).
 """
 from datetime import date, timedelta
 
@@ -17,6 +19,7 @@ ARTEN = {"einnahme": "Einnahme", "ausgabe": "Ausgabe", "einlage": "Privateinlage
          "bank_ein": "Geldtransit von der Bank", "bank_aus": "Einzahlung auf die Bank", "differenz": "Kassendifferenz",
          "gegenbuchung": "Gegenbuchung (Korrektur)", "anfangsbestand": "Anfangsbestand"}
 EINGANG = {"einnahme", "einlage", "bank_ein", "anfangsbestand"}
+PRIVAT = {"einlage", "entnahme"}  # ohne Umsatzsteuer
 SCHEINE = [50000, 20000, 10000, 5000, 2000, 1000, 500, 200, 100, 50, 20, 10, 5, 2, 1]
 
 
@@ -26,6 +29,26 @@ def bestand(con, bis_datum=None):
         sql += " WHERE datum <= ?"
         args.append(bis_datum)
     return con.execute(sql, args).fetchone()[0]
+
+
+class KassenFehlbetrag(EingabeFehler):
+    """Buchung würde den Kassenbestand an einem Tag negativ machen (tag: ISO-Datum, fehlbetrag: Cent > 0)."""
+
+    def __init__(self, tag, fehlbetrag):
+        self.tag, self.fehlbetrag = tag, fehlbetrag
+        super().__init__(f"Kassenbestand wäre am {date.fromisoformat(tag).strftime('%d.%m.%Y')} um "
+                         f"{euro(fehlbetrag)} negativ. Wahrscheinlich fehlt eine Einnahme oder eine Privateinlage.")
+
+
+def erster_fehlbetrag(con, datum, wert):
+    """Erster Tag ab datum (chronologisch), an dem der Bestand mit der zusätzlichen Buchung negativ wäre."""
+    tage = [datum] + [r[0] for r in con.execute(
+        "SELECT DISTINCT datum FROM kassenbuch WHERE datum > ? ORDER BY datum", (datum,))]
+    for tag in tage:
+        stand = bestand(con, tag) + wert
+        if stand < 0:
+            return tag, -stand
+    return None
 
 
 def letzter_abschluss(con):
@@ -52,7 +75,10 @@ def buchen(con, datum, art, betrag, text, steuersatz=None, dokument_id=None, zah
         raise EingabeFehler("Kassenbuchungen dürfen nicht in der Zukunft liegen.")
     text = (text or "").strip()
     if len(text) < 3:
-        raise EingabeFehler("Bitte einen Buchungstext angeben.")
+        raise EingabeFehler("Bitte eine Begründung angeben (z. B. Wechselgeld aus Privatvermögen)." if art in PRIVAT
+                            else "Bitte einen Buchungstext angeben.")
+    if art in PRIVAT:
+        steuersatz = None  # Privateinlagen/-entnahmen sind keine Umsätze
     if art in ("differenz", "gegenbuchung"):
         wert = int(betrag)  # mit Vorzeichen
         if not wert:
@@ -67,11 +93,9 @@ def buchen(con, datum, art, betrag, text, steuersatz=None, dokument_id=None, zah
                             "abgeschlossen – bitte mit heutigem Datum buchen (ggf. als Gegenbuchung).")
     # Bestand darf an keinem Tag ab dem Buchungsdatum negativ werden
     if wert < 0 and not negativ_erlaubt:
-        tiefster = min([bestand(con, datum) + wert] + [bestand(con, d["datum"]) + wert for d in con.execute(
-            "SELECT DISTINCT datum FROM kassenbuch WHERE datum > ?", (datum,))])
-        if tiefster < 0:
-            raise EingabeFehler(f"Der Kassenbestand würde negativ ({euro(tiefster)}). Eine Kasse kann nicht weniger "
-                                "als 0 € enthalten – bitte Datum, Betrag oder fehlende Einnahmen/Einlagen prüfen.")
+        fehl = erster_fehlbetrag(con, datum, wert)
+        if fehl:
+            raise KassenFehlbetrag(*fehl)
     nr = _naechste_nr(con)
     cur = con.execute(
         "INSERT INTO kassenbuch (lfd_nr, datum, art, betrag, steuersatz, kostenart, text, dokument_id, zahlung_id, "

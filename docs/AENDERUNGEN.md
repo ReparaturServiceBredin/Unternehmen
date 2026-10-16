@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.21.0 | 16.10.2026 | KVA-Pauschale je Gerätetyp, freiwillige Garantie ab Abholung, Löschvorschau, Kassen-Fehlbetrag |
 | 0.20.0 | 16.10.2026 | Datenschutz: Löschfristen, Auskunft, Löschprotokoll, Verzeichnis |
 | 0.19.0 | 16.10.2026 | Kassenbuch mit Tagesabschluss, DATEV-Export |
 | 0.18.0 | 16.10.2026 | E-Rechnung: ZUGFeRD/Factur-X und XRechnung erzeugen und empfangen |
@@ -39,6 +40,73 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.21.0 – 16.10.2026
+Anpassungen an KVA, Garantie, Löschfristen und Kassenbuch. Beim ersten Start legt das Programm vor der Umstellung der
+Datenbank automatisch ein Backup an (`Daten/backups/vor_update_…`). Es gehen keine Daten verloren.
+
+**Nicht geändert** (wird noch mit dem Steuerberater geklärt): DATEV-Kontenzuordnung, TSE, Aufbewahrungsfristen für
+Rechnungen, Buchungsbelege, Geschäftsbriefe und E-Mail-Verlauf.
+
+### KVA-Pauschale
+- Pauschale je **Gerätetyp** unter *Einstellungen → Annahme & Abholung → KVA-Pauschalen*, eine Zeile je Typ
+  (`Gerätetyp = Betrag`). Vorgabe: Laptop / PC / All-in-One 29,00 €, Smartphone / Tablet 19,00 €, Sonstige Geräte
+  29,00 €. Weitere Typen einfach als neue Zeile ergänzen.
+- Im Auftrag den Gerätetyp wählen. Die Pauschale wird vorgeschlagen und lässt sich je Auftrag ändern oder mit
+  „kostenlos“ ganz streichen.
+- **KVA angenommen:** Die Pauschale wird verrechnet, sie entfällt.
+- **KVA abgelehnt:** Es öffnet sich sofort ein **Rechnungsentwurf** mit der Position
+  „Kostenvoranschlag / Fehlerdiagnose – Gerät: …“. Die Leistung wird bei Bedarf unter *Leistungen und Artikel* angelegt.
+- Auf dem Annahmeschein steht ein **bearbeitbarer Hinweistext** mit dem Betrag. Er ist vor der Unterschrift deutlich
+  sichtbar (Platzhalter `{KVA-Gebühr}`).
+
+### Freiwillige Garantie
+- Standard 12 Monate **ab Abholung**. Abweichungen je Auftrag oder Position, auch „keine Garantie“ (0).
+- Das **Garantieende** wird bei der Abholung im Auftrag gespeichert und angezeigt. Bereits abgeholte Aufträge bekommen
+  es beim ersten Start einmalig nachgetragen. Die Garantieprüfung über SN/IMEI nutzt dieses gespeicherte Datum.
+- Ein **bearbeitbarer Garantietext** steht auf Rechnung und Abholschein, mit Firmenname und Anschrift aus den
+  Firmendaten. Platzhalter: `{Garantiedauer}`, `{Garantieende}`, `{Firmenname}`, `{Firmenanschrift}`. Der Text
+  trennt die freiwillige Garantie klar von der gesetzlichen Gewährleistung.
+- Wird die Rechnung vor der Abholung geschrieben, steht dort „bis Ablauf von … nach Abholung“ statt eines Datums.
+
+### Löschfristen (nur Daten ohne steuerliche Aufbewahrungspflicht)
+| Daten | Frist |
+|---|---|
+| Gerätezugangsdaten | sofort und endgültig bei Abholung, Abschluss oder Stornierung (Löschung wird ohne Inhalt protokolliert) |
+| Interessenten | 6 Monate nach Anlage bzw. letztem Kontakt |
+| Fotos und Annahme-/Abholscheine | 3 Jahre ab Ende des Kalenderjahres der Abholung (Abholung 15.10.2026 → ab 01.01.2030) |
+| Leihprotokolle und -fotos | 3 Jahre ab Ende des Jahres der Rückgabe bzw. des Abschlusses eines Schadensfalls |
+| inaktive Kunden | 3 Jahre ab Ende des Jahres des letzten Kontakts (Auftrag, Rechnung, E-Mail); mit Belegen nur Anonymisierung wie bisher |
+
+- **Sperren:** laufende Aufträge, offene Rechnungen, offene Schadensfälle und laufende Garantien verhindern die
+  Löschung des Kunden und seiner Fotos.
+- **Vorschau:** *Verwaltung → Datenschutz* zeigt „Folgende Daten werden in den nächsten 30 Tagen gelöscht“, jeweils
+  mit Status *fällig*, *vorgemerkt*, *gesperrt* (mit Grund) oder *zurückgestellt*.
+- **Zurückstellen:** Einzelne Einträge lassen sich mit Begründung zurückstellen, z. B. bei einem Streitfall.
+  Optional mit Enddatum, jederzeit aufhebbar.
+- Jede Löschung steht im Löschprotokoll: was, wann und nach welcher Frist, ohne Inhalte.
+- Bei Leihvorgängen werden Zustandsbeschreibungen, Zubehörlisten, Notizen und Fotos entfernt. Leihnummer, Daten
+  und Beträge bleiben für Rechnung und Kaution erhalten.
+
+### Kassenbuch
+- Der Bestand wird **chronologisch nach Buchungsdatum über die ganze Historie** geprüft, auch bei rückdatierten
+  Buchungen. Beispielmeldung: „Kassenbestand wäre am 12.10.2026 um 35,00 € negativ. Wahrscheinlich fehlt eine
+  Einnahme oder eine Privateinlage.“
+- Die abgelehnte Buchung bleibt vorgemerkt. Mit **„Fehlende Einnahme erfassen“** oder **„Privateinlage buchen“**
+  (Datum und Betrag vorbelegt) wird die Lücke geschlossen. Danach bucht das Programm die ursprüngliche Buchung
+  automatisch.
+- **Privateinlage und Privatentnahme** sind eigene Buchungsarten mit Datum, Betrag, Begründung und fortlaufender
+  Nummer, immer ohne Umsatzsteuer.
+
+### Technisch
+- Neue Felder: `auftraege.garantie_ende`, `auftraege.geraetetyp`, `leihen.protokoll_geloescht_am`,
+  `loeschprotokolle.frist`.
+- Neue Tabellen: `loesch_zurueckstellungen`, `loeschfreigaben`. Die zweite hebt den Schutz einer einzelnen Zeile nur
+  innerhalb eines Löschlaufs auf.
+- SQLite `secure_delete` ist eingeschaltet: Gelöschte Inhalte werden in der Datenbankdatei überschrieben.
+- Ältere Datensicherungen enthalten die verschlüsselten Zugangsdaten weiterhin, bis sie selbst gelöscht werden.
 
 ---
 

@@ -327,6 +327,8 @@ CREATE TABLE IF NOT EXISTS auftraege (
     zugang_geheim   TEXT,               -- verschlüsselt (Fernet), wird nach Abschluss gelöscht
     zugang_geloescht_am TEXT,
     abgeholt_am     TEXT,
+    garantie_ende   TEXT,               -- freiwillige Garantie: Ende (gespeichert bei Abholung)
+    geraetetyp      TEXT,               -- für die KVA-Pauschale (Einstellungen: Gebühr je Gerätetyp)
     -- Warten auf Ersatzteil (Spalte „Wartet auf Teil“ auf der Tafel; Status bleibt in_arbeit)
     wartet_teil_seit TEXT,
     teil_info       TEXT,
@@ -537,22 +539,33 @@ CREATE TABLE IF NOT EXISTS leihen (
     -- Markierung statt Löschen
     storniert_am       TEXT,
     storniert_von      TEXT,
+    protokoll_geloescht_am TEXT,          -- Datenschutz: Protokollinhalte nach Ablauf der Löschfrist entfernt
     storno_grund       TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_leihen_geraet ON leihen(geraet_id);
 CREATE INDEX IF NOT EXISTS ix_leihen_auftrag ON leihen(auftrag_id);
 CREATE INDEX IF NOT EXISTS ix_leihen_kunde ON leihen(kunde_id);
 
-CREATE TRIGGER IF NOT EXISTS leihe_schutz_update
+-- Gezielte Freigabe für den Datenschutz-Löschlauf (nach Ablauf der Löschfrist): nur für die hier eingetragene Zeile
+-- heben die Schutzregeln von Leihprotokollen und Annahme-/Abholscheinen ihre Sperre auf.
+CREATE TABLE IF NOT EXISTS loeschfreigaben (
+    tabelle  TEXT NOT NULL,
+    zeile_id INTEGER NOT NULL,
+    PRIMARY KEY (tabelle, zeile_id)
+);
+
+DROP TRIGGER IF EXISTS leihe_schutz_update;
+CREATE TRIGGER leihe_schutz_update
 BEFORE UPDATE ON leihen
-WHEN NEW.leihnr IS NOT OLD.leihnr OR NEW.geraet_id IS NOT OLD.geraet_id OR NEW.kunde_id IS NOT OLD.kunde_id
+WHEN NOT EXISTS (SELECT 1 FROM loeschfreigaben WHERE tabelle='leihen' AND zeile_id=OLD.id) AND (
+     NEW.leihnr IS NOT OLD.leihnr OR NEW.geraet_id IS NOT OLD.geraet_id OR NEW.kunde_id IS NOT OLD.kunde_id
   OR NEW.ausgabe_am IS NOT OLD.ausgabe_am OR NEW.zubehoer_ausgabe IS NOT OLD.zubehoer_ausgabe
   OR NEW.zustand_ausgabe IS NOT OLD.zustand_ausgabe OR NEW.erfasst_am IS NOT OLD.erfasst_am
   OR NEW.kaution_betrag IS NOT OLD.kaution_betrag OR NEW.kaution_erhalten IS NOT OLD.kaution_erhalten
   OR (OLD.rueckgabe_am IS NOT NULL AND (NEW.rueckgabe_am IS NOT OLD.rueckgabe_am
       OR NEW.zustand_rueckgabe IS NOT OLD.zustand_rueckgabe OR NEW.zubehoer_rueckgabe IS NOT OLD.zubehoer_rueckgabe
       OR NEW.rueckgabe_notiz IS NOT OLD.rueckgabe_notiz))
-  OR (OLD.storniert_am IS NOT NULL AND (NEW.storniert_am IS NOT OLD.storniert_am OR NEW.storno_grund IS NOT OLD.storno_grund))
+  OR (OLD.storniert_am IS NOT NULL AND (NEW.storniert_am IS NOT OLD.storniert_am OR NEW.storno_grund IS NOT OLD.storno_grund)))
 BEGIN
     SELECT RAISE(ABORT, 'Ausgabe- und Rückgabeprotokolle können nicht nachträglich geändert werden.');
 END;
@@ -827,7 +840,9 @@ CREATE TRIGGER IF NOT EXISTS auftrag_beleg_schutz_update BEFORE UPDATE ON auftra
 BEGIN
     SELECT RAISE(ABORT, 'Unterschriebene Annahme-/Abholscheine dürfen nicht geändert werden.');
 END;
-CREATE TRIGGER IF NOT EXISTS auftrag_beleg_schutz_delete BEFORE DELETE ON auftrag_belege
+DROP TRIGGER IF EXISTS auftrag_beleg_schutz_delete;
+CREATE TRIGGER auftrag_beleg_schutz_delete BEFORE DELETE ON auftrag_belege
+WHEN NOT EXISTS (SELECT 1 FROM loeschfreigaben WHERE tabelle='auftrag_belege' AND zeile_id=OLD.id)
 BEGIN
     SELECT RAISE(ABORT, 'Unterschriebene Annahme-/Abholscheine dürfen nicht gelöscht werden.');
 END;
@@ -1185,7 +1200,8 @@ CREATE TABLE IF NOT EXISTS loeschprotokolle (
     betroffen   TEXT,
     geloescht   TEXT NOT NULL,             -- JSON-Liste
     behalten    TEXT NOT NULL,             -- JSON-Liste [{was, bis}]
-    bis         TEXT
+    bis         TEXT,
+    frist       TEXT                       -- angewandte Löschfrist (z. B. „Fotos: 3 Jahre ab Ende des Abholjahres“)
 );
 CREATE TRIGGER IF NOT EXISTS loeschprotokoll_schutz_update BEFORE UPDATE ON loeschprotokolle
 BEGIN
@@ -1195,3 +1211,16 @@ CREATE TRIGGER IF NOT EXISTS loeschprotokoll_schutz_delete BEFORE DELETE ON loes
 BEGIN
     SELECT RAISE(ABORT, 'Löschprotokolle dürfen nicht gelöscht werden.');
 END;
+
+-- Zurückgestellte Löschungen (z. B. laufender Streitfall) – bis zur Aufhebung bzw. bis zum Datum
+CREATE TABLE IF NOT EXISTS loesch_zurueckstellungen (
+    id           INTEGER PRIMARY KEY,
+    art          TEXT NOT NULL,            -- kunde / interessent / auftrag / leihe
+    objekt_id    INTEGER NOT NULL,
+    grund        TEXT NOT NULL,
+    bis          TEXT,
+    erstellt_am  TEXT NOT NULL,
+    benutzer     TEXT,
+    aufgehoben_am TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_loesch_zurueck ON loesch_zurueckstellungen(art, objekt_id);

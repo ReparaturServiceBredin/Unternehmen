@@ -36,14 +36,41 @@ def test_garantie_auf_abholschein_und_rechnung(client, con, app):
     d = con.execute("SELECT * FROM dokumente WHERE id=?", (re_id,)).fetchone()
     assert d["status"] == "festgeschrieben"
     snap = json.loads(d["snapshot_json"])
-    assert "6 Monate Garantie" in snap["garantie_text"] and "gesetzlichen" in snap["garantie_text"]
+    t = snap["garantie_text"]
+    # noch nicht abgeholt: Beginn = Abholung, nicht Rechnungsdatum
+    assert "freiwillige Garantie von 6 Monaten ab Abholung (bis Ablauf von 6 Monaten nach Abholung)" in t
+    assert "bei Reparatur Service Bredin, Hauptstraße 1, 74219 Möckmühl vorlegen" in t
+    assert "gesetzlichen Gewährleistungsrechte bleiben von dieser Garantie unberührt" in t
     assert [p["garantie_monate"] for p in snap["positionen"]] == [None, 0]
     assert client.get(f"/dokumente/{re_id}/pdf").status_code == 200
+    assert not con.execute("SELECT garantie_ende FROM auftraege WHERE id=?", (aid,)).fetchone()[0]
     unterschreiben(client, aid, art="abholung")
+    ende = gar.plus_monate(date.today(), 6)
+    assert con.execute("SELECT garantie_ende FROM auftraege WHERE id=?", (aid,)).fetchone()[0] == ende.isoformat()
     b = con.execute("SELECT snapshot FROM auftrag_belege WHERE auftrag_id=? AND art='abholung'", (aid,)).fetchone()
-    assert "6 Monate Garantie" in json.loads(b["snapshot"])["garantie"]
+    assert f"6 Monaten ab Abholung (bis {ende.strftime('%d.%m.%Y')})" in json.loads(b["snapshot"])["garantie"]
     seite = client.get(f"/auftraege/{aid}").get_data(as_text=True)
     assert "6 Monate bis" in seite and "läuft" in seite
+    # spätere Rechnung zum Auftrag nennt das gespeicherte Ende
+    assert ende.strftime("%d.%m.%Y") in gar.rechnungstext(con, d)
+
+
+def test_garantiepruefung_nutzt_gespeichertes_ende(client, con):
+    kid = kunde_anlegen(client)
+    alt = auftrag_mit_annahme(client, kid, seriennummer="356789012345678")
+    post(client, f"/auftraege/{alt}/status", status="erledigt", ohne_kva="1")
+    post(client, f"/auftraege/{alt}/abgeholt")
+    assert client.get("/auftraege/geraet-pruefen?sn=356789012345678").get_json()[0]["laeuft"]
+    # gespeichertes Garantieende zählt (nicht neu berechnet aus heutigen Einstellungen)
+    con.execute("UPDATE auftraege SET garantie_ende=? WHERE id=?", ("2026-01-31", alt))
+    v = client.get("/auftraege/geraet-pruefen?sn=356789012345678").get_json()[0]
+    assert not v["laeuft"] and "31.01.2026" in v["garantie"] and "abgelaufen" in v["garantie"]
+    # keine Garantie vereinbart
+    ohne = auftrag_mit_annahme(client, kid, seriennummer="IMEI99887766", garantie_monate="0")
+    post(client, f"/auftraege/{ohne}/status", status="erledigt", ohne_kva="1")
+    post(client, f"/auftraege/{ohne}/abgeholt")
+    assert con.execute("SELECT garantie_ende FROM auftraege WHERE id=?", (ohne,)).fetchone()[0] is None
+    assert "keine freiwillige Garantie" in client.get("/auftraege/geraet-pruefen?sn=IMEI99887766").get_json()[0]["garantie"]
 
 
 def test_wiedererkennung_und_garantiefall(client, con):
@@ -71,7 +98,7 @@ def test_wiedererkennung_und_garantiefall(client, con):
 
 def test_artikel_garantie_und_einstellung(client, con):
     post(client, "/einstellungen?bereich=annahme", garantie_monate="6", annahme_zubehoer="Ladekabel",
-         annahme_kva_gebuehr_cent="0", annahme_datenschutz="", annahme_abholbedingungen="", abholschein_text="")
+         kva_gebuehren="Sonstige Geräte = 29,00", annahme_datenschutz="", annahme_abholbedingungen="", abholschein_text="")
     assert dbm.einstellungen(con)["garantie_monate"] == 6
     r = post(client, "/artikel/neu", name="Akkutausch iPhone", preis="89,00", teilekosten="30,00", einheit="pauschal",
              typ="leistung", steuersatz="19", aktiv="1", garantie_monate="3")

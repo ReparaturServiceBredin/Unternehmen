@@ -6,6 +6,27 @@
   <a class="knopf zweit" href="{{ url_for('main.kassenbuch', von=von, bis=bis, druck=1) }}" target="_blank">Drucken / PDF</a></div>
 <p class="klein">{% if letzter %}Letzter Tagesabschluss: <b>{{ letzter.datum|datum }}</b> (gezählt {{ letzter.ist|euro }}{% if letzter.differenz %}, Differenz {{ letzter.differenz|euro }}{% endif %}).{% else %}Noch kein Tagesabschluss.{% endif %}
   Buchungen sind fortlaufend nummeriert und unveränderlich – Korrekturen nur per Gegenbuchung. Barzahlungen auf Rechnungen und bar bezahlte Eingangsrechnungen erscheinen automatisch.</p>
+{% if offen %}{% set ob = offen.buchung %}
+<div class="karte" id="fehlbetrag" style="border-left:4px solid var(--rot)">
+  <h2>Buchung vorgemerkt – Kassenbestand würde negativ</h2>
+  <p>Kassenbestand wäre am <b>{{ offen.tag|datum }}</b> um <b>{{ offen.fehlbetrag|euro }}</b> negativ. Wahrscheinlich fehlt eine Einnahme oder eine Privateinlage.</p>
+  <p class="klein">Vorgemerkt: {{ arten[ob.art] }} am {{ ob.datum|datum }} über {{ ob.betrag|euro }} – „{{ ob.text }}“. Nach dem Erfassen der fehlenden Buchung wird sie automatisch erneut versucht.</p>
+  <div class="zweispaltig">
+    {% for a, titel in [('einnahme', 'Fehlende Einnahme erfassen'), ('einlage', 'Privateinlage buchen')] %}
+    <form method="post" action="{{ url_for('main.kasse_buchen') }}" class="karte">{{ csrf() }}
+      <input type="hidden" name="nachholen" value="1"><input type="hidden" name="art" value="{{ a }}">
+      <h3>{{ titel }}</h3>
+      <div class="felder">
+        <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ offen.tag }}" max="{{ offen.tag }}" required></div>
+        <div class="s4"><label>Betrag (€)</label><input type="text" name="betrag" value="{{ offen.fehlbetrag|euro(false) }}" required inputmode="decimal"></div>
+        {% if a == 'einnahme' %}<div class="s4"><label>Steuersatz (%)</label><input type="text" name="steuersatz" placeholder="{{ '19' if einst.steuer_modus == 'regel' else '–' }}"></div>{% endif %}
+        <div class="s12"><label>{{ 'Text' if a == 'einnahme' else 'Begründung' }}</label><input type="text" name="text" required minlength="3" placeholder="{{ 'z. B. Barverkauf Displayschutzfolie' if a == 'einnahme' else 'z. B. Wechselgeld aus Privatvermögen' }}"></div>
+      </div><br><button>{{ titel }}</button>
+    </form>{% endfor %}
+  </div>
+  <form method="post" action="{{ url_for('main.kasse_vormerkung_verwerfen') }}">{{ csrf() }}<button class="zweit klein">Vorgemerkte Buchung verwerfen</button></form>
+</div>
+{% endif %}
 <div class="zweispaltig">
 <form method="post" action="{{ url_for('main.kasse_buchen') }}" enctype="multipart/form-data" class="karte">{{ csrf() }}
   <h2>Neue Buchung</h2>
@@ -14,8 +35,8 @@
     <div class="s4"><label>Art</label><select name="art" id="k_art">{% for k in ['einnahme', 'ausgabe', 'einlage', 'entnahme', 'bank_aus', 'bank_ein', 'anfangsbestand'] %}<option value="{{ k }}">{{ arten[k] }}</option>{% endfor %}</select></div>
     <div class="s4"><label>Betrag (€)</label><input type="text" name="betrag" required inputmode="decimal"></div>
     <div class="s12 k-einnahme"><label>Barzahlung zu Rechnung (optional)</label><select name="dokument_id"><option value="">– keine (sonstige Bareinnahme) –</option>{% for d in offene_re %}<option value="{{ d.id }}">{{ d.nummer }} · {{ d|kname }} · offen {{ (d.summe_brutto - d.bezahlt_betrag)|euro }}</option>{% endfor %}</select></div>
-    <div class="s8"><label>Text</label><input type="text" name="text" required minlength="3" placeholder="z. B. Verkauf Ladekabel, Briefmarken, Bareinzahlung Sparkasse"></div>
-    <div class="s4"><label>Steuersatz (%)</label><input type="text" name="steuersatz" placeholder="{{ '19' if einst.steuer_modus == 'regel' else '–' }}"></div>
+    <div class="s8"><label id="k_text_label">Text</label><input type="text" name="text" required minlength="3" placeholder="z. B. Verkauf Ladekabel, Briefmarken, Bareinzahlung Sparkasse"></div>
+    <div class="s4 k-ust"><label>Steuersatz (%)</label><input type="text" name="steuersatz" placeholder="{{ '19' if einst.steuer_modus == 'regel' else '–' }}"></div>
     <div class="s6 k-ausgabe" hidden><label>Kostenart</label><select name="kostenart"><option value=""></option>{% for k in kostenarten %}<option>{{ k }}</option>{% endfor %}</select></div>
     <div class="s6"><label>Beleg (Foto/PDF)</label><input type="file" name="beleg" accept=".pdf,.jpg,.jpeg,.png"></div>
   </div><br><button>Buchen</button>
@@ -46,7 +67,10 @@
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
 const art = document.getElementById('k_art');
-const anpassen = () => { document.querySelectorAll('.k-ausgabe').forEach(e => e.hidden = art.value !== 'ausgabe'); document.querySelectorAll('.k-einnahme').forEach(e => e.hidden = art.value !== 'einnahme'); };
+const anpassen = () => { document.querySelectorAll('.k-ausgabe').forEach(e => e.hidden = art.value !== 'ausgabe'); document.querySelectorAll('.k-einnahme').forEach(e => e.hidden = art.value !== 'einnahme');
+  const privat = art.value === 'einlage' || art.value === 'entnahme';
+  document.querySelectorAll('.k-ust').forEach(e => { e.hidden = privat; e.querySelector('input').disabled = privat; });
+  document.getElementById('k_text_label').textContent = privat ? 'Begründung (ohne USt)' : 'Text'; };
 art.addEventListener('change', anpassen); anpassen();
 document.querySelectorAll('.k-zaehl').forEach(i => i.addEventListener('input', () => {
   let s = 0; document.querySelectorAll('.k-zaehl').forEach(x => s += (parseInt(x.value) || 0) * parseInt(x.dataset.wert));
