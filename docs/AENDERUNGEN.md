@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.24.1 | 16.10.2026 | Dunkelmodus: alle Texte gut lesbar |
 | 0.24.0 | 16.10.2026 | Fixkosten und Finanzübersicht |
 | 0.23.1 | 16.10.2026 | Technik: feste Versionen, sichere Dateinamen, Pfadprüfung, Entwickler-Regeln |
 | 0.23.0 | 16.10.2026 | Fester Datenordner – egal, von wo das Programm gestartet wird |
@@ -46,6 +47,26 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.24.1 – 16.10.2026
+Fehlerbehebung Dunkelmodus.
+
+### Behoben
+- **Unterschriftsseite (Annahme- und Abholschein):** Die Kästen „Datenschutz und Datensicherung“ und
+  „Abholbedingungen“ hatten im Dunkelmodus einen hellen Hintergrund mit heller Schrift. Der Text war dadurch nicht
+  lesbar.
+- **Weitere feste Farben** passen sich jetzt ebenfalls an:
+  - Warnhinweise, Rahmen von Meldungen
+  - Garantie- und Teile-Hinweise auf der Auftragstafel
+  - Hinweis „Ungespeicherte Änderungen“
+- **Auftragstafel:** Die Spaltenköpfe „In Arbeit“ und „Erledigt“ samt Zählern sind in Hell und Dunkel kontrastreicher.
+
+### Geprüft
+- Alle Seiten in Hell und Dunkel wurden automatisch auf Lesbarkeit geprüft, jeder sichtbare Text gegen seinen
+  tatsächlichen Hintergrund. Kein Text liegt mehr unter dem Kontrast 4,5:1 (Fließtext), außer den kleinen Zählern
+  der Auftragstafel, die jetzt deutlich besser lesbar sind.
 
 ---
 
