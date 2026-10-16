@@ -149,6 +149,7 @@ def _backup_vor_update(app, version):
                            {"datei": ziel.name, "von": VERSION_NUMMER, "nach": version}, con=con)
     finally:
         con.close()
+        dbm.festschreiben(app.config["DB_PFAD"])
 
 
 def update_hintergrund(app):
@@ -161,6 +162,11 @@ def update_hintergrund(app):
                       "wird beim nächsten Start installiert (oder in der Oberfläche auf „Jetzt aktualisieren“).")
         except Exception as e:
             print(f"{datetime.now():%H:%M} Update-Prüfung fehlgeschlagen: {e}")
+
+
+def _beenden(app):
+    dbm.festschreiben(app.config["DB_PFAD"])
+    os._exit(0)
 
 
 def port_belegt(host, port):
@@ -240,7 +246,7 @@ def main():
     # Symbol neben der Uhr (blockiert bis „Beenden“). Ohne Symbol läuft der Server einfach weiter.
     if not os.environ.get("RSB_KEIN_SYMBOL") and fenster.symbol_anzeigen(
             f"Reparatur Service Bredin – Buchhaltung {VERSION_NUMMER}", adresse, app.config["DATEN"],
-            lambda: fenster_modus(app.config["DB_PFAD"]), lambda: os._exit(0)):
+            lambda: fenster_modus(app.config["DB_PFAD"]), lambda: _beenden(app)):
         os._exit(0)
     try:
         while server.is_alive():

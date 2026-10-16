@@ -11,7 +11,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.22.0"
+VERSION_NUMMER = "0.22.1"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -111,36 +111,48 @@ def create_app(daten_dir=None, testing=False):
     def globale_werte():
         if request.endpoint in ("static",):
             return {}
+        # Einstellungen immer echt laden: ein Fehler darf nie zu leeren Formularen führen (Speichern würde sonst
+        # die echten Werte überschreiben). Nur die Zähler sind „weich“ – fällt einer aus, steht dort 0.
+        einst = dbm.einstellungen()
+        con = dbm.get_db()
+
+        def zahl(sql, standard=0):
+            try:
+                return con.execute(sql).fetchone()[0]
+            except Exception as e:  # z. B. Spalte fehlt – Seite trotzdem anzeigen
+                print(f"Hinweis: Zähler nicht verfügbar ({e})")
+                return standard
+
+        offene_anfragen = zahl("SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'")
+        leihen_ueberfaellig = zahl(
+            "SELECT COUNT(*) FROM leihen WHERE rueckgabe_am IS NULL AND storniert_am IS NULL "
+            "AND rueckgabe_geplant < date('now', 'localtime')")
+        posten_ueberfaellig = zahl(
+            "SELECT COUNT(*) FROM dokumente d WHERE typ='rechnung' AND status='festgeschrieben' "
+            "AND faellig_am < date('now', 'localtime') AND summe_brutto + COALESCE((SELECT SUM(g.summe_brutto) "
+            "FROM dokumente g WHERE g.bezug_id=d.id AND g.typ='gutschrift' AND g.status<>'entwurf'), 0) "
+            "> bezahlt_betrag")
         try:
-            einst = dbm.einstellungen()
-            offene_anfragen = dbm.get_db().execute(
-                "SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'").fetchone()[0]
-            leihen_ueberfaellig = dbm.get_db().execute(
-                "SELECT COUNT(*) FROM leihen WHERE rueckgabe_am IS NULL AND storniert_am IS NULL "
-                "AND rueckgabe_geplant < date('now', 'localtime')").fetchone()[0]
-            posten_ueberfaellig = dbm.get_db().execute(
-                "SELECT COUNT(*) FROM dokumente d WHERE typ='rechnung' AND status='festgeschrieben' "
-                "AND faellig_am < date('now', 'localtime') AND summe_brutto + COALESCE((SELECT SUM(g.summe_brutto) "
-                "FROM dokumente g WHERE g.bezug_id=d.id AND g.typ='gutschrift' AND g.status<>'entwurf'), 0) "
-                "> bezahlt_betrag").fetchone()[0]
             from .lager import unter_mindestbestand_anzahl
-            lager_unter_min = unter_mindestbestand_anzahl(dbm.get_db())
-            benachrichtigungen_offen = dbm.get_db().execute(
-                "SELECT COUNT(*) FROM benachrichtigungen WHERE status IN ('offen', 'fehler')").fetchone()[0]
-            offene_auftraege = dbm.get_db().execute(
-                "SELECT COUNT(*) FROM auftraege WHERE status<>'erledigt'").fetchone()[0]
-            glocke = dbm.get_db().execute(
+            lager_unter_min = unter_mindestbestand_anzahl(con)
+        except Exception as e:
+            print(f"Hinweis: Zähler nicht verfügbar ({e})")
+            lager_unter_min = 0
+        benachrichtigungen_offen = zahl("SELECT COUNT(*) FROM benachrichtigungen WHERE status IN ('offen', 'fehler')")
+        offene_auftraege = zahl("SELECT COUNT(*) FROM auftraege WHERE status<>'erledigt'")
+        glocke_ungelesen = zahl(
+            "SELECT COUNT(*) FROM benachrichtigungen WHERE gelesen_am IS NULL AND status IN ('offen', 'fehler')")
+        try:
+            glocke = con.execute(
                 "SELECT b.*, a.auftragsnr, a.geraet FROM benachrichtigungen b JOIN auftraege a ON a.id=b.auftrag_id "
                 "WHERE b.status<>'verworfen' ORDER BY (b.gelesen_am IS NULL AND b.status IN ('offen', 'fehler')) DESC, "
                 "b.id DESC LIMIT 8").fetchall()
-            glocke_ungelesen = dbm.get_db().execute(
-                "SELECT COUNT(*) FROM benachrichtigungen WHERE gelesen_am IS NULL AND status IN ('offen', 'fehler')"
-            ).fetchone()[0]
-            ui = einst.get(f"oberflaeche:{session.get('benutzer') or 'inhaber'}") or {}
-        except Exception:
-            einst, offene_anfragen, leihen_ueberfaellig, posten_ueberfaellig = {}, 0, 0, 0
-            benachrichtigungen_offen = lager_unter_min = offene_auftraege = glocke_ungelesen = 0
-            glocke, ui = [], {}
+        except Exception as e:
+            print(f"Hinweis: Benachrichtigungen nicht verfügbar ({e})")
+            glocke = []
+        ui = einst.get(f"oberflaeche:{session.get('benutzer') or 'inhaber'}") or {}
+        if not isinstance(ui, dict):
+            ui = {}
         from .update import ist_exe, ist_neuer
         update_da = einst.get("update_verfuegbar") if ist_neuer(einst.get("update_verfuegbar"), VERSION_NUMMER) \
             else None

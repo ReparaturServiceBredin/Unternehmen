@@ -273,6 +273,18 @@ def verbinden(pfad):
     return con
 
 
+def festschreiben(pfad):
+    """Alle Änderungen aus der WAL-Zwischendatei in die Datenbankdatei übernehmen (vor Beenden/Neustart)."""
+    try:
+        con = sqlite3.connect(pfad, timeout=15)
+        try:
+            con.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        finally:
+            con.close()
+    except sqlite3.Error as e:
+        print(f"Hinweis: Datenbank konnte nicht festgeschrieben werden ({e})")
+
+
 def get_db():
     if "db" not in g:
         g.db = verbinden(current_app.config["DB_PFAD"])

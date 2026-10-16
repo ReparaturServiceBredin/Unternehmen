@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.22.1 | 16.10.2026 | Fehlerbehebung: Einstellungen werden nie mehr leer angezeigt |
 | 0.22.0 | 16.10.2026 | Neue Navigation: Gruppen, Schnellsuche (Strg+K), Glocke, Einstellungen mit Suche, Dunkelmodus |
 | 0.21.0 | 16.10.2026 | KVA-Pauschale je Gerätetyp, freiwillige Garantie ab Abholung, Löschvorschau, Kassen-Fehlbetrag |
 | 0.20.0 | 16.10.2026 | Datenschutz: Löschfristen, Auskunft, Löschprotokoll, Verzeichnis |
@@ -41,6 +42,21 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.22.1 – 16.10.2026
+Fehlerbehebung.
+
+### Behoben
+- Konnte einer der Zähler in Menü oder Glocke nicht ermittelt werden, zeigte das Programm alle Einstellungen leer an
+  (z. B. Firmenanschrift, IMAP). Die gespeicherten Werte waren dabei nicht verloren. Jetzt werden die Einstellungen
+  immer aus der Datenbank angezeigt; ein ausgefallener Zähler zeigt nur 0.
+
+### Technisch
+- Beim Beenden über das Symbol neben der Uhr und vor dem Neustart nach einem Update werden alle Änderungen fest in
+  die Datenbankdatei geschrieben (WAL-Checkpoint). Das schützt besonders, wenn der Programmordner per OneDrive
+  synchronisiert wird.
 
 ---
 

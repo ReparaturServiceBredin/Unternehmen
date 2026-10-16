@@ -168,3 +168,15 @@ def test_einstellungs_suche_und_anker(client):
     html = client.get("/einstellungen/anfragen").get_data(as_text=True)
     assert 'id="einst-suche"' in html and 'class="einst-nav"' in html and "Verwaltung &amp; Prüfung" in html
     assert 'name="imap_host"' in html
+
+
+def test_zaehlerfehler_leert_nie_die_einstellungen(client, con, monkeypatch):
+    """Fällt ein Zähler aus (z. B. fehlende Spalte), bleiben Firmendaten und IMAP sichtbar – nie leere Formulare."""
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({"imap_host": "imap.ionos.de"}, con)
+    con.execute("ALTER TABLE benachrichtigungen DROP COLUMN gelesen_am")
+    import rsb.lager
+    monkeypatch.setattr(rsb.lager, "unter_mindestbestand_anzahl", lambda c: 1 / 0)
+    firma = dbm.einstellungen(con)["firma_name"]
+    assert firma and firma in client.get("/einstellungen/firma").get_data(as_text=True)
+    assert 'value="imap.ionos.de"' in client.get("/einstellungen/anfragen").get_data(as_text=True)
