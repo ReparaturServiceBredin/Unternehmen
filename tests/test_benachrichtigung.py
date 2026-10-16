@@ -152,7 +152,7 @@ def test_manuell_und_einstellungen(client, con, smtp):
     daten = {f"ben_{a}_{t}": "x" for a in ben.ANLAESSE for t in ("betreff", "text")}
     daten.update(ben_fertig_text="Hallo {Kundenname}, {Gerät} ist fertig. {Öffnungszeiten}", oeffnungszeiten="Mo 9-12",
                  erinnerung_tage="5, 10", benachrichtigung_kanal="email", ben_fertig_aktiv="1")
-    post(client, "/einstellungen?bereich=benachrichtigung", **daten)
+    post(client, "/einstellungen/benachrichtigung", **daten)
     e = dbm.einstellungen(con)
     assert e["erinnerung_tage"] == "5, 10" and e["ben_fertig_aktiv"] and not e["ben_angenommen_aktiv"]
     assert e["benachrichtigung_vorschau"] is False  # Haken nicht gesetzt

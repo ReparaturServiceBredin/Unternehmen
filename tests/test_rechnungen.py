@@ -142,9 +142,9 @@ def test_kunde_mit_rechnung_nicht_loeschbar(client, con):
 def test_seiten_laden(client):
     kid = kunde_anlegen(client)
     did = rechnung_anlegen(client, kid)
-    for url in ["/", "/kunden", f"/kunden/{kid}", "/kunden/neu", "/artikel", "/artikel/neu", "/dokumente",
+    for url in ["/", "/kunden", f"/kunden/{kid}", "/kunden/neu", "/artikel", "/artikel/neu", "/verkauf/rechnungen",
                 f"/dokumente/{did}", f"/dokumente/{did}/pdf", f"/dokumente/{did}/drucken", "/textbausteine",
                 "/textbausteine/1", "/protokoll", "/pruefung", "/einstellungen/musterrechnung.pdf",
-                "/einstellungen/logo.png"] + [f"/einstellungen?bereich={b}" for b in
+                "/einstellungen/logo.png"] + [f"/einstellungen/{b}" for b in
                                               ["firma", "rechnung", "layout", "email", "backup", "sicherheit"]]:
         assert client.get(url).status_code == 200, url

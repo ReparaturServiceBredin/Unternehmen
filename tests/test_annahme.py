@@ -251,7 +251,7 @@ def test_handy_fotos_und_ablauf(client, con, app):
 
 
 def test_einstellungen_annahme(client, con):
-    r = post(client, "/einstellungen?bereich=annahme", annahme_zubehoer="Ladekabel\nStift",
+    r = post(client, "/einstellungen/annahme", annahme_zubehoer="Ladekabel\nStift",
              kva_gebuehren="Laptop = 35\nSmartphone / Tablet = 15,00\nKonsole = 25,5", garantie_monate="12",
              annahme_kva_text="Pauschale {KVA-Gebühr}.", garantie_text="Garantie {Garantiedauer}.",
              annahme_datenschutz="DS", annahme_abholbedingungen="AB",
@@ -262,5 +262,5 @@ def test_einstellungen_annahme(client, con):
     assert e["handy_im_netz"] is True and e["annahme_kva_text"] == "Pauschale {KVA-Gebühr}."
     assert 'data-cent="2550"' in client.get("/auftraege/neu").get_data(as_text=True)
     # ohne gültigen Gerätetyp wird nicht gespeichert
-    post(client, "/einstellungen?bereich=annahme", kva_gebuehren="Unsinn", garantie_monate="12")
+    post(client, "/einstellungen/annahme", kva_gebuehren="Unsinn", garantie_monate="12")
     assert dbm.einstellungen(con)["kva_gebuehren"].startswith("Laptop = 35,00")

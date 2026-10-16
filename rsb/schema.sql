@@ -873,7 +873,8 @@ CREATE TABLE IF NOT EXISTS benachrichtigungen (
     hinweis     TEXT,
     erstellt_am TEXT NOT NULL,
     erledigt_am TEXT,
-    benutzer    TEXT
+    benutzer    TEXT,
+    gelesen_am  TEXT                     -- in der Glocke als gelesen markiert
 );
 CREATE INDEX IF NOT EXISTS ix_benachrichtigungen ON benachrichtigungen(auftrag_id, status);
 

@@ -115,7 +115,7 @@ def test_loeschen_und_seiten(client, con):
     aid = auftrag_anlegen(client, kid)
     kva = kva_mit_position(client, con, aid, festschreiben=False)
     for url in ["/auftraege", "/auftraege?alle=1", f"/auftraege/{aid}", f"/dokumente/{kva}", f"/kunden/{kid}", "/",
-                "/dokumente?typ=kva", "/dokumente/neu?typ=kva"]:
+                "/verkauf/kostenvoranschlaege", "/dokumente/neu?typ=kva"]:
         assert client.get(url, follow_redirects=True).status_code == 200, url
     post(client, f"/auftraege/{aid}/loeschen")
     assert not con.execute("SELECT 1 FROM auftraege WHERE id=?", (aid,)).fetchone()

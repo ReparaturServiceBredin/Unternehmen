@@ -54,9 +54,9 @@ def test_zahlungen_status_und_storno(client, con):
     assert "Zahlungen" in client.get(f"/dokumente/{d['id']}").get_data(as_text=True)
     seite = client.get(f"/kunden/{kid}").get_data(as_text=True)
     assert "Zahlungshistorie" in seite and "Fehlbuchung" not in seite and "60,00 €" in seite
-    seite = client.get("/offene-posten").get_data(as_text=True)
+    seite = client.get("/verkauf/offene-posten").get_data(as_text=True)
     assert d["nummer"] in seite and "60,00 €" in seite
-    assert "teilweise bezahlt" in client.get("/dokumente").get_data(as_text=True)
+    assert "teilweise bezahlt" in client.get("/verkauf/rechnungen").get_data(as_text=True)
     # Gutschrift mindert den offenen Betrag
     r = post(client, f"/dokumente/{d['id']}/gutschrift")
     gid = int(re.search(r"/dokumente/(\d+)", r.headers["Location"]).group(1))
@@ -74,7 +74,7 @@ def test_mahnwesen_ablauf(client, con, monkeypatch):
     assert zlg.stand(con, d)["status"] == "ueberfaellig"
     v = mw.vorschlaege(con)
     assert [(x["d"]["id"], x["stufe"]) for x in v] == [(d["id"], 0)]
-    assert "Zahlungserinnerung" in client.get("/mahnwesen").get_data(as_text=True)
+    assert "Zahlungserinnerung" in client.get("/verkauf/mahnwesen").get_data(as_text=True)
     # Stufen können nicht übersprungen werden
     with pytest.raises(Exception):
         mw.erstellen(con, d["id"], 1, client.application.config["DATEN"])
@@ -222,16 +222,16 @@ def test_nummer_im_verwendungszweck():
 
 
 def test_seiten_und_einstellungen(client, con):
-    for url in ["/offene-posten", "/offene-posten?filter=ueberfaellig", "/mahnwesen", "/bank", "/bank?ansicht=ignoriert",
-                "/einstellungen?bereich=mahnwesen", "/"]:
+    for url in ["/verkauf/offene-posten", "/verkauf/offene-posten?filter=ueberfaellig", "/verkauf/mahnwesen", "/bank", "/bank?ansicht=ignoriert",
+                "/einstellungen/mahnwesen", "/"]:
         assert client.get(url).status_code == 200, url
     basis = dict(mahn_erinnerung_tage="7", mahn_stufe1_tage="7", mahn_stufe2_tage="7", mahn_frist_tage="10",
                  mahngebuehr_cent="2,50", mahngebuehr_2_cent="5,00", mahn_text_0="a", mahn_text_1="b", mahn_text_2="c",
                  mahn_email_betreff="x", mahn_email_text="y", basiszinssatz="", zinsen_aufschlag_privat="5",
                  zinsen_aufschlag_firma="9", zinsen_ab="mahnung1")
-    post(client, "/einstellungen?bereich=mahnwesen", **{**basis, "zinsen_aktiv": "on"})
+    post(client, "/einstellungen/mahnwesen", **{**basis, "zinsen_aktiv": "on"})
     assert not dbm.einstellungen(con)["zinsen_aktiv"]  # ohne Basiszinssatz abgelehnt
-    post(client, "/einstellungen?bereich=mahnwesen", **{**basis, "zinsen_aktiv": "on", "basiszinssatz": "2,27"})
+    post(client, "/einstellungen/mahnwesen", **{**basis, "zinsen_aktiv": "on", "basiszinssatz": "2,27"})
     e = dbm.einstellungen(con)
     assert e["zinsen_aktiv"] and e["basiszinssatz"] == "2.27" and e["mahngebuehr_cent"] == 250
 

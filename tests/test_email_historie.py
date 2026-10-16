@@ -260,10 +260,10 @@ def test_seite_einstellungen_loeschen_datenschutz(con, client, eingerichtet):
     assert "Display" not in texte and "anna@" not in texte and "news@" not in texte
     seite = client.get(f"/kunden/{anna}").get_data(as_text=True)
     assert "Display kaputt" in seite and "Rechnung.pdf" in seite
-    seite = client.get("/einstellungen?bereich=anfragen").get_data(as_text=True)
+    seite = client.get("/einstellungen/anfragen").get_data(as_text=True)
     assert "E-Mail-Historie aktivieren" in seite and "Ordner abrufen" in seite and "letzte 6 Monate" in seite
     # Speichern
-    post(client, "/einstellungen?bereich=anfragen", historie_aktiv="on", historie_ordner_eingang=" INBOX \n\nArchiv",
+    post(client, "/einstellungen/anfragen", historie_aktiv="on", historie_ordner_eingang=" INBOX \n\nArchiv",
          historie_ordner_gesendet="Gesendete Objekte", historie_zeitraum_tage="365", anfragen_intervall_min="5",
          imap_host="imap.ionos.de", imap_port="143", imap_sicherheit="starttls", imap_ordner="INBOX",
          imap_zielordner="Anfragen erledigt", anfrage_schwelle_unsicher="2", anfrage_schwelle_spam="5",

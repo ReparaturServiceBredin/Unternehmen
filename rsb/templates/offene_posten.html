@@ -2,9 +2,10 @@
 {% from "_status.html" import dokname %}
 {% block titel %}Offene Posten{% endblock %}
 {% block inhalt %}
+{% set reiter = "rechnungen" %}{% include "_bereichsreiter.html" %}
 <div class="kopf">
   <h1>Offene Posten</h1>
-  <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.bank') }}">Bankabgleich</a><a class="knopf" href="{{ url_for('main.mahnwesen') }}">Mahnwesen</a></div>
+  <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.bank') }}">Bankabgleich</a></div>
 </div>
 <div class="raster">
   <div class="kachel"><div class="label">Offen gesamt</div><div class="wert">{{ summe|euro }}</div><div class="klein">{{ posten|length }} Rechnung(en)</div></div>

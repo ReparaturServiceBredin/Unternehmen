@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.22.0 | 16.10.2026 | Neue Navigation: Gruppen, Schnellsuche (Strg+K), Glocke, Einstellungen mit Suche, Dunkelmodus |
 | 0.21.0 | 16.10.2026 | KVA-Pauschale je Gerätetyp, freiwillige Garantie ab Abholung, Löschvorschau, Kassen-Fehlbetrag |
 | 0.20.0 | 16.10.2026 | Datenschutz: Löschfristen, Auskunft, Löschprotokoll, Verzeichnis |
 | 0.19.0 | 16.10.2026 | Kassenbuch mit Tagesabschluss, DATEV-Export |
@@ -40,6 +41,78 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.22.0 – 16.10.2026
+Neue, übersichtlichere Navigation. Keine Funktion entfällt. Alte Adressen und Lesezeichen leiten auf die neue Stelle
+weiter.
+
+### Seitenleiste
+- **Gruppen:**
+  - Werkstatt: Anfragen, Reparaturaufträge, Leihgeräte
+  - Kunden: Kunden, Verträge & Lizenzen
+  - Verkauf: Rechnungen, Leistungen & Artikel
+  - Einkauf & Lager: Lager, Einkauf
+  - Buchhaltung: Bankabgleich, Kassenbuch, DATEV-Export
+  - *Einstellungen* steht fest unten.
+- **Bedienung:**
+  - Gruppen per Klick einklappbar. Der Zustand wird je Benutzer gemerkt; die Gruppe der geöffneten Seite ist immer
+    offen.
+  - Die Seitenleiste lässt sich auf Symbole verkleinern, mit Namen als Tooltip.
+  - Am Handy öffnet sie sich über das Menü-Symbol ☰.
+- **Symbole:** einheitlich ([Lucide](https://lucide.dev), lokal eingebunden, ISC-Lizenz).
+- **Zähler:** neue Anfragen, offene Aufträge, Artikel unter Mindestbestand (dezent). Überfällige Rechnungen und
+  überfällige Leihgeräte sind rot.
+
+### Zusammengefasste Seiten
+- **Rechnungen**, mit Reitern: Rechnungen | Kostenvoranschläge | Offene Posten | Mahnwesen.
+- **Einkauf**, mit Reitern: Bestellungen | Lieferanten | Eingangsrechnungen.
+
+### Kopfzeile
+- **Brotkrumen**, z. B. *Verkauf › Rechnungen › Offene Posten*.
+- **Schnellsuche** (Strg+K): Seiten, Einstellungen und einzelne Felder, Kunden, Aufträge, Rechnungen/KVAs,
+  Artikel, Leihgeräte. Dazu Schnellaktionen „Neuer Auftrag“, „Neuer Kunde“, „Neuer KVA“, „Neue Rechnung“.
+- **+ Neu:** Auftrag, Kunde, KVA, Rechnung, Leihgerät ausgeben. Für „Leihgerät ausgeben“ gibt es eine neue Seite zur
+  Auswahl des Auftrags.
+- **Glocke** statt Menüpunkt „Benachrichtigungen“: die letzten Benachrichtigungen, „als gelesen markieren“ und ein
+  Link zur Übersicht.
+- **Hell/Dunkel** umschaltbar, wird gemerkt.
+
+### Einstellungen
+- Links eine Unternavigation in Gruppen, rechts der Inhalt:
+  - Unternehmen
+  - Verkauf & Werkstatt
+  - Kommunikation
+  - Einkauf & Buchhaltung
+  - System
+  - Verwaltung & Prüfung: Textbausteine, Datenschutz-Übersicht, Protokoll, Datenprüfung, Verfahrensdokumentation,
+    Versionsprotokoll (früher eigene Menüpunkte)
+- **Suchfeld:** findet auch einzelne Felder, springt hin und hebt sie kurz hervor.
+- Lange Seiten sind in einklappbare Abschnitte gegliedert.
+- Der Knopf „Speichern“ bleibt unten sichtbar.
+- Beim Verlassen mit ungespeicherten Änderungen fragt das Programm nach.
+
+### Neue Adressen (alte leiten weiter)
+| alt | neu |
+|---|---|
+| `/dokumente` | `/verkauf/rechnungen?typ=alle` (alle Belege wie bisher) |
+| `/dokumente?typ=rechnung` | `/verkauf/rechnungen` |
+| `/dokumente?typ=kva` | `/verkauf/kostenvoranschlaege` |
+| `/offene-posten` | `/verkauf/offene-posten` |
+| `/mahnwesen` | `/verkauf/mahnwesen` |
+| `/bestellungen` | `/einkauf/bestellungen` |
+| `/lieferanten` | `/einkauf/lieferanten` |
+| `/eingangsrechnungen` | `/einkauf/eingangsrechnungen` |
+| `/einstellungen` | `/einstellungen/firma` |
+| `/einstellungen?bereich=…` | `/einstellungen/…` |
+
+- Filter in der Adresse (z. B. `?status=…`) bleiben erhalten.
+- Unterseiten wie `/dokumente/123`, `/lieferanten/5` oder `/mahnwesen/erstellen` behalten ihre Adresse.
+
+### Technisch
+- Neues Feld `benachrichtigungen.gelesen_am`. Beim ersten Start wird vorher automatisch ein Backup angelegt.
+- „Backup jetzt erstellen“ läuft jetzt über `/einstellungen/backup/erstellen`.
 
 ---
 

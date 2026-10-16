@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block titel %}Bestellungen{% endblock %}
 {% block inhalt %}
+{% set reiter = "einkauf" %}{% include "_bereichsreiter.html" %}
 <div class="kopf"><h1>Bestellungen</h1>
   <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.lager_bestellvorschlag') }}">Aus Bestellvorschlag</a><a class="knopf" href="{{ url_for('main.bestellung_neu') }}">+ Neue Bestellung</a></div></div>
 <nav class="reiter">{% for k, n in [('offen','Offen'),('geliefert','Geliefert'),('storniert','Storniert'),('alle','Alle')] %}<a href="{{ url_for('main.bestellungen', status=k) }}" class="{{ 'aktiv' if status == k }}">{{ n }}</a>{% endfor %}</nav>

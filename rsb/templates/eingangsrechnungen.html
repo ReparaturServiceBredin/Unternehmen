@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block titel %}Eingangsrechnungen{% endblock %}
 {% block inhalt %}
+{% set reiter = "einkauf" %}{% include "_bereichsreiter.html" %}
 <div class="kopf"><h1>Eingangsrechnungen</h1>
   <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.eingangsrechnungen_postfach') }}">📥 Aus dem Postfach</a><a class="knopf" href="{{ url_for('main.eingangsrechnung_neu', neu=1) }}">+ Erfassen / hochladen</a></div></div>
 <p>Offen zu zahlen: <b>{{ summe_offen|euro }}</b></p>

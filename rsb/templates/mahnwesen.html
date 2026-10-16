@@ -2,9 +2,10 @@
 {% from "_status.html" import csrf, dokname %}
 {% block titel %}Mahnwesen{% endblock %}
 {% block inhalt %}
+{% set reiter = "rechnungen" %}{% include "_bereichsreiter.html" %}
 <div class="kopf">
   <h1>Mahnwesen</h1>
-  <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.offene_posten') }}">Offene Posten</a><a class="knopf zweit" href="{{ url_for('main.einstellungen', bereich='mahnwesen') }}">Fristen, Gebühren &amp; Texte</a></div>
+  <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.einstellungen', bereich='mahnwesen') }}">Fristen, Gebühren &amp; Texte</a></div>
 </div>
 <form method="post" action="{{ url_for('main.mahnungen_erstellen') }}" class="karte">{{ csrf() }}
   <h2>Fällige Schreiben (Vorschlag)</h2>

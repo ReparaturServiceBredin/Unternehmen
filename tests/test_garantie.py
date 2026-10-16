@@ -97,7 +97,7 @@ def test_wiedererkennung_und_garantiefall(client, con):
 
 
 def test_artikel_garantie_und_einstellung(client, con):
-    post(client, "/einstellungen?bereich=annahme", garantie_monate="6", annahme_zubehoer="Ladekabel",
+    post(client, "/einstellungen/annahme", garantie_monate="6", annahme_zubehoer="Ladekabel",
          kva_gebuehren="Sonstige Geräte = 29,00", annahme_datenschutz="", annahme_abholbedingungen="", abholschein_text="")
     assert dbm.einstellungen(con)["garantie_monate"] == 6
     r = post(client, "/artikel/neu", name="Akkutausch iPhone", preis="89,00", teilekosten="30,00", einheit="pauschal",

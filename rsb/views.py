@@ -15,6 +15,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from . import db as dbm
 from . import benachrichtigung as ben
 from . import katalog, logik
+from . import navigation as nav
 from . import lager as lgr
 from .backup import backup_erstellen
 from .hilfen import (EingabeFehler, anrede_brief, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
@@ -662,7 +663,7 @@ from . import einkauf as ek  # noqa: E402
 from . import erechnung as erech  # noqa: E402
 
 
-@bp.route("/lieferanten")
+@bp.route("/einkauf/lieferanten")
 def lieferanten():
     return render_template("lieferanten.html", liste=ek.lieferanten(dbm.get_db()))
 
@@ -712,7 +713,7 @@ def artikel_bezugsquelle(aid):
     return redirect(url_for("main.artikel", aid=aid) + "#bezugsquellen")
 
 
-@bp.route("/bestellungen")
+@bp.route("/einkauf/bestellungen")
 def bestellungen():
     con = dbm.get_db()
     status = request.args.get("status", "offen")
@@ -851,7 +852,7 @@ def _kostenarten():
     return [k.strip() for k in (dbm.einstellung("kostenarten") or "").splitlines() if k.strip()]
 
 
-@bp.route("/eingangsrechnungen")
+@bp.route("/einkauf/eingangsrechnungen")
 def eingangsrechnungen():
     con = dbm.get_db()
     status = request.args.get("status", "offen")
@@ -1186,10 +1187,18 @@ def datev_download(eid):
 
 # ====================================================================== Dokumente
 
-@bp.route("/dokumente")
+@bp.route("/verkauf/rechnungen")
 def dokumente():
+    return _dokumentliste(request.args.get("typ") or "rechnung")
+
+
+@bp.route("/verkauf/kostenvoranschlaege")
+def kostenvoranschlaege():
+    return _dokumentliste("kva")
+
+
+def _dokumentliste(typ):
     status = request.args.get("status", "")
-    typ = request.args.get("typ", "")
     q = request.args.get("q", "").strip()
     sql = ("SELECT d.*, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM dokumente d "
            "LEFT JOIN kunden k ON k.id=d.kunde_id WHERE 1=1")
@@ -1596,10 +1605,16 @@ KOMMAZAHL = {"schriftgroesse", "logo_breite_mm"}
 
 
 @bp.route("/einstellungen", methods=["GET", "POST"])
-def einstellungen():
-    bereich = request.args.get("bereich", "firma")
-    if bereich not in EINSTELLUNGS_BEREICHE and bereich not in ("sicherheit",):
-        bereich = "firma"
+@bp.route("/einstellungen/<bereich>", methods=["GET", "POST"])
+def einstellungen(bereich=None):
+    if bereich is None:  # alte Adresse /einstellungen?bereich=… → /einstellungen/…
+        bereich = request.args.get("bereich") or "firma"
+        if request.method == "GET":
+            weitere = {k: v for k, v in request.args.items() if k != "bereich"}
+            return redirect(url_for("main.einstellungen", bereich=_bereich_gueltig(bereich), **weitere))
+    bereich = _bereich_gueltig(bereich)
+    if request.method == "POST" and bereich == "backup" and "backup_behalten" not in request.form:
+        return backup_jetzt()  # Formular „Backup jetzt erstellen“ aus einer noch offenen alten Seite
     con = dbm.get_db()
     if request.method == "POST" and bereich in EINSTELLUNGS_BEREICHE:
         neu = {}
@@ -1700,11 +1715,51 @@ def einstellungen():
             dbm.protokollieren("einstellungen_geaendert", "einstellungen", None, geaendert, con=con)
         flash("Einstellungen gespeichert.", "ok")
         return redirect(url_for("main.einstellungen", bereich=bereich))
-    return render_template("einstellungen.html", bereich=bereich, schriften=list(SCHRIFTEN),
-                           smtp_passwort_gesetzt=bool(dbm.einstellung("smtp_passwort_enc")),
-                           gesendet_passwort_gesetzt=bool(dbm.einstellung("gesendet_imap_passwort_enc")),
-                           imap_passwort_gesetzt=bool(dbm.einstellung("imap_passwort_enc")),
-                           backups=_backup_liste())
+    return render_template("einstellungen.html", **_einstellungs_werte(bereich), gruppen=nav.EINSTELLUNGS_GRUPPEN,
+                           verwaltung=nav.VERWALTUNG)
+
+
+def _bereich_gueltig(bereich):
+    return bereich if bereich in EINSTELLUNGS_BEREICHE or bereich == "sicherheit" else "firma"
+
+
+def _einstellungs_werte(bereich):
+    return dict(bereich=bereich, bereich_titel=nav.BEREICHS_TITEL.get(bereich, "Einstellungen"),
+                schriften=list(SCHRIFTEN), smtp_passwort_gesetzt=bool(dbm.einstellung("smtp_passwort_enc")),
+                gesendet_passwort_gesetzt=bool(dbm.einstellung("gesendet_imap_passwort_enc")),
+                imap_passwort_gesetzt=bool(dbm.einstellung("imap_passwort_enc")), backups=_backup_liste())
+
+
+_EINSTELLUNGS_INDEX = {}
+
+
+def einstellungs_index():
+    """Alle Abschnitte und Felder der Einstellungen (für die Suche) – aus den gerenderten Seiten gelesen."""
+    if "liste" not in _EINSTELLUNGS_INDEX:
+        from .einstellungs_suche import felder_lesen
+        liste = []
+        for _, eintraege in nav.EINSTELLUNGS_GRUPPEN:
+            for b, titel, _ in eintraege:
+                html = render_template("_einstellungen_inhalt.html", **_einstellungs_werte(b))
+                liste.append({"bereich": b, "bereich_titel": titel, "abschnitt": "", "feld": "", "titel": titel,
+                              "anker": ""})
+                for f in felder_lesen(html):
+                    liste.append({"bereich": b, "bereich_titel": titel, **f})
+        _EINSTELLUNGS_INDEX["liste"] = liste
+    return _EINSTELLUNGS_INDEX["liste"]
+
+
+@bp.route("/einstellungen/suche.json")
+def einstellungen_suche():
+    q = request.args.get("q", "")
+    return jsonify([{**t, "url": url_for("main.einstellungen", bereich=t["bereich"]) + (f"#{t['anker']}" if t["anker"]
+                                                                                     else "")}
+                    for t in einstellungen_treffer(q, 30)])
+
+
+def einstellungen_treffer(q, limit=8):
+    from .einstellungs_suche import passt
+    return [t for t in einstellungs_index() if passt(q, t)][:limit]
 
 
 def _backup_liste():
@@ -1825,7 +1880,7 @@ def passwort_aendern():
     return redirect(url_for("main.einstellungen", bereich="sicherheit"))
 
 
-@bp.route("/einstellungen/backup", methods=["POST"])
+@bp.route("/einstellungen/backup/erstellen", methods=["POST"])
 def backup_jetzt():
     con = dbm.get_db()
     einst = dbm.einstellungen(con)
@@ -2846,7 +2901,7 @@ def zahlung_stornieren(zid):
     return redirect(request.form.get("zurueck") or url_for("main.dokument", did=z["dokument_id"]) + "#zahlungen")
 
 
-@bp.route("/offene-posten")
+@bp.route("/verkauf/offene-posten")
 def offene_posten():
     con = dbm.get_db()
     kunde_id = request.args.get("kunde_id", type=int)
@@ -2861,7 +2916,7 @@ def offene_posten():
                            summe_ueberfaellig=sum(p["s"]["offen"] for p in posten if p["s"]["status"] == "ueberfaellig"))
 
 
-@bp.route("/mahnwesen")
+@bp.route("/verkauf/mahnwesen")
 def mahnwesen():
     from . import mahnwesen as mw
     con = dbm.get_db()
@@ -3798,3 +3853,186 @@ def imap_verbindung_testen():
         return jsonify(ok=True, meldung=verbindung_testen(_gesendet_cfg_aus_formular()))
     except AblageFehler as e:
         return jsonify(ok=False, meldung=str(e))
+
+
+# ====================================================================== Navigation: alte Adressen, Suche, Oberfläche
+
+# Alte Adressen der früheren Einzelseiten → neue Stelle (Lesezeichen und Links bleiben gültig)
+ALTE_ADRESSEN = {
+    "/dokumente": "main.dokumente",
+    "/offene-posten": "main.offene_posten",
+    "/mahnwesen": "main.mahnwesen",
+    "/bestellungen": "main.bestellungen",
+    "/lieferanten": "main.lieferanten",
+    "/eingangsrechnungen": "main.eingangsrechnungen",
+}
+
+
+def _alte_adresse():
+    ziel = ALTE_ADRESSEN[request.url_rule.rule]
+    args = request.args.to_dict(flat=False)
+    if ziel == "main.dokumente":
+        typ = (args.pop("typ", [""]) or [""])[0]
+        ziel = "main.kostenvoranschlaege" if typ == "kva" else ziel
+        if typ == "":
+            args["typ"] = ["alle"]  # früher: alle Arten zusammen
+        elif typ not in ("rechnung", "kva"):
+            args["typ"] = [typ]
+    return redirect(url_for(ziel, **args), 301)
+
+
+for _alt in ALTE_ADRESSEN:
+    bp.add_url_rule(_alt, f"alt_{_alt.strip('/').replace('-', '_')}", _alte_adresse)
+
+
+@bp.route("/leihgeraete/ausgeben")
+def leihe_ausgabe_waehlen():
+    """„+ Neu → Leihgerät ausgeben“: Ein Leihgerät wird immer zu einem Auftrag ausgegeben – hier den Auftrag wählen."""
+    con = dbm.get_db()
+    auftraege = con.execute(AUFTRAG_SQL + "WHERE a.status<>'erledigt' ORDER BY a.eingang_am DESC").fetchall()
+    frei = con.execute("SELECT COUNT(*) FROM leihgeraete WHERE status='verfuegbar'").fetchone()[0]
+    return render_template("leihe_ausgabe_waehlen.html", auftraege=auftraege, frei=frei)
+
+
+def _oberflaeche_schluessel():
+    return f"oberflaeche:{session.get('benutzer') or 'inhaber'}"
+
+
+@bp.route("/oberflaeche", methods=["POST"])
+def oberflaeche_speichern():
+    """Zustand der Oberfläche je Benutzer merken: eingeklappte Gruppen, schmale Seitenleiste, Hell/Dunkel."""
+    daten = request.get_json(silent=True) or {}
+    con = dbm.get_db()
+    zustand = dict(dbm.einstellung(_oberflaeche_schluessel(), con) or {})
+    gruppen = {g.schluessel for g in nav.SEITENLEISTE if g.schluessel}
+    if isinstance(daten.get("zu"), list):
+        zustand["zu"] = [g for g in daten["zu"] if g in gruppen]
+    if "schmal" in daten:
+        zustand["schmal"] = bool(daten["schmal"])
+    if daten.get("design") in ("hell", "dunkel", "auto"):
+        zustand["design"] = daten["design"]
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({_oberflaeche_schluessel(): zustand}, con)
+    return jsonify({"ok": True})
+
+
+@bp.route("/benachrichtigungen/gelesen", methods=["POST"])
+def benachrichtigungen_gelesen():
+    con = dbm.get_db()
+    bid = request.form.get("id", type=int)
+    with dbm.Transaktion(con):
+        if bid:
+            con.execute("UPDATE benachrichtigungen SET gelesen_am=? WHERE id=? AND gelesen_am IS NULL",
+                        (dbm.jetzt_berlin(), bid))
+        else:
+            con.execute("UPDATE benachrichtigungen SET gelesen_am=? WHERE gelesen_am IS NULL", (dbm.jetzt_berlin(),))
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True})
+    return _zurueck(url_for("main.benachrichtigungen"))
+
+
+@bp.route("/benachrichtigungen/<int:bid>/oeffnen")
+def benachrichtigung_oeffnen(bid):
+    con = dbm.get_db()
+    b = con.execute("SELECT * FROM benachrichtigungen WHERE id=?", (bid,)).fetchone() or abort(404)
+    with dbm.Transaktion(con):
+        con.execute("UPDATE benachrichtigungen SET gelesen_am=COALESCE(gelesen_am, ?) WHERE id=?",
+                    (dbm.jetzt_berlin(), bid))
+    return redirect(url_for("main.auftrag", aid=b["auftrag_id"]) + "#benachrichtigung")
+
+
+def _seiten_ziele():
+    """Seiten, Reiter, Schnellaktionen und Verwaltungsseiten für die Schnellsuche."""
+    ziele = []
+    for gruppe, e in nav.alle_eintraege():
+        ziele.append({"titel": e.titel, "unter": gruppe.titel if gruppe else "", "url": url_for(e.endpoint, **e.args),
+                      "symbol": e.symbol, "stichworte": e.stichworte})
+    for haupt, reiter in nav.REITER.items():
+        _, e = nav.eintrag(haupt)
+        for titel, ep_ in reiter[1:]:
+            ziele.append({"titel": titel, "unter": e.titel, "url": url_for(ep_), "symbol": e.symbol, "stichworte": ""})
+    ziele.append({"titel": "Benachrichtigungen", "unter": "Werkstatt", "url": url_for("main.benachrichtigungen"),
+                  "symbol": "bell", "stichworte": "Kundenbenachrichtigung E-Mail SMS Abholung Erinnerung"})
+    for ep_, titel, sym, stichworte in nav.VERWALTUNG:
+        ziele.append({"titel": titel, "unter": "Einstellungen", "url": url_for(ep_), "symbol": sym,
+                      "stichworte": stichworte})
+    return ziele
+
+
+def _rang(q, titel):
+    """Reihenfolge: genauer Treffer, Anfang des Titels, im Titel, nur in Stichworten."""
+    from .einstellungs_suche import normal
+    q, t = normal(q), normal(titel)
+    return 0 if t == q else 1 if t.startswith(q) else 2 if q in t else 3
+
+
+@bp.route("/suche.json")
+def schnellsuche():
+    """Strg+K: Seiten, Einstellungen, Kunden, Aufträge, Rechnungen/KVA, Artikel und Leihgeräte."""
+    from .einstellungs_suche import normal, passt
+    q = request.args.get("q", "").strip()
+    gruppen = []
+    aktionen = [{"titel": t, "url": url_for(ep_, **args), "symbol": sym} for t, ep_, args, sym in nav.NEU]
+    if not q:
+        return jsonify([{"art": "Schnellaktionen", "eintraege": aktionen},
+                        {"art": "Seiten", "eintraege": [z for z in _seiten_ziele() if not z["unter"] == "Einstellungen"
+                                                        ][:9]}])
+    treffer = [a for a in aktionen if passt(q, a, "titel") or normal(q) in ("neu", "neue", "neuer")]
+    if treffer:
+        gruppen.append({"art": "Schnellaktionen", "eintraege": treffer})
+    seiten = sorted((z for z in _seiten_ziele() if passt(q, z, "titel", "unter", "stichworte")),
+                    key=lambda z: _rang(q, z["titel"]))
+    if seiten:
+        gruppen.append({"art": "Seiten", "eintraege": seiten[:8]})
+    einst = sorted(einstellungen_treffer(q, 30), key=lambda t: _rang(q, t["titel"]))[:6]
+    if einst:
+        gruppen.append({"art": "Einstellungen", "eintraege": [
+            {"titel": t["titel"], "unter": " › ".join(x for x in (t["bereich_titel"], t["abschnitt"]) if x and
+                                                       x != t["titel"]),
+             "url": url_for("main.einstellungen", bereich=t["bereich"]) + (f"#{t['anker']}" if t["anker"] else ""),
+             "symbol": "settings"} for t in einst]})
+    con = dbm.get_db()
+    muster = f"%{q}%"
+    ziffern = re.sub(r"\D", "", q)
+    tel = f"%{ziffern}%" if len(ziffern) >= 4 else "\x00"
+    daten = [
+        ("Kunden", "users", con.execute(
+            "SELECT * FROM kunden WHERE anonymisiert_am IS NULL AND (kundennr LIKE :m OR firma LIKE :m OR "
+            "vorname LIKE :m OR nachname LIKE :m OR (vorname || ' ' || nachname) LIKE :m OR email LIKE :m OR "
+            "replace(replace(replace(replace(COALESCE(telefon,''),' ',''),'/',''),'-',''),'+49','0') LIKE :t) "
+            "ORDER BY archiviert, geaendert_am DESC LIMIT 6", {"m": muster, "t": tel}).fetchall(),
+         lambda k: (kunde_name(k), " · ".join(x for x in (k["kundennr"], k["email"], k["telefon"]) if x),
+                    url_for("main.kunde", kid=k["id"]))),
+        ("Aufträge", "wrench", con.execute(
+            "SELECT a.*, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM auftraege a JOIN kunden k "
+            "ON k.id=a.kunde_id WHERE a.auftragsnr LIKE :m OR a.geraet LIKE :m OR a.seriennummer LIKE :m "
+            "ORDER BY a.eingang_am DESC LIMIT 6", {"m": muster}).fetchall(),
+         lambda a: (f"{a['auftragsnr']} · {a['geraet'] or ''}", " · ".join(
+             x for x in (_kname(a), a["seriennummer"], auf.STATUS.get(a["status"], a["status"])) if x),
+                    url_for("main.auftrag", aid=a["id"]))),
+        ("Rechnungen & KVA", "receipt", con.execute(
+            "SELECT d.*, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM dokumente d LEFT JOIN kunden k "
+            "ON k.id=d.kunde_id WHERE d.nummer LIKE :m OR d.betreff LIKE :m ORDER BY d.datum DESC, d.id DESC LIMIT 6",
+            {"m": muster}).fetchall(),
+         lambda d: (f"{d['nummer'] or 'Entwurf'} · {d['betreff'] or ''}",
+                    " · ".join(x for x in ({"rechnung": "Rechnung", "kva": "KVA", "storno": "Storno",
+                                            "gutschrift": "Gutschrift"}.get(d["typ"], d["typ"]),
+                                           kunde_name({**dict(d), "typ": d["ktyp"]}) if d["kunde_id"] else "",
+                                           euro(d["summe_brutto"])) if x),
+                    url_for("main.dokument", did=d["id"]))),
+        ("Leistungen & Artikel", "tag", con.execute(
+            "SELECT * FROM artikel WHERE name LIKE :m OR artikelnr LIKE :m OR ean LIKE :m OR herstellernr LIKE :m "
+            "ORDER BY aktiv DESC, name LIMIT 6", {"m": muster}).fetchall(),
+         lambda a: (a["name"], " · ".join(x for x in (a["artikelnr"], euro(a["preis"])) if x),
+                    url_for("main.artikel", aid=a["id"]))),
+        ("Leihgeräte", "laptop", con.execute(
+            "SELECT * FROM leihgeraete WHERE bezeichnung LIKE :m OR inventarnr LIKE :m OR seriennummer LIKE :m "
+            "ORDER BY bezeichnung LIMIT 6", {"m": muster}).fetchall(),
+         lambda g: (g["bezeichnung"], " · ".join(x for x in (g["inventarnr"], g["seriennummer"]) if x),
+                    url_for("main.leihgeraet", gid=g["id"]))),
+    ]
+    for art, sym, zeilen, form in daten:
+        if zeilen:
+            gruppen.append({"art": art, "eintraege": [dict(zip(("titel", "unter", "url"), form(z)), symbol=sym)
+                                                      for z in zeilen]})
+    return jsonify(gruppen)

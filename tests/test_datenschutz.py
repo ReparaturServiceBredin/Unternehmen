@@ -217,7 +217,7 @@ def test_verzeichnis_und_einstellungen(client, con):
     assert "Verarbeitungstätigkeiten" in seite and "Gerätezugangsdaten" in seite and "1 Kunden" in seite
     assert "Ende des Kalenderjahres der Abholung" in seite
     assert client.get("/datenschutz/verzeichnis?pdf=1").data.startswith(b"%PDF")
-    post(client, "/einstellungen?bereich=datenschutz", ds_auto="1", interessent_loeschen_monate="6",
+    post(client, "/einstellungen/datenschutz", ds_auto="1", interessent_loeschen_monate="6",
          ds_kunde_inaktiv_jahre="0", ds_fotos_jahre="4", ds_leihe_jahre="5", ds_vorschau_tage="14", ds_zugang_tage="60",
          ds_email_jahre="0", ds_verantwortlicher="")
     e = dbm.einstellungen(con)

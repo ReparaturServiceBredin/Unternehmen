@@ -1,16 +1,15 @@
 {% extends "base.html" %}
 {% from "_status.html" import status, dokname %}
-{% block titel %}Rechnungen & KVA{% endblock %}
+{% block titel %}{{ {"kva": "Kostenvoranschläge", "alle": "Alle Belege"}.get(typ, "Rechnungen") }}{% endblock %}
 {% block inhalt %}
+{% set reiter = "rechnungen" %}{% include "_bereichsreiter.html" %}
 <div class="kopf">
-  <h1>Rechnungen &amp; Kostenvoranschläge</h1>
+  <h1>{{ {"kva": "Kostenvoranschläge", "alle": "Alle Belege"}.get(typ, "Rechnungen") }}</h1>
   <div class="leiste">
     <form class="leiste" method="get">
-      <select name="typ" onchange="this.form.submit()" style="width:auto">
-        {% for t, n in [('','Alle Arten'),('rechnung','Rechnungen'),('kva','Kostenvoranschläge')] %}<option value="{{ t }}" {{ 'selected' if typ == t }}>{{ n }}</option>{% endfor %}
-      </select>
+      {% if typ == 'alle' %}<input type="hidden" name="typ" value="alle">{% endif %}
       <select name="status" onchange="this.form.submit()" style="width:auto">
-        <option value="">Alle</option>
+        <option value="">Alle Status</option>
         {% for s, t in [('entwurf','Entwürfe'),('festgeschrieben','Festgeschrieben'),('storniert','Storniert')] %}
         <option value="{{ s }}" {{ 'selected' if status == s }}>{{ t }}</option>{% endfor %}
       </select>
@@ -37,4 +36,5 @@
   {% else %}<tr><td colspan="9" class="klein">Keine Dokumente gefunden.</td></tr>{% endfor %}
 </table>
 </div>
+<p class="klein">{% if typ == 'alle' %}<a href="{{ url_for('main.dokumente') }}">Nur Rechnungen, Stornos und Gutschriften anzeigen</a>{% else %}<a href="{{ url_for('main.dokumente', typ='alle') }}">Alle Belege zusammen anzeigen (Rechnungen und Kostenvoranschläge)</a>{% endif %}</p>
 {% endblock %}

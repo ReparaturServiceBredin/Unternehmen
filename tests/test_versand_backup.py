@@ -29,7 +29,7 @@ class FalscherServer:
 
 def test_email_versand_mit_protokoll(client, con, app, monkeypatch):
     monkeypatch.setattr("rsb.mail.smtplib.SMTP", FalscherServer)
-    post(client, "/einstellungen?bereich=email", smtp_host="smtp.example.com", smtp_port="587",
+    post(client, "/einstellungen/email", smtp_host="smtp.example.com", smtp_port="587",
          smtp_sicherheit="starttls", smtp_benutzer="kontakt@reparatur-bredin.de", smtp_passwort="SuperGeheim!",
          absender_name="Reparatur Service Bredin", absender_email="kontakt@reparatur-bredin.de", bcc_an_mich="on")
     gespeichert = dbm.einstellungen(con)["smtp_passwort_enc"]

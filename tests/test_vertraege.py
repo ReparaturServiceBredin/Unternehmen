@@ -116,7 +116,7 @@ def test_seiten(client, con):
     vid = vertrag_anlegen(client, kid)
     for url in ["/vertraege", "/vertraege?filter=alle", "/vertraege?filter=gekuendigt", f"/vertraege/{vid}",
                 f"/vertraege/neu?kunde_id={kid}", "/vertragsarten", "/vertragsarten?neu=1", "/vertragsarten/1",
-                f"/kunden/{kid}", "/", "/einstellungen?bereich=vertraege"]:
+                f"/kunden/{kid}", "/", "/einstellungen/vertraege"]:
         assert client.get(url).status_code == 200, url
     post(client, "/vertragsarten", name="ESET Internet Security 3 Geräte", kategorie="Lizenz", abrechnung="laufzeit",
          laufzeit_monate="12", preis="59,90", einkauf="35,00", aktiv="on", beschreibung="")

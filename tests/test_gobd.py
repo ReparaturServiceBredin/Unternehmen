@@ -182,11 +182,11 @@ def test_einstellungen_und_verfahrensdoku(client, con):
                  nummern_format="{praefix}-{jahr}-{nummer:04d}", praefix_rechnung="RE", praefix_gutschrift="GS",
                  praefix_angebot="KV", praefix_kunde="K", leistungsarten="Smartphone",
                  aufbewahrung_belege_jahre="8", aufbewahrung_briefe_jahre="6")
-    post(client, "/einstellungen?bereich=rechnung", **{**basis, "aufbewahrung_belege_jahre": "5"})
+    post(client, "/einstellungen/rechnung", **{**basis, "aufbewahrung_belege_jahre": "5"})
     assert dbm.einstellungen(con)["aufbewahrung_belege_jahre"] == 8
-    post(client, "/einstellungen?bereich=rechnung", **{**basis, "praefix_gutschrift": "re"})
+    post(client, "/einstellungen/rechnung", **{**basis, "praefix_gutschrift": "re"})
     assert dbm.einstellungen(con)["praefix_gutschrift"] == "GS"
-    post(client, "/einstellungen?bereich=rechnung", **{**basis, "aufbewahrung_belege_jahre": "10"})
+    post(client, "/einstellungen/rechnung", **{**basis, "aufbewahrung_belege_jahre": "10"})
     assert dbm.einstellungen(con)["aufbewahrung_belege_jahre"] == 10
     seite = client.get("/verfahrensdokumentation").get_data(as_text=True)
     for t in ["Verfahrensdokumentation", "Festschreiben", "SHA-256", "10 Jahre", "bitte ergänzen", "65001/12345"]:

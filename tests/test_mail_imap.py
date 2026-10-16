@@ -190,7 +190,7 @@ def test_einstellungen_imap_ordner_und_test(client, con, mailserver):
                                                        "gesendet_imap_host": "nicht.erreichbar"}).get_json()
     assert not j["ok"] and "nicht erreichbar" in j["meldung"]
     # Speichern inkl. eigenem, verschlüsseltem IMAP-Passwort
-    post(client, "/einstellungen?bereich=email", smtp_host="smtp.ionos.de", smtp_port="587", smtp_sicherheit="starttls",
+    post(client, "/einstellungen/email", smtp_host="smtp.ionos.de", smtp_port="587", smtp_sicherheit="starttls",
          smtp_benutzer="kontakt@reparatur-bredin.de", absender_name="RSB", absender_email="kontakt@reparatur-bredin.de",
          gesendet_aktiv="on", gesendet_imap_host="imap.ionos.de", gesendet_imap_port="993",
          gesendet_imap_sicherheit="ssl", gesendet_imap_benutzer="ich@ionos.de", gesendet_imap_passwort="PW123",
@@ -198,4 +198,4 @@ def test_einstellungen_imap_ordner_und_test(client, con, mailserver):
     e = dbm.einstellungen(con)
     assert e["gesendet_aktiv"] is True and e["gesendet_gleiche_zugangsdaten"] is False
     assert e["gesendet_imap_passwort_enc"] and "PW123" not in e["gesendet_imap_passwort_enc"]
-    assert client.get("/einstellungen?bereich=email").status_code == 200
+    assert client.get("/einstellungen/email").status_code == 200

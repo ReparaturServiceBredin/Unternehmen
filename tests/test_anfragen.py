@@ -183,7 +183,7 @@ def test_oberflaeche(client, con):
     a = con.execute("SELECT * FROM anfragen WHERE id=?", (aid,)).fetchone()
     assert a["einstufung"] == "echt" and a["kunde_id"]
     for url in ["/anfragen", "/anfragen?filter=spam", f"/anfragen/{aid}", "/anfragen/einfuegen",
-                "/einstellungen?bereich=anfragen", f"/kunden/{a['kunde_id']}", "/kunden?interessenten=1", "/"]:
+                "/einstellungen/anfragen", f"/kunden/{a['kunde_id']}", "/kunden?interessenten=1", "/"]:
         assert client.get(url).status_code == 200, url
     # unsichere Anfrage manuell übernehmen mit korrigiertem Namen
     r = post(client, "/anfragen/einfuegen", text="Name\nTom\nEmail\ntom@gmx.de\nNachricht\nHallo")
@@ -193,7 +193,7 @@ def test_oberflaeche(client, con):
     k = con.execute("SELECT k.* FROM kunden k JOIN anfragen a ON a.kunde_id=k.id WHERE a.id=?", (aid2,)).fetchone()
     assert (k["vorname"], k["nachname"]) == ("Tom", "Becker")
     # Speichern in Einstellungen
-    r = post(client, "/einstellungen?bereich=anfragen", anfragen_aktiv="on", anfragen_intervall_min="5",
+    r = post(client, "/einstellungen/anfragen", anfragen_aktiv="on", anfragen_intervall_min="5",
              imap_host="imap.ionos.de", imap_port="993", imap_benutzer="", imap_ordner="INBOX",
              imap_zielordner="Anfragen erledigt", imap_verschieben="on", anfrage_erkennung="A new form",
              anfrage_auto_kunde="on", anfrage_schwelle_unsicher="2", anfrage_schwelle_spam="5",

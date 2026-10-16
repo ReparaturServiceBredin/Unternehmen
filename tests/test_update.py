@@ -99,7 +99,7 @@ def test_oberflaeche_update_pruefen(client, server, monkeypatch):
     url, _ = server
     monkeypatch.setattr(update, "API_URL", url + "/latest")
     post(client, "/update/pruefen")
-    seite = client.get("/einstellungen?bereich=programm").get_data(as_text=True)
+    seite = client.get("/einstellungen/programm").get_data(as_text=True)
     assert "Neue Version 9.9.0" in seite
     assert "Neue Programmversion 9.9.0" in client.get("/kunden").get_data(as_text=True)
     assert client.get("/version").get_json()["version"]
@@ -111,7 +111,7 @@ def test_oberflaeche_update_pruefen(client, server, monkeypatch):
 def test_offline(client, monkeypatch):
     monkeypatch.setattr(update, "API_URL", "http://127.0.0.1:9/gibtsnicht")
     post(client, "/update/pruefen")
-    assert "nicht erreichbar" in client.get("/einstellungen?bereich=programm").get_data(as_text=True)
+    assert "nicht erreichbar" in client.get("/einstellungen/programm").get_data(as_text=True)
 
 
 def test_versionsprotokoll(client):

@@ -178,11 +178,11 @@ def test_datev_regelbesteuerung_und_storno(client, con):
     z = datev.buchungen(con, HEUTE[:4] + "-01-01", HEUTE)
     assert sorted(x["betrag"] for x in z) == [-11900, 11900]
     # Einstellungen
-    r = post(client, "/einstellungen?bereich=datev", datev_beraternr="12a", datev_mandantennr="1", datev_skr="03",
+    r = post(client, "/einstellungen/datev", datev_beraternr="12a", datev_mandantennr="1", datev_skr="03",
              datev_wj_beginn="01-01", datev_kontenlaenge="4", datev_debitor_start="10000", datev_kreditor_start="70000",
              datev_konten="", datev_kostenarten="")
     assert dbm.einstellungen(con)["datev_beraternr"] == ""  # Buchstaben abgelehnt
-    post(client, "/einstellungen?bereich=datev", datev_beraternr="1234567", datev_mandantennr="1", datev_skr="03",
+    post(client, "/einstellungen/datev", datev_beraternr="1234567", datev_mandantennr="1", datev_skr="03",
          datev_wj_beginn="01-01", datev_kontenlaenge="4", datev_debitor_start="10000", datev_kreditor_start="70000",
          datev_konten="bank=1210", datev_kostenarten="")
     assert datev.konten(dbm.einstellungen(con))[0]["bank"] == "1210"

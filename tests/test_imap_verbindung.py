@@ -211,10 +211,10 @@ def test_knopf_verbindung_testen(client, con, monkeypatch):
     j = client.post("/einstellungen/anfragen/imap-test", data=basis).get_json()
     assert not j["ok"] and "kein STARTTLS" in j["meldung"]
     # Speichern der Auswahl
-    post(client, "/einstellungen?bereich=anfragen", anfragen_intervall_min="5", imap_host="imap.ionos.de",
+    post(client, "/einstellungen/anfragen", anfragen_intervall_min="5", imap_host="imap.ionos.de",
          imap_port="143", imap_sicherheit="starttls", imap_ordner="INBOX", imap_zielordner="Anfragen erledigt",
          anfrage_schwelle_unsicher="2", anfrage_schwelle_spam="5", anfrage_namensreihenfolge="auto",
          interessent_loeschen_monate="6")
     assert dbm.einstellungen(con)["imap_sicherheit"] == "starttls"
-    seite = client.get("/einstellungen?bereich=anfragen").get_data(as_text=True)
+    seite = client.get("/einstellungen/anfragen").get_data(as_text=True)
     assert "STARTTLS (meist Port 143)" in seite and "Verbindung testen" in seite

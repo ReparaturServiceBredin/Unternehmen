@@ -7,10 +7,11 @@ from pathlib import Path
 from flask import abort, Flask, flash, redirect, request, session, url_for
 
 from . import db as dbm
+from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.21.0"
+VERSION_NUMMER = "0.22.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
@@ -126,14 +127,31 @@ def create_app(daten_dir=None, testing=False):
             lager_unter_min = unter_mindestbestand_anzahl(dbm.get_db())
             benachrichtigungen_offen = dbm.get_db().execute(
                 "SELECT COUNT(*) FROM benachrichtigungen WHERE status IN ('offen', 'fehler')").fetchone()[0]
+            offene_auftraege = dbm.get_db().execute(
+                "SELECT COUNT(*) FROM auftraege WHERE status<>'erledigt'").fetchone()[0]
+            glocke = dbm.get_db().execute(
+                "SELECT b.*, a.auftragsnr, a.geraet FROM benachrichtigungen b JOIN auftraege a ON a.id=b.auftrag_id "
+                "WHERE b.status<>'verworfen' ORDER BY (b.gelesen_am IS NULL AND b.status IN ('offen', 'fehler')) DESC, "
+                "b.id DESC LIMIT 8").fetchall()
+            glocke_ungelesen = dbm.get_db().execute(
+                "SELECT COUNT(*) FROM benachrichtigungen WHERE gelesen_am IS NULL AND status IN ('offen', 'fehler')"
+            ).fetchone()[0]
+            ui = einst.get(f"oberflaeche:{session.get('benutzer') or 'inhaber'}") or {}
         except Exception:
             einst, offene_anfragen, leihen_ueberfaellig, posten_ueberfaellig = {}, 0, 0, 0
-            benachrichtigungen_offen = lager_unter_min = 0
+            benachrichtigungen_offen = lager_unter_min = offene_auftraege = glocke_ungelesen = 0
+            glocke, ui = [], {}
         from .update import ist_exe, ist_neuer
         update_da = einst.get("update_verfuegbar") if ist_neuer(einst.get("update_verfuegbar"), VERSION_NUMMER) \
             else None
         return {"einst": einst, "offene_anfragen": offene_anfragen, "leihen_ueberfaellig": leihen_ueberfaellig,
-                "posten_ueberfaellig": posten_ueberfaellig, "benachrichtigungen_offen": benachrichtigungen_offen, "lager_unter_min": lager_unter_min, "update_da": update_da, "ist_exe": ist_exe()}
+                "posten_ueberfaellig": posten_ueberfaellig, "benachrichtigungen_offen": benachrichtigungen_offen,
+                "lager_unter_min": lager_unter_min, "offene_auftraege": offene_auftraege, "glocke": glocke,
+                "glocke_ungelesen": glocke_ungelesen, "ui": ui, "nav": navigation,
+                "zaehler": {"offene_anfragen": offene_anfragen, "offene_auftraege": offene_auftraege,
+                            "leihen_ueberfaellig": leihen_ueberfaellig, "posten_ueberfaellig": posten_ueberfaellig,
+                            "lager_unter_min": lager_unter_min},
+                "update_da": update_da, "ist_exe": ist_exe()}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

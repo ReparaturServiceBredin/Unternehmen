@@ -291,7 +291,7 @@ def test_abrechnung_in_vorhandenen_entwurf_und_entwurf_loeschen(client, con, bas
 
 def test_storno_email_einstellungen(client, con, basis, monkeypatch):
     kid, aid, gid = basis
-    post(client, "/einstellungen?bereich=leihgeraete", leihbedingungen="Eigene Bedingung für {firma}.")
+    post(client, "/einstellungen/leihgeraete", leihbedingungen="Eigene Bedingung für {firma}.")
     lid, _, _ = ausgeben(client, aid, gid)
     assert "Eigene Bedingung für Reparatur Service Bredin." in pdf_text(client.get(f"/leihen/{lid}/ausgabe.pdf").data)
     from rsb import views
@@ -316,7 +316,7 @@ def test_seiten_laden(client, con, basis):
     lid, _, _ = ausgeben(client, aid, gid)
     for url in ["/leihgeraete", "/leihgeraete?status=alle", "/leihgeraete/neu", f"/leihgeraete/{gid}",
                 f"/leihen/{lid}", f"/leihen/{lid}/rueckgabe", f"/leihen/{lid}/email?art=ausgabe",
-                f"/auftraege/{aid}", "/einstellungen?bereich=leihgeraete", f"/kunden/{kid}"]:
+                f"/auftraege/{aid}", "/einstellungen/leihgeraete", f"/kunden/{kid}"]:
         assert client.get(url).status_code == 200, url
 
 

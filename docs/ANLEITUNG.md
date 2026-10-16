@@ -7,8 +7,32 @@
    (einschaltbar unter *Einstellungen → Passwortschutz*).
 2. **Einstellungen → Firmendaten:** Anschrift, Telefon, Steuernummer, Bank und IBAN eintragen.
    Diese Angaben erscheinen in der Fußzeile jeder Rechnung.
-3. **Einstellungen → E-Mail:** Den Zugang zu Ihrem Postfach eintragen und mit „Test-E-Mail senden“ prüfen.
+3. **Einstellungen → E-Mail (Versand und IMAP):** Den Zugang zu Ihrem Postfach eintragen und mit „Test-E-Mail senden“ prüfen.
 4. **Leistungen & Artikel:** Ihre Festpreise anlegen, z. B. „Kaffeemaschinen-Wartung“ für 89 €.
+
+### Bedienung: Menü, Schnellsuche, Benachrichtigungen
+
+- **Menü links**, in Gruppen: Werkstatt, Kunden, Verkauf, Einkauf & Lager, Buchhaltung.
+  - Eine Gruppe klappen Sie per Klick auf die Überschrift ein und aus. Das Programm merkt sich das. Die Gruppe der
+    gerade geöffneten Seite ist immer offen.
+  - „Seitenleiste einklappen“ (unten) zeigt nur noch Symbole. Fahren Sie mit der Maus über ein Symbol, erscheint der
+    Name.
+  - Am Handy öffnen Sie das Menü über ☰ oben links.
+- **Zusammengefasste Seiten mit Reitern:**
+  - *Rechnungen*: Rechnungen, Kostenvoranschläge, Offene Posten, Mahnwesen.
+  - *Einkauf*: Bestellungen, Lieferanten, Eingangsrechnungen.
+- **Schnellsuche:** Oben „Suchen oder springen …“ oder **Strg+K**. Gefunden werden Seiten, Einstellungen (z. B.
+  „SMTP“, „Backup“), Kunden (Name, E-Mail, Telefon), Aufträge (Nummer, Gerät, Seriennummer), Rechnungen und KVAs
+  (Nummer), Artikel und Leihgeräte. Mit ↑/↓ wählen, mit Enter öffnen.
+- **+ Neu** (oben rechts): Auftrag, Kunde, KVA, Rechnung, Leihgerät ausgeben.
+- **Glocke:** Die letzten Kundenbenachrichtigungen. Die Zahl nennt Vorschläge und Fehler, die Sie noch nicht angesehen
+  haben. „Alle als gelesen“ setzt sie zurück; die Vorschläge warten trotzdem weiter auf Ihre Freigabe.
+- **Mond/Sonne:** Hell oder dunkel, wird gemerkt.
+- **Einstellungen:** Links die Bereiche, oben ein Suchfeld (z. B. „IMAP“ springt zum Feld und hebt es hervor).
+  - Der Knopf „Speichern“ bleibt unten sichtbar.
+  - Wollen Sie eine Seite mit ungespeicherten Änderungen verlassen, fragt das Programm nach.
+  - Textbausteine, Datenschutz-Übersicht, Protokoll, Datenprüfung, Verfahrensdokumentation und Versionsprotokoll
+    finden Sie dort unter „Verwaltung & Prüfung“.
 
 ## 2. Eine Rechnung schreiben
 
@@ -38,7 +62,7 @@ Löschen oder Ändern ist absichtlich nicht möglich (siehe GoBD). So gehen Sie 
 
 ## 3. Layout ändern (ohne Programmierung)
 
-Unter **Einstellungen → Layout** zeigt rechts eine Musterrechnung, wie das Ergebnis aussieht.
+Unter **Einstellungen → Layout & Dokumente** zeigt rechts eine Musterrechnung, wie das Ergebnis aussieht.
 
 | Einstellung | Wirkung |
 |---|---|
@@ -387,7 +411,7 @@ von welchem auf welchen Wert geändert hat.
 **Kunden löschen:** Unter „Datenschutz“ beim Kunden auf „Löschen …“ klicken. Sie sehen vorher, was gelöscht und was
 wegen Aufbewahrungspflicht bis wann behalten wird. Bei Aufbewahrungspflicht werden die Stammdaten anonymisiert.
 
-**Verfahrensdokumentation:** Menü *Verwaltung → Verfahrensdoku*. Ausdrucken, die markierten Stellen ergänzen und mit
+**Verfahrensdokumentation:** *Einstellungen → Verwaltung & Prüfung → Verfahrensdokumentation*. Ausdrucken, die markierten Stellen ergänzen und mit
 dem Steuerberater durchgehen.
 
 ## 17. Zahlungen, offene Posten, Bankabgleich und Mahnwesen
@@ -396,7 +420,7 @@ dem Steuerberater durchgehen.
 Betrag ist vorbelegt), Zahlungsart. Teilzahlungen gehen genauso. Eine falsch erfasste Zahlung stornieren Sie mit
 Begründung; gelöscht wird sie nie.
 
-**Offene Posten:** Menü *Verkauf → Offene Posten*. Dort sehen Sie, was offen und was überfällig ist, gefiltert nach
+**Offene Posten:** Menü *Verkauf → Rechnungen*, Reiter *Offene Posten*. Dort sehen Sie, was offen und was überfällig ist, gefiltert nach
 Kunde. Beim Kunden stehen offene Beträge und alle Zahlungen.
 
 **Bankabgleich:** Im Online-Banking die Umsätze als CSV exportieren (bei der Sparkasse „CSV-CAMT“) oder als CAMT.053.

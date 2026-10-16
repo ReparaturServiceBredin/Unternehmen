@@ -378,6 +378,7 @@ MIGRATIONEN = [
     ("auftraege", "garantie_ende", "TEXT"),
     ("auftraege", "geraetetyp", "TEXT"),
     ("leihen", "protokoll_geloescht_am", "TEXT"),
+    ("benachrichtigungen", "gelesen_am", "TEXT"),
     ("loeschprotokolle", "frist", "TEXT"),
 ]
 
