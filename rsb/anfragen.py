@@ -18,7 +18,7 @@ from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 
 from . import db as dbm
-from .hilfen import kunde_name
+from .hilfen import heute_datum, kunde_name
 from .namen import VORNAMEN
 from .sicherheit import entschluesseln
 
@@ -343,12 +343,16 @@ def schoen(text):
 
 # ------------------------------------------------------------------ Verarbeiten
 
-def verarbeiten(con, text, einst, quelle="email", message_id=None, absender=None, betreff=None, eingang=None):
+def verarbeiten(con, text, einst, quelle="email", message_id=None, absender=None, betreff=None, eingang=None,
+                auto_kunde=True):
     """Legt eine Anfrage an, bewertet sie und legt bei echten Anfragen den Kunden an.
 
-    Gibt die ID der Anfrage zurück, oder None, wenn sie schon vorhanden war.
+    Mit auto_kunde=False wird nie automatisch ein Kunde angelegt (die Anfrage wartet unter „Zu prüfen“).
+    Gibt die ID der Anfrage zurück, oder None, wenn sie schon vorhanden war oder früher gelöscht wurde.
     """
-    if message_id and con.execute("SELECT 1 FROM anfragen WHERE message_id=?", (message_id,)).fetchone():
+    if message_id and con.execute("SELECT 1 FROM anfragen WHERE message_id=? UNION ALL "
+                                  "SELECT 1 FROM anfragen_entfernt WHERE message_id=?",
+                                  (message_id, message_id)).fetchone():
         return None
     felder = felder_auslesen(text)
     punkte, gruende, stufe = bewerten(felder, int(einst["anfrage_schwelle_unsicher"]),
@@ -368,7 +372,7 @@ def verarbeiten(con, text, einst, quelle="email", message_id=None, absender=None
              json.dumps(gruende, ensure_ascii=False), stufe))
         aid = cur.lastrowid
         dbm.protokollieren("anfrage_eingegangen", "anfrage", aid, {"einstufung": stufe, "punkte": punkte}, con=con)
-        if stufe == "echt" and einst.get("anfrage_auto_kunde"):
+        if stufe == "echt" and einst.get("anfrage_auto_kunde") and auto_kunde:
             kunde_aus_anfrage(con, aid, einst)
     return aid
 
@@ -420,6 +424,38 @@ def kunde_aus_anfrage(con, anfrage_id, einst, vorname=None, nachname=None):
                 (kid, dbm.jetzt(), anfrage_id))
     dbm.protokollieren("kunde_aus_anfrage", "kunde", kid, {"kundennr": nr, "anfrage": anfrage_id}, con=con)
     return kid, True
+
+
+def ohne_kunde_zuruecksetzen(con):
+    """Anfragen, deren Kunde nicht mehr existiert, wieder auf „Zu prüfen“ setzen. Gibt die Anzahl zurück."""
+    with dbm.Transaktion(con):
+        ids = [r[0] for r in con.execute(
+            "SELECT id FROM anfragen WHERE status IN ('kunde_angelegt','zugeordnet') "
+            "AND (kunde_id IS NULL OR kunde_id NOT IN (SELECT id FROM kunden))")]
+        for aid in ids:
+            con.execute("UPDATE anfragen SET status='neu', kunde_id=NULL, bearbeitet_am=? WHERE id=?",
+                        (dbm.jetzt(), aid))
+            dbm.protokollieren("anfrage_ohne_kunde", "anfrage", aid, "Kunde fehlt, wieder zu prüfen", con=con)
+    return len(ids)
+
+
+def bestaetigen(con, einst, anfrage_ids):
+    """Legt für die ausgewählten offenen Anfragen Kunden an bzw. ordnet sie vorhandenen zu.
+
+    Spam, verworfene und bereits erledigte Anfragen werden übergangen. Gibt (angelegt, zugeordnet) zurück.
+    """
+    angelegt = zugeordnet = 0
+    with dbm.Transaktion(con):
+        for aid in anfrage_ids:
+            a = con.execute("SELECT * FROM anfragen WHERE id=?", (aid,)).fetchone()
+            if not a or a["status"] != "neu" or a["kunde_id"] or a["einstufung"] == "spam":
+                continue
+            _, neu = kunde_aus_anfrage(con, aid, einst)
+            if neu:
+                angelegt += 1
+            else:
+                zugeordnet += 1
+    return angelegt, zugeordnet
 
 
 def aufraeumen(con, einst):
@@ -511,43 +547,50 @@ def verbindung_testen(einst, ueberschreiben=None, imap_klasse=None, imap_plain=N
     return ok, zeilen
 
 
+def _ordner_lesen(con, imap, einst, suche, ergebnis, host, ordner_kennung="", auto_kunde=True):
+    """Verarbeitet die Formular-E-Mails im ausgewählten Ordner. Gibt die UIDs der Formular-E-Mails zurück."""
+    erkennung = (einst.get("anfrage_erkennung") or "").strip().lower()
+    typ, daten = imap.uid("SEARCH", None, suche)
+    uids = daten[0].split() if typ == "OK" and daten and daten[0] else []
+    formular_uids = []
+    for uid in uids:
+        typ, teile = imap.uid("FETCH", uid, "(BODY.PEEK[])")
+        if typ != "OK" or not teile or not isinstance(teile[0], tuple):
+            continue
+        ergebnis["gelesen"] += 1
+        nachricht = email.message_from_bytes(teile[0][1], policy=email.policy.default)
+        text = mail_text(nachricht)
+        if erkennung and erkennung not in text.lower():
+            continue  # keine Formular-E-Mail -> nicht anfassen
+        message_id = (nachricht.get("Message-ID") or "").strip() or f"uid-{ordner_kennung}{uid.decode()}-{host}"
+        try:
+            eingang = parsedate_to_datetime(nachricht.get("Date")).astimezone().replace(tzinfo=None)
+            eingang = eingang.isoformat(timespec="seconds")
+        except (TypeError, ValueError):
+            eingang = None
+        aid = verarbeiten(con, text, einst, "email", message_id, _kopf(nachricht.get("From")),
+                          _kopf(nachricht.get("Subject")), eingang, auto_kunde=auto_kunde)
+        if aid:
+            ergebnis["neu"] += 1
+            stufe = con.execute("SELECT einstufung FROM anfragen WHERE id=?", (aid,)).fetchone()[0]
+            ergebnis[stufe] += 1
+        else:
+            ergebnis["bekannt"] += 1
+        formular_uids.append(uid)
+    return formular_uids
+
+
 def abrufen(con, einst, imap_klasse=None, imap_plain=None):
     """Holt Formular-E-Mails aus dem Postfach. Gibt eine Zusammenfassung zurück."""
     zugang = imap_zugang(einst)
-    host = zugang["host"]
-    erkennung = (einst.get("anfrage_erkennung") or "").strip().lower()
-    ergebnis = {"gelesen": 0, "neu": 0, "echt": 0, "unsicher": 0, "spam": 0, "verschoben": 0}
+    ergebnis = {"gelesen": 0, "neu": 0, "echt": 0, "unsicher": 0, "spam": 0, "bekannt": 0, "verschoben": 0}
     imap = imap_anmelden(zugang, imap_klasse, imap_plain)
     try:
         typ, _ = imap.select(_imap_ordnername(einst.get("imap_ordner") or "INBOX"))
         if typ != "OK":
             raise AbrufFehler(f"Ordner „{einst.get('imap_ordner')}“ nicht gefunden.")
         seit = (datetime.now() - timedelta(days=60)).strftime("%d-%b-%Y")
-        typ, daten = imap.uid("SEARCH", None, f"SINCE {seit}")
-        uids = daten[0].split() if typ == "OK" and daten and daten[0] else []
-        zum_verschieben = []
-        for uid in uids:
-            typ, teile = imap.uid("FETCH", uid, "(BODY.PEEK[])")
-            if typ != "OK" or not teile or not isinstance(teile[0], tuple):
-                continue
-            ergebnis["gelesen"] += 1
-            nachricht = email.message_from_bytes(teile[0][1], policy=email.policy.default)
-            text = mail_text(nachricht)
-            if erkennung and erkennung not in text.lower():
-                continue  # keine Formular-E-Mail -> nicht anfassen
-            message_id = (nachricht.get("Message-ID") or "").strip() or f"uid-{uid.decode()}-{host}"
-            try:
-                eingang = parsedate_to_datetime(nachricht.get("Date")).astimezone().replace(tzinfo=None)
-                eingang = eingang.isoformat(timespec="seconds")
-            except (TypeError, ValueError):
-                eingang = None
-            aid = verarbeiten(con, text, einst, "email", message_id, _kopf(nachricht.get("From")),
-                              _kopf(nachricht.get("Subject")), eingang)
-            if aid:
-                ergebnis["neu"] += 1
-                stufe = con.execute("SELECT einstufung FROM anfragen WHERE id=?", (aid,)).fetchone()[0]
-                ergebnis[stufe] += 1
-            zum_verschieben.append(uid)
+        zum_verschieben = _ordner_lesen(con, imap, einst, f"SINCE {seit}", ergebnis, zugang["host"])
         if einst.get("imap_verschieben") and zum_verschieben:
             ziel = _imap_ordnername(einst.get("imap_zielordner") or "Anfragen erledigt")
             imap.create(ziel)  # Fehler, falls vorhanden, ist egal
@@ -557,6 +600,45 @@ def abrufen(con, einst, imap_klasse=None, imap_plain=None):
                     imap.uid("STORE", uid, "+FLAGS", r"(\Deleted)")
                     ergebnis["verschoben"] += 1
             imap.expunge()
+    finally:
+        try:
+            imap.logout()
+        except Exception:
+            pass
+    return ergebnis
+
+
+NACHHOLEN_ZEITRAUM = {"180": "letzte 6 Monate", "365": "letztes Jahr", "730": "letzte 2 Jahre", "0": "alle"}
+
+
+def nachholen(con, einst, tage=365, imap_klasse=None, imap_plain=None):
+    """Durchsucht Posteingang und Ordner für erledigte nach älteren Formular-E-Mails, die noch fehlen.
+
+    Es wird nichts verschoben und kein Kunde automatisch angelegt: Neue Anfragen landen unter „Zu prüfen“ und
+    werden dort bestätigt. Früher gelöschte Anfragen (Datenschutz, Spam) kommen nicht zurück.
+    tage=0 durchsucht alle E-Mails.
+    """
+    zugang = imap_zugang(einst)
+    ergebnis = {"gelesen": 0, "neu": 0, "echt": 0, "unsicher": 0, "spam": 0, "bekannt": 0, "ordner": []}
+    suche = f"SINCE {(heute_datum() - timedelta(days=tage)).strftime('%d-%b-%Y')}" if tage else "ALL"
+    eingang = (einst.get("imap_ordner") or "INBOX").strip()
+    erledigt = (einst.get("imap_zielordner") or "Anfragen erledigt").strip()
+    from .imap_verbindung import IMAP_FEHLER
+    imap = imap_anmelden(zugang, imap_klasse, imap_plain)
+    try:
+        for name in dict.fromkeys([eingang, erledigt]):
+            try:
+                typ, _ = imap.select(_imap_ordnername(name), readonly=True)
+            except IMAP_FEHLER:
+                typ = "NO"
+            if typ != "OK":
+                if name == eingang:
+                    raise AbrufFehler(f"Ordner „{name}“ nicht gefunden.")
+                continue  # Ordner für erledigte gibt es (noch) nicht
+            # UIDs gelten je Ordner: E-Mails ohne Message-ID außerhalb des Posteingangs eindeutig kennzeichnen
+            _ordner_lesen(con, imap, einst, suche, ergebnis, zugang["host"],
+                          "" if name == eingang else f"{name}-", auto_kunde=False)
+            ergebnis["ordner"].append(name)
     finally:
         try:
             imap.logout()

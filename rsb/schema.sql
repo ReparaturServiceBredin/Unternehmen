@@ -296,6 +296,19 @@ CREATE TABLE IF NOT EXISTS anfragen (
 );
 CREATE INDEX IF NOT EXISTS ix_anfragen_status ON anfragen(status, einstufung);
 
+-- Kennungen gelöschter Anfragen (nur die Message-ID, keine Inhalte): Beim Nachholen älterer E-Mails kommen
+-- gelöschter Spam und aus Datenschutzgründen gelöschte Anfragen nicht zurück.
+CREATE TABLE IF NOT EXISTS anfragen_entfernt (
+    message_id  TEXT PRIMARY KEY,
+    entfernt_am TEXT NOT NULL                       -- UTC
+);
+CREATE TRIGGER IF NOT EXISTS anfragen_entfernt_merken AFTER DELETE ON anfragen
+WHEN OLD.message_id IS NOT NULL
+BEGIN
+    INSERT OR IGNORE INTO anfragen_entfernt (message_id, entfernt_am)
+    VALUES (OLD.message_id, strftime('%Y-%m-%dT%H:%M:%S', 'now'));
+END;
+
 -- Reparaturaufträge (Tafel: offen -> in Arbeit -> erledigt)
 CREATE TABLE IF NOT EXISTS auftraege (
     id              INTEGER PRIMARY KEY,

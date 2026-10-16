@@ -2048,7 +2048,8 @@ def anfragen_liste():
               for k, (_, w) in ANFRAGE_FILTER.items()}
     loeschvorschlaege = anf.interessenten_zum_loeschen(con, dbm.einstellungen(con))
     return render_template("anfragen.html", liste=liste, filt=filt, filter=ANFRAGE_FILTER, anzahl=anzahl,
-                           loeschvorschlaege=loeschvorschlaege, anzeigename=anf.anfrage_anzeigename)
+                           loeschvorschlaege=loeschvorschlaege, anzeigename=anf.anfrage_anzeigename,
+                           zeitraeume=anf.NACHHOLEN_ZEITRAUM)
 
 
 @bp.route("/anfragen/abrufen", methods=["POST"])
@@ -2062,6 +2063,44 @@ def anfragen_abrufen():
           f"{e['spam']} Spam. {e['verschoben']} E-Mail(s) in den Ordner „{dbm.einstellung('imap_zielordner')}“ "
           f"verschoben.", "ok")
     return redirect(url_for("main.anfragen_liste"))
+
+
+@bp.route("/anfragen/nachholen", methods=["POST"])
+def anfragen_nachholen():
+    """Ältere Anfragen prüfen: fehlende Kunden erkennen und ältere Formular-E-Mails nachholen (ohne Auto-Kunde)."""
+    con = dbm.get_db()
+    tage = request.form.get("zeitraum", "365")
+    if tage not in anf.NACHHOLEN_ZEITRAUM:
+        tage = "365"
+    ohne_kunde = anf.ohne_kunde_zuruecksetzen(con)
+    if ohne_kunde:
+        flash(f"{ohne_kunde} Anfrage(n), deren Kunde nicht mehr vorhanden ist, stehen wieder unter „Zu prüfen“.", "ok")
+    try:
+        e = anf.nachholen(con, dbm.einstellungen(con), int(tage))
+    except (anf.AbrufFehler, OSError, anf.imaplib.IMAP4.error) as fehler:
+        flash(f"Postfach konnte nicht durchsucht werden: {fehler}", "fehler")
+        return redirect(url_for("main.anfragen_liste"))
+    with dbm.Transaktion(con):
+        dbm.protokollieren("anfragen_nachgeholt", "anfrage", None, {k: e[k] for k in ("neu", "bekannt", "ordner")},
+                           con=con)
+    flash(f"Postfach durchsucht ({anf.NACHHOLEN_ZEITRAUM[tage]}, Ordner: {', '.join(e['ordner'])}): "
+          f"{e['neu']} ältere Anfrage(n) nachgeholt – {e['echt']} echt, {e['unsicher']} unsicher, {e['spam']} Spam. "
+          f"{e['bekannt']} waren schon bekannt oder wurden früher gelöscht. Kunden werden erst nach Ihrer "
+          "Bestätigung angelegt.", "ok")
+    return redirect(url_for("main.anfragen_liste", filter="offen"))
+
+
+@bp.route("/anfragen/bestaetigen", methods=["POST"])
+def anfragen_bestaetigen():
+    """Ausgewählte offene Anfragen als Kunden (Interessenten) anlegen bzw. vorhandenen Kunden zuordnen."""
+    con = dbm.get_db()
+    ids = [int(i) for i in request.form.getlist("anfrage_id") if i.isdigit()]
+    if not ids:
+        raise EingabeFehler("Bitte mindestens eine Anfrage auswählen.")
+    angelegt, zugeordnet = anf.bestaetigen(con, dbm.einstellungen(con), ids)
+    flash(f"{angelegt} Kunde(n) als Interessent angelegt, {zugeordnet} Anfrage(n) vorhandenen Kunden zugeordnet.",
+          "ok")
+    return redirect(url_for("main.anfragen_liste", filter="offen"))
 
 
 @bp.route("/anfragen/einfuegen", methods=["GET", "POST"])

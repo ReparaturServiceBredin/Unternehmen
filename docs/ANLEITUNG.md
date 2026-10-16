@@ -236,6 +236,19 @@ hineinkopieren. Die Anfrage wird genauso geprüft.
 Die Anfragen werden nur abgeholt, **solange das Programm läuft**. Beim nächsten Start holt das Tool alles nach,
 was in den letzten 60 Tagen eingegangen ist.
 
+### Ältere Anfragen prüfen und nachholen
+
+Unter *Anfragen → Ältere Anfragen prüfen und nachholen* durchsucht das Tool den Posteingang und den Ordner
+„Anfragen erledigt“ nach Formular-E-Mails, die noch nicht im Programm sind. Der Zeitraum ist wählbar
+(6 Monate, 1 Jahr, 2 Jahre oder alle E-Mails). Außerdem findet es Anfragen, deren Kunde nicht mehr vorhanden ist.
+
+- Es wird **kein Kunde automatisch angelegt** und keine E-Mail verschoben oder gelöscht.
+- Alle gefundenen Anfragen stehen danach unter **„Zu prüfen“**. Dort die gewünschten Anfragen ankreuzen und
+  **„Ausgewählte als Kunden anlegen bzw. zuordnen“** klicken. Echte Anfragen sind vorausgewählt.
+  Gibt es den Kunden schon (gleiche E-Mail oder Telefonnummer), wird die Anfrage ihm zugeordnet.
+- Wer den Namen vorher korrigieren will, öffnet die Anfrage über „prüfen“.
+- Gelöschte Anfragen (Spam, verworfen, Datenschutz-Löschung) kommen nicht zurück.
+
 ## 11. Reparaturaufträge (Tafel) und Kostenvoranschläge
 
 Unter **Verkauf → Reparaturaufträge** sehen Sie alle Aufträge auf einer Tafel mit drei Spalten:

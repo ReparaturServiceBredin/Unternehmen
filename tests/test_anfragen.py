@@ -200,3 +200,116 @@ def test_oberflaeche(client, con):
              anfrage_namensreihenfolge="auto", interessent_loeschen_monate="6", imap_passwort="pw")
     assert dbm.einstellungen(con)["anfragen_aktiv"] is True
     assert dbm.einstellungen(con)["imap_passwort_enc"]
+
+
+class OrdnerImap(FalschesImap):
+    """Postfach mit mehreren Ordnern; merkt sich Suche und ob nur lesend geöffnet wurde."""
+    ordner = {}
+    aufrufe = []
+
+    def select(self, ordner, readonly=False):
+        name = ordner.strip('"')
+        if name not in OrdnerImap.ordner:
+            return "NO", [b"nicht vorhanden"]
+        self.aktuell = name
+        OrdnerImap.aufrufe.append(("select", name, readonly))
+        return "OK", [b"1"]
+
+    def uid(self, befehl, *args):
+        inhalt = OrdnerImap.ordner[self.aktuell]
+        if befehl == "SEARCH":
+            OrdnerImap.aufrufe.append(("search", args[1]))
+            return "OK", [b" ".join(inhalt)]
+        if befehl == "FETCH":
+            return "OK", [(b"1 (BODY[] {123}", inhalt[args[0]]), b")"]
+        OrdnerImap.aufrufe.append((befehl,))
+        return "OK", []
+
+
+def _imap_einrichten(con):
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({"imap_benutzer": "kontakt@reparatur-bredin.de",
+                                     "imap_passwort_enc": verschluesseln("geheim")}, con)
+
+
+def test_nachholen_aelterer_anfragen_ohne_auto_kunde(app, con):
+    with app.app_context():
+        _imap_einrichten(con)
+        einst = dbm.einstellungen(con)
+        # schon bekannt
+        anf.verarbeiten(con, text_aus(formular_mail(msgid="<bekannt>")), einst, message_id="<bekannt>")
+        # früher gelöscht (z. B. Datenschutz) -> darf nicht zurückkommen
+        weg = anf.verarbeiten(con, text_aus(formular_mail(name="Weg Anna", mail="anna@web.de", tel="0170 1111111",
+                                                          msgid="<weg>")), einst, message_id="<weg>")
+        with dbm.Transaktion(con):
+            con.execute("DELETE FROM anfragen WHERE id=?", (weg,))
+        assert con.execute("SELECT 1 FROM anfragen_entfernt WHERE message_id='<weg>'").fetchone()
+        kunden_vorher = con.execute("SELECT COUNT(*) FROM kunden").fetchone()[0]
+        OrdnerImap.ordner = {
+            "INBOX": {b"1": formular_mail(name="Alt Max", mail="max@gmx.de", tel="0171 2222222",
+                                          msgid="<alt1>").as_bytes(),
+                      b"2": formular_mail(msgid="<bekannt>").as_bytes()},
+            "Anfragen erledigt": {b"1": formular_mail(name="Erledigt Eva", mail="eva@web.de", tel="0172 3333333",
+                                                      msgid="<alt2>").as_bytes(),
+                                  b"2": formular_mail(msgid="<weg>").as_bytes()},
+        }
+        OrdnerImap.aufrufe = []
+        e = anf.nachholen(con, dbm.einstellungen(con), 0, imap_klasse=OrdnerImap)
+    assert (e["neu"], e["echt"], e["bekannt"]) == (2, 2, 2)
+    assert e["ordner"] == ["INBOX", "Anfragen erledigt"]
+    neu = con.execute("SELECT * FROM anfragen WHERE message_id IN ('<alt1>','<alt2>')").fetchall()
+    assert all(a["status"] == "neu" and a["kunde_id"] is None for a in neu)  # erst nach Bestätigung
+    assert con.execute("SELECT COUNT(*) FROM kunden").fetchone()[0] == kunden_vorher
+    assert not con.execute("SELECT 1 FROM anfragen WHERE message_id='<weg>'").fetchone()
+    # nur lesend, nichts verschoben/gelöscht, Suche über alle E-Mails
+    assert all(a[2] for a in OrdnerImap.aufrufe if a[0] == "select")
+    assert not [a for a in OrdnerImap.aufrufe if a[0] in ("COPY", "STORE")]
+    assert ("search", "ALL") in OrdnerImap.aufrufe
+    # Zeitraum begrenzt die Suche
+    OrdnerImap.aufrufe = []
+    with app.app_context():
+        anf.nachholen(con, dbm.einstellungen(con), 180, imap_klasse=OrdnerImap)
+    assert all(a[1].startswith("SINCE ") for a in OrdnerImap.aufrufe if a[0] == "search")
+
+
+def test_geloeschte_anfrage_kommt_beim_abruf_nicht_zurueck(app, con):
+    einst = dbm.einstellungen(con)
+    aid = anf.verarbeiten(con, text_aus(formular_mail()), einst, message_id="<a1>")
+    with dbm.Transaktion(con):
+        con.execute("DELETE FROM anfragen WHERE id=?", (aid,))
+    assert anf.verarbeiten(con, text_aus(formular_mail()), einst, message_id="<a1>") is None
+
+
+def test_anfrage_ohne_kunde_wird_wieder_zu_pruefen(app, con):
+    aid = anf.verarbeiten(con, text_aus(formular_mail()), dbm.einstellungen(con), message_id="<a1>")
+    kid = con.execute("SELECT kunde_id FROM anfragen WHERE id=?", (aid,)).fetchone()[0]
+    with dbm.Transaktion(con):
+        con.execute("DELETE FROM kunden WHERE id=?", (kid,))  # Kunde fehlt, Anfrage bleibt
+    a = con.execute("SELECT * FROM anfragen WHERE id=?", (aid,)).fetchone()
+    assert a["status"] == "kunde_angelegt" and a["kunde_id"] is None
+    assert anf.ohne_kunde_zuruecksetzen(con) == 1
+    assert con.execute("SELECT status FROM anfragen WHERE id=?", (aid,)).fetchone()[0] == "neu"
+    assert anf.ohne_kunde_zuruecksetzen(con) == 0
+
+
+def test_sammelbestaetigung_und_nachholen_oberflaeche(client, con):
+    with client.application.app_context():
+        einst = {**dbm.einstellungen(con), "anfrage_auto_kunde": False}
+    a1 = anf.verarbeiten(con, text_aus(formular_mail(msgid="<b1>")), einst, message_id="<b1>")
+    a2 = anf.verarbeiten(con, text_aus(formular_mail(tel="0171 9879253", mail="anders@example.com",
+                                                     nachricht="Akku hält nicht mehr")), einst, message_id="<b2>")
+    spam = anf.verarbeiten(con, text_aus(formular_mail(name="Best SEO", mail="x@mailinator.com", tel="1",
+                                                       nachricht="We offer SEO, visit www.seo.example.com")),
+                           einst, message_id="<b3>")
+    seite = client.get("/anfragen").get_data(as_text=True)
+    assert "Ältere Anfragen prüfen und nachholen" in seite and f'name="anfrage_id" value="{a1}"' in seite
+    r = post(client, "/anfragen/bestaetigen", anfrage_id=[str(a1), str(a2), str(spam)])
+    assert r.status_code == 302
+    status = {r["id"]: (r["status"], r["kunde_id"]) for r in con.execute("SELECT * FROM anfragen")}
+    assert status[a1][0] == "kunde_angelegt" and status[a2] == ("zugeordnet", status[a1][1])
+    assert status[spam] == ("neu", None)
+    assert con.execute("SELECT COUNT(*) FROM kunden").fetchone()[0] == 1
+    # Nachholen ohne eingerichtetes Postfach: verständliche Meldung, kein Absturz
+    r = post(client, "/anfragen/nachholen", zeitraum="365")
+    assert r.status_code == 302
+    assert "Postfach konnte nicht durchsucht werden" in client.get("/anfragen").get_data(as_text=True)

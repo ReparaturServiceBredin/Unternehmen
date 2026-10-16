@@ -17,14 +17,28 @@
   {% if einst.anfragen_aktiv %}Automatischer Abruf alle {{ einst.anfragen_intervall_min }} Minuten aktiv.{% else %}Automatischer Abruf ist aus (<a href="{{ url_for('main.einstellungen', bereich='anfragen') }}">einschalten</a>).{% endif %}
   {% if einst.anfragen_letzter_abruf %}Zuletzt geprüft: {{ einst.anfragen_letzter_abruf|zeit }}.{% endif %}
 </p>
+<details class="karte">
+  <summary><b>Ältere Anfragen prüfen und nachholen</b></summary>
+  <p class="klein">Sucht im Posteingang und im Ordner „{{ einst.imap_zielordner or 'Anfragen erledigt' }}“ nach Formular-E-Mails, die noch nicht im Programm sind, und findet Anfragen, deren Kunde nicht (mehr) angelegt ist.
+    Es wird <b>kein</b> Kunde automatisch angelegt und keine E-Mail verschoben: Alles landet unter „Zu prüfen“ und wird dort von Ihnen bestätigt.
+    Früher gelöschte Anfragen (Spam, Datenschutz) kommen nicht zurück.</p>
+  <form method="post" action="{{ url_for('main.anfragen_nachholen') }}" class="leiste">{{ csrf() }}
+    <label>Zeitraum <select name="zeitraum">{% for k, titel in zeitraeume.items() %}<option value="{{ k }}" {{ 'selected' if k == '365' }}>{{ titel }}</option>{% endfor %}</select></label>
+    <button class="zweit">Jetzt prüfen und nachholen</button>
+  </form>
+</details>
 <div class="reiter">
   {% for k, (titel, _) in filter.items() %}<a href="{{ url_for('main.anfragen_liste', filter=k) }}" class="{{ 'aktiv' if filt == k }}">{{ titel }} ({{ anzahl[k] }})</a>{% endfor %}
 </div>
+{% set auswahl = filt == 'offen' and liste %}
+{% if auswahl %}<form method="post" action="{{ url_for('main.anfragen_bestaetigen') }}" id="bestaetigen">{{ csrf() }}{% endif %}
 <div class="karte">
+{% if auswahl %}<p class="klein">Häkchen setzen und bestätigen: Für jede ausgewählte Anfrage wird der Kunde als Interessent angelegt bzw. einem vorhandenen Kunden mit gleicher E-Mail/Telefonnummer zugeordnet. Echte Anfragen sind vorausgewählt. Den Namen vorher korrigieren können Sie über „prüfen“.</p>{% endif %}
 <table class="liste">
-  <tr><th>Eingang</th><th>Name</th><th>Kontakt</th><th>Gerät</th><th>Nachricht</th><th>Bewertung</th><th>Kunde</th></tr>
+  <tr>{% if auswahl %}<th></th>{% endif %}<th>Eingang</th><th>Name</th><th>Kontakt</th><th>Gerät</th><th>Nachricht</th><th>Bewertung</th><th>Kunde</th></tr>
   {% for a in liste %}
   <tr>
+    {% if auswahl %}<td><input type="checkbox" name="anfrage_id" value="{{ a.id }}" {{ 'checked' if a.einstufung == 'echt' }} aria-label="Anfrage auswählen"></td>{% endif %}
     <td class="klein">{{ a.eingang_am|zeit }}</td>
     <td><a href="{{ url_for('main.anfrage', aid=a.id) }}"><b>{{ anzeigename(a) }}</b></a></td>
     <td class="klein">{{ a.email }}<br>{{ a.telefon }}</td>
@@ -35,7 +49,9 @@
   </tr>
   {% else %}<tr><td colspan="7" class="klein">Keine Anfragen in dieser Ansicht.</td></tr>{% endfor %}
 </table>
+{% if auswahl %}<br><button>Ausgewählte als Kunden anlegen bzw. zuordnen</button>{% endif %}
 </div>
+{% if auswahl %}</form>{% endif %}
 {% if loeschvorschlaege %}
 <form method="post" action="{{ url_for('main.interessenten_loeschen') }}" class="karte" onsubmit="return confirm('Ausgewählte Interessenten endgültig löschen?')">{{ csrf() }}
   <h2>Datenschutz: Interessenten ohne Auftrag seit über {{ einst.interessent_loeschen_monate }} Monaten</h2>

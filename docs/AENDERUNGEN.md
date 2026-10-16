@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.25.0 | 16.10.2026 | Ältere Anfragen prüfen und nachholen, Kunden per Sammelbestätigung |
 | 0.24.1 | 16.10.2026 | Dunkelmodus: alle Texte gut lesbar |
 | 0.24.0 | 16.10.2026 | Fixkosten und Finanzübersicht |
 | 0.23.1 | 16.10.2026 | Technik: feste Versionen, sichere Dateinamen, Pfadprüfung, Entwickler-Regeln |
@@ -47,6 +48,30 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.25.0 – 16.10.2026
+Ältere Anfragen aus dem Kontaktformular prüfen und nachholen. Vor der Erweiterung der Datenbank legt das Programm
+automatisch eine Sicherung an. Alle bisherigen Daten bleiben unverändert.
+
+### Neu
+- **Ältere Anfragen prüfen und nachholen** (*Anfragen → Ältere Anfragen prüfen und nachholen*):
+  - Durchsucht den Posteingang **und** den Ordner „Anfragen erledigt“ nach Formular-E-Mails, die noch nicht im
+    Programm sind. Zeitraum wählbar: 6 Monate, 1 Jahr, 2 Jahre oder alle E-Mails. Der normale Abruf schaut nur
+    60 Tage zurück.
+  - Findet Anfragen, deren Kunde nicht mehr vorhanden ist, und stellt sie wieder unter „Zu prüfen“.
+  - Es wird **kein Kunde automatisch angelegt** und keine E-Mail verschoben. Alles landet unter „Zu prüfen“.
+- **Sammelbestätigung unter „Zu prüfen“:** Anfragen ankreuzen und mit einem Klick als Kunden (Interessenten)
+  anlegen. Gibt es die E-Mail-Adresse oder Telefonnummer schon, wird die Anfrage dem vorhandenen Kunden zugeordnet.
+  Echte Anfragen sind vorausgewählt, unsichere nicht, Spam ist ausgenommen.
+
+### Geändert
+- Gelöschte Anfragen (Spam nach 30 Tagen, verworfene, Löschung aus Datenschutzgründen) kommen beim Abruf nicht
+  wieder. Dafür merkt sich das Programm nur die Kennung der E-Mail (Message-ID), keine Inhalte.
+
+### Technik
+- Neue Tabelle `anfragen_entfernt` mit Trigger beim Löschen einer Anfrage.
 
 ---
 

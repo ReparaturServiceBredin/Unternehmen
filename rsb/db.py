@@ -409,7 +409,7 @@ NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "s
                  "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
                  "er_zahlungen", "kassenbuch", "kassen_abschluesse", "datev_exporte", "datev_posten",
                  "loeschprotokolle", "loeschfreigaben", "loesch_zurueckstellungen", "fixkosten",
-                 "fixkosten_betraege", "hinweise_gelesen"]
+                 "fixkosten_betraege", "hinweise_gelesen", "anfragen_entfernt"]
 
 
 def _migrieren(con, pfad=None):
