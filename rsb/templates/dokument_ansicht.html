@@ -33,6 +33,9 @@
         <tr><td>Betrag</td><td><b>{{ snap.summen.brutto|euro }}</b></td></tr>
         <tr><td>Festgeschrieben</td><td>{{ d.festgeschrieben_am|zeit_sek }}</td></tr>
         <tr><td>Prüfsumme PDF (SHA-256)</td><td class="klein" style="word-break:break-all">{{ d.pdf_sha256 }}</td></tr>
+        {% if d.e_format and d.e_format != 'pdf' %}<tr><td>E-Rechnung</td><td><b>{{ {'zugferd': 'ZUGFeRD / Factur-X (EN 16931, XML im PDF)', 'xrechnung': 'XRechnung (CII-XML)'}[d.e_format] }}</b>
+          {% if d.xml_pfad %} · <a href="{{ url_for('main.dokument_xml', did=d.id) }}">XML herunterladen</a>{% endif %}
+          <div class="klein" style="word-break:break-all">XML SHA-256 {{ d.xml_sha256 }}</div></td></tr>{% endif %}
         {% if d.snapshot_sha256 %}<tr><td>Prüfsumme Rechnungsdaten</td><td class="klein" style="word-break:break-all">{{ d.snapshot_sha256 }}</td></tr>{% endif %}
         {% if aufbewahren_bis %}<tr><td>Aufbewahren bis</td><td>{{ aufbewahren_bis|datum }} <span class="klein">({{ 'Buchungsbeleg' if d.typ != 'kva' else 'Geschäftsbrief' }}, nicht löschbar)</span></td></tr>{% endif %}
         {% if gutschriften %}<tr><td>Gutschriften</td><td>{% for gs in gutschriften %}<a href="{{ url_for('main.dokument', did=gs.id) }}">{{ gs.nummer or 'Entwurf' }}</a>{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endif %}

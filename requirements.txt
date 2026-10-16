@@ -6,3 +6,5 @@ cryptography>=42
 pillow>=10
 pystray>=0.19; sys_platform == "win32"
 tzdata>=2024.1
+factur-x>=3.1          # ZUGFeRD/Factur-X: XML prüfen, ins PDF einbetten, E-Rechnungen lesen
+drafthorse>=2024.1     # ZUGFeRD/XRechnung (CII-XML) erzeugen

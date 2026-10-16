@@ -160,7 +160,10 @@ def kunde(kid=None):
         abort(404)
     if request.method == "POST":
         felder = {f: _f(f) for f in ("typ", "firma", "anrede", "vorname", "nachname", "strasse", "plz", "ort", "land",
-                                     "email", "telefon", "ust_idnr", "notizen", "email_weitere")}
+                                     "email", "telefon", "ust_idnr", "notizen", "email_weitere", "e_rechnung",
+                                     "leitweg_id")}
+        if felder["e_rechnung"] not in ("auto", "pdf", "zugferd", "xrechnung"):
+            felder["e_rechnung"] = "auto"
         if felder["typ"] not in ("privat", "firma"):
             felder["typ"] = "privat"
         if not (felder["firma"] or felder["nachname"]):
@@ -245,7 +248,7 @@ KUNDE_FELDNAMEN = {"kundennr": "Kundennummer", "typ": "Typ", "firma": "Firma", "
                    "nachname": "Nachname", "strasse": "Straße", "plz": "PLZ", "ort": "Ort", "land": "Land",
                    "email": "E-Mail", "telefon": "Telefon", "ust_idnr": "USt-IdNr.", "notizen": "Notizen",
                    "email_weitere": "Weitere E-Mail-Adressen", "zahlungsziel_tage": "Zahlungsziel (Tage)",
-                   "interessent": "Interessent"}
+                   "interessent": "Interessent", "e_rechnung": "Rechnungsformat", "leitweg_id": "Leitweg-ID"}
 
 
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
@@ -565,9 +568,24 @@ def material_stornieren(rid):
     return redirect(url_for("main.auftrag", aid=r["auftrag_id"]) + "#material")
 
 
+@bp.route("/dokumente/<int:did>/xml")
+def dokument_xml(did):
+    d = dbm.get_db().execute("SELECT * FROM dokumente WHERE id=?", (did,)).fetchone()
+    if not d or not d["xml_pfad"]:
+        abort(404)
+    pfad = Path(daten_dir()) / d["xml_pfad"]
+    daten = pfad.read_bytes() if pfad.is_file() else None
+    if daten is None or hashlib.sha256(daten).hexdigest() != d["xml_sha256"]:
+        return render_template("pdf_fehler.html", d={"nummer": d["nummer"], "pdf_pfad": d["xml_pfad"],
+                                                     "pdf_sha256": d["xml_sha256"]}, fehlt=daten is None), 409
+    return send_file(io.BytesIO(daten), mimetype="application/xml", as_attachment=True,
+                     download_name=Path(d["xml_pfad"]).name)
+
+
 # ====================================================================== Einkauf: Lieferanten, Bestellungen, Eingangsrechnungen
 
 from . import einkauf as ek  # noqa: E402
+from . import erechnung as erech  # noqa: E402
 
 
 @bp.route("/lieferanten")
@@ -775,13 +793,18 @@ def eingangsrechnung_neu():
     if request.method == "POST":
         datei = request.files.get("datei")
         if datei and datei.filename:
-            rel, sha = ek.datei_ablegen(daten_dir(), datei.read(), datei.filename)
-            vorlage = {"rel": rel, "sha": sha, "name": datei.filename, "quelle": "Upload", "message_id": None}
-            session["er_datei"] = vorlage
+            vorlage = _er_vorlage(con, datei.read(), datei.filename, "Upload")
+            if vorlage.get("e_rechnung") and not (_f("brutto") or _f("netto")):
+                flash("E-Rechnung erkannt – die Angaben wurden aus der XML übernommen. Bitte prüfen und speichern.", "ok")
+                return redirect(url_for("main.eingangsrechnung_neu"))
         felder = ek.er_felder(request.form)
+        e_daten = None
+        if vorlage.get("e_rechnung"):
+            bt, _ = erech.einlesen((Path(daten_dir()) / vorlage["rel"]).read_bytes(), vorlage.get("name"))
+            e_daten = json.dumps(bt, ensure_ascii=False, default=str) if bt else None
         with dbm.Transaktion(con):
             eid = ek.er_anlegen(con, felder, vorlage.get("rel"), vorlage.get("sha"), vorlage.get("name"),
-                                vorlage.get("quelle") or "manuell", vorlage.get("message_id"))
+                                vorlage.get("quelle") or "manuell", vorlage.get("message_id"), e_daten)
         session.pop("er_datei", None)
         flash("Eingangsrechnung erfasst.", "ok")
         return redirect(url_for("main.eingangsrechnung", eid=eid))
@@ -795,6 +818,47 @@ def eingangsrechnung_neu():
     return render_template("eingangsrechnung.html", e=None, vorlage=vorlage, werte=werte,
                            lieferanten=ek.lieferanten(con), kostenarten=_kostenarten(),
                            bestellungen=ek.bestellungen(con), heute=date.today().isoformat())
+
+
+def _er_vorlage(con, daten, name, quelle, message_id=None, werte=None):
+    """Beleg ablegen, E-Rechnung auslesen, Lieferant zuordnen; Ergebnis in der Sitzung merken (nur Verweise)."""
+    rel, sha = ek.datei_ablegen(daten_dir(), daten, name)
+    werte = dict(werte or {})
+    bt, _ = erech.einlesen(daten, name)
+    if bt:
+        e = erech.eingangswerte(bt)
+        werte.update({k: v for k, v in e.items() if v not in (None, "") and k not in ("iban", "ust_idnr", "email")})
+        werte.setdefault("email", e["email"])
+        werte["ust_idnr"] = e["ust_idnr"]
+    l = None
+    if werte.get("ust_idnr"):
+        l = con.execute("SELECT id FROM lieferanten WHERE replace(upper(ust_idnr), ' ', '')=?",
+                        (werte["ust_idnr"].replace(" ", "").upper(),)).fetchone()
+    if not l and werte.get("email"):
+        l = con.execute("SELECT id FROM lieferanten WHERE lower(email)=lower(?)", (werte["email"],)).fetchone()
+    if not l and werte.get("lieferant_name"):
+        l = con.execute("SELECT id FROM lieferanten WHERE lower(name)=lower(?)", (werte["lieferant_name"],)).fetchone()
+    if l:
+        werte["lieferant_id"] = l["id"]
+    werte = {k: v for k, v in werte.items() if k in ("lieferant_id", "lieferant_name", "nummer", "datum", "faellig_am",
+                                                     "netto", "steuer", "brutto", "steuersatz", "beschreibung")}
+    vorlage = {"rel": rel, "sha": sha, "name": name, "quelle": quelle + (" (E-Rechnung)" if bt else ""),
+               "message_id": message_id, "werte": werte, "e_rechnung": bool(bt)}
+    session["er_datei"] = vorlage
+    return vorlage
+
+
+@bp.route("/eingangsrechnungen/<int:eid>/e-rechnung")
+def eingangsrechnung_e(eid):
+    """Lesbare Ansicht einer empfangenen E-Rechnung (XRechnung/ZUGFeRD); ?pdf=1 als PDF speichern."""
+    e = dbm.get_db().execute("SELECT * FROM eingangsrechnungen WHERE id=?", (eid,)).fetchone()
+    if not e or not e["e_daten"]:
+        abort(404)
+    r = erech.lesbar(json.loads(e["e_daten"]))
+    if request.args.get("pdf"):
+        return send_file(io.BytesIO(erech.ansicht_pdf(r)), mimetype="application/pdf",
+                         download_name=f"E-Rechnung_{e['lfd_nr']}.pdf")
+    return render_template("e_rechnung_ansicht.html", e=e, r=r)
 
 
 @bp.route("/eingangsrechnungen/<int:eid>", methods=["GET", "POST"])
@@ -859,13 +923,10 @@ def eingangsrechnungen_postfach():
             daten, name, kopf = er_postfach.anhang_holen(einst, _f("uid"), request.form.get("index", type=int))
         except AbrufFehler as e:
             raise EingabeFehler(str(e))
-        rel, sha = ek.datei_ablegen(daten_dir(), daten, name)
-        werte = {"datum": kopf["datum"], "lieferant_name": kopf["von"]}
-        l = con.execute("SELECT id FROM lieferanten WHERE lower(email)=lower(?)", (kopf["von_adresse"],)).fetchone()
-        if l:
-            werte["lieferant_id"] = l["id"]
-        session["er_datei"] = {"rel": rel, "sha": sha, "name": name, "quelle": "Postfach",
-                               "message_id": kopf["message_id"], "werte": werte}
+        vorlage = _er_vorlage(con, daten, name, "Postfach", kopf["message_id"],
+                              {"datum": kopf["datum"], "lieferant_name": kopf["von"], "email": kopf["von_adresse"]})
+        if vorlage.get("e_rechnung"):
+            flash("E-Rechnung erkannt – die Angaben wurden aus der XML übernommen. Bitte prüfen und speichern.", "ok")
         return redirect(url_for("main.eingangsrechnung_neu"))
     try:
         liste = er_postfach.mails(con, einst)
@@ -1222,9 +1283,12 @@ def dokument_email(did):
         if "@" not in an:
             raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
         pdf = (Path(daten_dir()) / d["pdf_pfad"]).read_bytes()
+        weitere = []
+        if d["e_format"] == "xrechnung" and d["xml_pfad"]:
+            weitere.append(((Path(daten_dir()) / d["xml_pfad"]).read_bytes(), f"{d['nummer']}_xrechnung.xml"))
         try:
             hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""), pdf, f"{d['nummer']}.pdf",
-                             did)
+                             did, weitere=weitere)
         except MailFehler as e:
             flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
             return redirect(url_for("main.dokument_email", did=did))

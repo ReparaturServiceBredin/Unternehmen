@@ -281,6 +281,9 @@ def pflichtangaben_pruefen(con, dok, einst=None):
             fehler.append("Bei mindestens einer Position fehlt der Steuersatz.")
         if any(p["steuersatz"] == 0 for p in positionen):
             hinweise.append("Position mit 0 % Steuer: Bitte im Hinweistext den Grund der Steuerbefreiung angeben.")
+    if dok["typ"] in ("rechnung", "gutschrift", "storno") and kunde:
+        from .erechnung import format_fuer, stammdaten_pruefen
+        fehler += stammdaten_pruefen(einst, kunde, format_fuer(kunde, dok["typ"]))
     return fehler, hinweise
 
 
@@ -329,24 +332,36 @@ def festschreiben(con, dok_id, daten_dir):
         nummer = naechste_nummer(con, praefix, jahr, einst["nummern_format"])
         summen_speichern(con, dok_id)
         snap = snapshot_bauen(con, dok_id, nummer)
+        from . import erechnung
+        kunde = con.execute("SELECT * FROM kunden WHERE id=?", (dok["kunde_id"],)).fetchone()
+        e_format = erechnung.format_fuer(kunde, dok["typ"])
+        snap["e_format"] = e_format
         pdf = pdf_erzeugen(snap, daten_dir=daten_dir, entwurf=False)
+        pdf, xml = erechnung.erzeugen(snap, einst, kunde, e_format, pdf)
         sha = hashlib.sha256(pdf).hexdigest()
         rel = Path("dokumente") / str(jahr) / f"{nummer}.pdf"
         ziel = Path(daten_dir) / rel
         ziel.parent.mkdir(parents=True, exist_ok=True)
         ziel.write_bytes(pdf)
+        xml_rel = xml_sha = None
+        if xml:
+            xml_rel = rel.with_name(f"{nummer}_{e_format}.xml")
+            (Path(daten_dir) / xml_rel).write_bytes(xml)
+            xml_sha = hashlib.sha256(xml).hexdigest()
+            xml_rel = xml_rel.as_posix()
         # Rechnungsdaten (alle Inhalte, wie sie im PDF stehen) unverändert neben dem PDF archivieren
         daten = json.dumps(snap, ensure_ascii=False, sort_keys=True, indent=1).encode("utf-8")
         snap_sha = hashlib.sha256(daten).hexdigest()
         ziel.with_suffix(".json").write_bytes(daten)
         con.execute(
             "UPDATE dokumente SET status='festgeschrieben', nummer=?, snapshot_json=?, pdf_pfad=?, pdf_sha256=?, "
-            "snapshot_sha256=?, festgeschrieben_am=?, geaendert_am=? WHERE id=?",
+            "snapshot_sha256=?, festgeschrieben_am=?, geaendert_am=?, e_format=?, xml_pfad=?, xml_sha256=? WHERE id=?",
             (nummer, json.dumps(snap, ensure_ascii=False), rel.as_posix(), sha, snap_sha, dbm.jetzt_berlin(),
-             dbm.jetzt(), dok_id),
+             dbm.jetzt(), e_format, xml_rel, xml_sha, dok_id),
         )
         dbm.ereignis_erfassen(con, "dokument", dok_id, "festgeschrieben",
-                              f"Nummer {nummer}, Betrag {euro(snap['summen']['brutto'])}, PDF SHA-256 {sha}")
+                              f"Nummer {nummer}, Betrag {euro(snap['summen']['brutto'])}, PDF SHA-256 {sha}"
+                              + (f", {erechnung.FORMATE[e_format]} (XML SHA-256 {xml_sha})" if xml else ""))
         con.execute("UPDATE kunden SET interessent=0 WHERE id=?", (dok["kunde_id"],))  # jetzt echter Kunde
         dbm.protokollieren("festgeschrieben", "dokument", dok_id,
                            {"nummer": nummer, "betrag": snap["summen"]["brutto"], "pdf_sha256": sha}, con=con)
@@ -448,8 +463,12 @@ def standard_texte(con, dokumenttyp):
 def integritaet_pruefen(con, daten_dir):
     """Prüft PDF-Prüfsummen, Lückenlosigkeit der Nummern und die Protokollkette."""
     ergebnisse = {"pdf": [], "nummern": [], "protokoll": dbm.protokoll_pruefen(con), "anzahl_dokumente": 0}
-    for d in con.execute("SELECT id, nummer, pdf_pfad, pdf_sha256, snapshot_sha256 FROM dokumente "
-                         "WHERE status<>'entwurf'"):
+    for d in con.execute("SELECT id, nummer, pdf_pfad, pdf_sha256, snapshot_sha256, xml_pfad, xml_sha256 "
+                         "FROM dokumente WHERE status<>'entwurf'"):
+        if d["xml_pfad"]:
+            x = Path(daten_dir) / d["xml_pfad"]
+            if not x.is_file() or hashlib.sha256(x.read_bytes()).hexdigest() != d["xml_sha256"]:
+                ergebnisse["pdf"].append(f"{d['nummer']}: E-Rechnungs-XML fehlt oder wurde verändert.")
         ergebnisse["anzahl_dokumente"] += 1
         pfad = Path(daten_dir) / (d["pdf_pfad"] or "")
         if not d["pdf_pfad"] or not pfad.is_file():

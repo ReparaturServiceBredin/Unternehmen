@@ -501,3 +501,14 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
    eintragen (Netto oder Brutto genügt) und speichern.
 6. **Bezahlen:** Kontoauszug im *Bankabgleich* einlesen. Bei der Abbuchung die Eingangsrechnung bestätigen. Ohne
    Kontoauszug erfassen Sie die Zahlung direkt an der Eingangsrechnung.
+
+## 23. E-Rechnung (ZUGFeRD / XRechnung)
+
+- **Firmenkunden** bekommen automatisch ZUGFeRD: Das PDF sieht aus wie immer, enthält aber zusätzlich die
+  Rechnungsdaten als XML. Sie müssen nichts weiter tun.
+- **Behörden / XRechnung:** Kunden öffnen → *Rechnungsformat: XRechnung* → **Leitweg-ID** eintragen (bekommen Sie von
+  der Behörde) → Speichern. Beim E-Mail-Versand werden PDF und XML angehängt.
+- **Vor der ersten E-Rechnung:** Unter *Einstellungen → Firmendaten* IBAN, Telefon und E-Mail eintragen.
+- **Empfangene E-Rechnung:** Bei *Eingangsrechnungen → Erfassen* nur die Datei wählen und ohne Beträge auf „erfassen“
+  klicken. Die Angaben werden ausgelesen, Sie prüfen und speichern. „E-Rechnung lesbar anzeigen“ zeigt den Inhalt
+  übersichtlich, auch als PDF.

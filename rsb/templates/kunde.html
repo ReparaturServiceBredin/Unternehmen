@@ -33,6 +33,8 @@
     <div><label>E-Mail</label><input type="email" name="email" value="{{ (k.email or '') if k }}"></div>
     <div><label>Telefon</label><input type="tel" name="telefon" value="{{ (k.telefon or '') if k }}"></div>
     <div><label>USt-IdNr. (nur Firmenkunden, optional)</label><input type="text" name="ust_idnr" value="{{ (k.ust_idnr or '') if k }}"></div>
+    <div><label>Rechnungsformat</label><select name="e_rechnung">{% for wert, text in [('auto', 'automatisch (Firma: ZUGFeRD, Privat: PDF)'), ('pdf', 'PDF'), ('zugferd', 'ZUGFeRD / Factur-X (PDF mit XML)'), ('xrechnung', 'XRechnung (z. B. Behörden)')] %}<option value="{{ wert }}" {{ 'selected' if (k.e_rechnung if k else 'auto') == wert or (k and not k.e_rechnung and wert == 'auto') }}>{{ text }}</option>{% endfor %}</select></div>
+    <div><label>Leitweg-ID (nur XRechnung)</label><input type="text" name="leitweg_id" value="{{ (k.leitweg_id or '') if k }}" placeholder="z. B. 04011000-12345-67"></div>
     <div><label>Abweichendes Zahlungsziel (Tage)</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ k.zahlungsziel_tage if k and k.zahlungsziel_tage is not none }}">
       <div class="hilfe">Leer lassen = Standard ({{ einst.zahlungsziel_privat }} Tage privat / {{ einst.zahlungsziel_firma }} Tage Firma)</div></div>
     <div class="s12"><label class="check"><input type="checkbox" name="interessent" {{ 'checked' if k and k.interessent }}> Interessent (hat angefragt, noch keine Rechnung){% if k and k.quelle %} – Quelle: {{ k.quelle }}{% endif %}</label></div>

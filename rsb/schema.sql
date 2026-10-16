@@ -29,7 +29,9 @@ CREATE TABLE IF NOT EXISTS kunden (
     interessent      INTEGER NOT NULL DEFAULT 0,
     quelle           TEXT,
     archiviert       INTEGER NOT NULL DEFAULT 0,
-    anonymisiert_am  TEXT,            -- gesetzt, wenn der Kunde auf Wunsch gelöscht, wegen Aufbewahrungspflicht aber anonymisiert wurde
+    anonymisiert_am  TEXT,
+    e_rechnung       TEXT,            -- auto / pdf / zugferd / xrechnung
+    leitweg_id       TEXT,            -- Käuferreferenz für XRechnung (Behörden)            -- gesetzt, wenn der Kunde auf Wunsch gelöscht, wegen Aufbewahrungspflicht aber anonymisiert wurde
     erstellt_am      TEXT NOT NULL,
     geaendert_am     TEXT NOT NULL
 );
@@ -107,7 +109,10 @@ CREATE TABLE IF NOT EXISTS dokumente (
     versendet_am     TEXT,
     bezahlt_betrag   INTEGER NOT NULL DEFAULT 0,
     kva_status       TEXT,            -- nur Kostenvoranschlag: offen / angenommen / abgelehnt
-    snapshot_sha256  TEXT,            -- Prüfsumme der beim Festschreiben archivierten Rechnungsdaten (JSON)
+    snapshot_sha256  TEXT,
+    e_format         TEXT,            -- pdf / zugferd / xrechnung (beim Festschreiben)
+    xml_pfad         TEXT,            -- archivierte E-Rechnungs-XML
+    xml_sha256       TEXT,            -- Prüfsumme der beim Festschreiben archivierten Rechnungsdaten (JSON)
     erstellt_am      TEXT NOT NULL,
     geaendert_am     TEXT NOT NULL
 );
@@ -190,6 +195,9 @@ WHEN OLD.status <> 'entwurf' AND (
     OR NEW.pdf_sha256 IS NOT OLD.pdf_sha256
     OR NEW.festgeschrieben_am IS NOT OLD.festgeschrieben_am
     OR NEW.snapshot_sha256 IS NOT OLD.snapshot_sha256
+    OR NEW.e_format IS NOT OLD.e_format
+    OR NEW.xml_pfad IS NOT OLD.xml_pfad
+    OR NEW.xml_sha256 IS NOT OLD.xml_sha256
     OR NEW.zahlungsziel_tage IS NOT OLD.zahlungsziel_tage
     OR (OLD.storniert_durch IS NOT NULL AND NEW.storniert_durch IS NOT OLD.storniert_durch)
 )
@@ -1052,6 +1060,7 @@ CREATE TABLE IF NOT EXISTS eingangsrechnungen (
     datei_sha256  TEXT,
     quelle        TEXT,                      -- Upload / Postfach / E-Rechnung
     message_id    TEXT,                      -- aus dem Postfach übernommen (gegen Doppelte)
+    e_daten       TEXT,                      -- ausgelesene E-Rechnung (Business-Terms als JSON)
     erfasst_am    TEXT NOT NULL,
     benutzer      TEXT,
     storniert_am  TEXT,

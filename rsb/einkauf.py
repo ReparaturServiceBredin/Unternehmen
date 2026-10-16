@@ -445,7 +445,8 @@ def er_felder(daten):
             "beschreibung": (daten.get("beschreibung") or "").strip() or None}
 
 
-def er_anlegen(con, felder, datei_rel=None, sha=None, datei_name=None, quelle="Upload", message_id=None):
+def er_anlegen(con, felder, datei_rel=None, sha=None, datei_name=None, quelle="Upload", message_id=None,
+               e_daten=None):
     """Eingangsrechnung erfassen. Muss in einer Transaktion laufen."""
     if felder["lieferant_id"] and felder["nummer"] and con.execute(
             "SELECT 1 FROM eingangsrechnungen WHERE lieferant_id=? AND nummer=? AND status<>'storniert'",
@@ -463,8 +464,9 @@ def er_anlegen(con, felder, datei_rel=None, sha=None, datei_name=None, quelle="U
                                     timedelta(days=l["zahlungsziel_tage"])).isoformat()
     cur = con.execute(
         f"INSERT INTO eingangsrechnungen ({', '.join(felder)}, lfd_nr, status, datei, datei_name, datei_sha256, quelle, "
-        f"message_id, erfasst_am, benutzer) VALUES ({', '.join('?' * len(felder))}, ?, 'offen', ?, ?, ?, ?, ?, ?, ?)",
-        (*felder.values(), lfd, datei_rel, datei_name, sha, quelle, message_id, dbm.jetzt_berlin(),
+        f"message_id, e_daten, erfasst_am, benutzer) VALUES ({', '.join('?' * len(felder))}, ?, 'offen', ?, ?, ?, ?, ?, "
+        f"?, ?, ?)",
+        (*felder.values(), lfd, datei_rel, datei_name, sha, quelle, message_id, e_daten, dbm.jetzt_berlin(),
          dbm.aktueller_benutzer()))
     dbm.protokollieren("eingangsrechnung_erfasst", "eingangsrechnung", cur.lastrowid,
                        {"lfd_nr": lfd, "brutto": felder["brutto"], "datei_sha256": sha}, con=con)

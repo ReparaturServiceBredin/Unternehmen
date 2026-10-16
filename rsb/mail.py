@@ -86,7 +86,7 @@ def _beenden(server):
         pass
 
 
-def nachricht_bauen(einst, an, betreff, text, anhang=None, anhang_name=None, bcc=None):
+def nachricht_bauen(einst, an, betreff, text, anhang=None, anhang_name=None, bcc=None, weitere=None):
     msg = EmailMessage()
     absender = einst.get("absender_email") or einst.get("smtp_benutzer")
     msg["From"] = formataddr((einst.get("absender_name") or "", absender))
@@ -99,10 +99,14 @@ def nachricht_bauen(einst, an, betreff, text, anhang=None, anhang_name=None, bcc
     msg.set_content(text)
     if anhang:
         msg.add_attachment(anhang, maintype="application", subtype="pdf", filename=anhang_name)
+    for daten, name in weitere or []:  # z. B. XRechnung-XML
+        typ = ("application", "xml") if name.lower().endswith(".xml") else ("application", "octet-stream")
+        msg.add_attachment(daten, maintype=typ[0], subtype=typ[1], filename=name)
     return msg
 
 
-def senden(con, einst=None, an=None, betreff="", text="", anhang=None, anhang_name=None, dokument_id=None):
+def senden(con, einst=None, an=None, betreff="", text="", anhang=None, anhang_name=None, dokument_id=None,
+           weitere=None):
     """Sendet eine E-Mail und schreibt das Ergebnis ins Versandprotokoll (auch bei Fehlern).
 
     Die Einstellungen werden immer frisch aus der Datenbank gelesen; `einst` darf nur einzelne Werte
@@ -117,7 +121,7 @@ def senden(con, einst=None, an=None, betreff="", text="", anhang=None, anhang_na
     sha = hashlib.sha256(anhang).hexdigest() if anhang else None
     status, fehler, msg = "gesendet", None, None
     try:
-        msg = nachricht_bauen(einst, an, betreff, text, anhang, anhang_name, bcc)
+        msg = nachricht_bauen(einst, an, betreff, text, anhang, anhang_name, bcc, weitere)
         server = _verbindung(einst)
         try:
             server.send_message(msg)

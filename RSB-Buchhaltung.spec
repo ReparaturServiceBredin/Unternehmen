@@ -10,7 +10,8 @@ datas = [
 ]
 binaries = []
 hiddenimports = ["waitress", "pystray._win32"]
-for paket in ("reportlab", "tzdata"):  # tzdata: deutsche Zeitzone für Foto-Zeitstempel unter Windows
+# tzdata: deutsche Zeitzone; facturx/drafthorse: XSD-, Schematron- und XMP-Dateien der E-Rechnung
+for paket in ("reportlab", "tzdata", "facturx", "drafthorse", "pypdf", "lxml", "stdnum", "iso4217"):
     d, b, h = collect_all(paket)
     datas += d
     binaries += b

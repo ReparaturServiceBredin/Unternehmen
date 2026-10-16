@@ -9,7 +9,8 @@
 {% set sha = e.datei_sha256 if e else vorlage.sha %}
 <div class="zweispaltig">
 <form method="post" enctype="multipart/form-data" class="karte">{{ csrf() }}<input type="hidden" name="aktion" value="speichern">
-  {% if not e and not vorlage.sha %}<div class="s12"><label>Beleg (PDF, Bild oder XRechnung-XML)</label><input type="file" name="datei" accept=".pdf,.jpg,.jpeg,.png,.xml"></div><br>{% endif %}
+  {% if not e and not vorlage.sha %}<div class="s12"><label>Beleg (PDF, Bild oder XRechnung-XML)</label><input type="file" name="datei" accept=".pdf,.jpg,.jpeg,.png,.xml">
+    <div class="hilfe">Tipp: Bei ZUGFeRD-PDFs und XRechnungen nur die Datei wählen und ohne Beträge auf „erfassen“ klicken – die Angaben werden dann aus der E-Rechnung übernommen.</div></div><br>{% endif %}
   {% if vorlage.sha and not e %}<p class="klein">Beleg: <b>{{ vorlage.name }}</b> ({{ vorlage.quelle }}) · SHA-256 {{ vorlage.sha[:12] }}… · <a href="{{ url_for('main.eingangsrechnung_neu', neu=1) }}">anderen Beleg wählen</a></p>{% endif %}
   <div class="felder">
     <div class="s6"><label>Lieferant</label><select name="lieferant_id"><option value="">– nicht angelegt (Name rechts) –</option>{% for l in lieferanten %}<option value="{{ l.id }}" {{ 'selected' if werte.lieferant_id == l.id }}>{{ l.name }}</option>{% endfor %}</select></div>
@@ -30,6 +31,7 @@
 </form>
 <div>
   {% if sha %}<div class="karte"><h2>Beleg</h2>
+    {% if e and e.e_daten %}<p><a class="knopf" href="{{ url_for('main.eingangsrechnung_e', eid=e.id) }}">E-Rechnung lesbar anzeigen</a> <a class="knopf zweit" href="{{ url_for('main.eingangsrechnung_e', eid=e.id, pdf=1) }}">als PDF speichern</a></p>{% endif %}
     <p><a href="{{ url_for('main.eingangsrechnung_datei', sha=sha) }}" target="_blank">{{ (e.datei_name if e else vorlage.name) or 'Beleg öffnen' }}</a> · SHA-256 <span class="klein">{{ sha[:16] }}…</span>{% if e %} · {{ e.quelle }}{% endif %}</p>
     {% if ((e.datei if e else vorlage.rel) or '').endswith('.pdf') %}<iframe src="{{ url_for('main.eingangsrechnung_datei', sha=sha) }}" style="width:100%;height:520px;border:1px solid var(--linie,#ddd);border-radius:8px"></iframe>{% endif %}
   </div>{% endif %}

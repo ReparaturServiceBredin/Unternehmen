@@ -7,7 +7,8 @@ from rsb import db as dbm
 
 
 VOLLSTAENDIGE_FIRMA = {"inhaber": "Dennis Bredin", "firma_name": "Reparatur Service Bredin", "strasse": "Hauptstraße 1",
-                       "plz": "74219", "ort": "Möckmühl", "steuernummer": "65001/12345"}
+                       "plz": "74219", "ort": "Möckmühl", "steuernummer": "65001/12345",
+                       "iban": "DE02120300000000202051", "email": "kontakt@reparatur-bredin.de", "telefon": "06298 123"}
 
 
 @pytest.fixture

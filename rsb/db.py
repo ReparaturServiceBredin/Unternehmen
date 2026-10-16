@@ -340,6 +340,12 @@ MIGRATIONEN = [
     ("artikel", "herstellernr", "TEXT"),
     ("artikel", "kompatibilitaet", "TEXT"),
     ("bank_umsaetze", "er_zahlung_id", "INTEGER"),
+    ("kunden", "e_rechnung", "TEXT"),
+    ("kunden", "leitweg_id", "TEXT"),
+    ("dokumente", "e_format", "TEXT"),
+    ("dokumente", "xml_pfad", "TEXT"),
+    ("dokumente", "xml_sha256", "TEXT"),
+    ("eingangsrechnungen", "e_daten", "TEXT"),
 ]
 
 # Tabellen, die mit neueren Versionen dazukommen: fehlen sie in einer bestehenden Datenbank, wird vorher gesichert

@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.18.0 | 16.10.2026 | E-Rechnung: ZUGFeRD/Factur-X und XRechnung erzeugen und empfangen |
 | 0.17.0 | 15.10.2026 | Lieferanten, Bestellungen, Wareneingang, Eingangsrechnungen |
 | 0.16.0 | 15.10.2026 | Lager: Bestand, Reservierung, Mindestbestand, Inventur, Lagerwert |
 | 0.15.0 | 15.10.2026 | Garantie, Geräte-Wiedererkennung per SN/IMEI, Garantiefälle |
@@ -38,6 +39,56 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.18.0 – 16.10.2026
+E-Rechnung (Ausbaustufe 8 von 10).
+
+### Neu
+
+**ZUGFeRD / Factur-X (EN 16931):** Rechnungen, Gutschriften und Stornos an Firmenkunden werden beim Festschreiben
+automatisch als ZUGFeRD-PDF archiviert. Das ist ein PDF mit eingebetteter XML im Profil EN 16931 und
+PDF/A-3-Kennzeichnung. Für Kleinunternehmer steht in der XML die Steuerbefreiung nach § 19 UStG
+(Kategorie „E“), bei Regelbesteuerung die Steuer je Steuersatz.
+
+**Format je Kunde:** Unter *Kunden → Rechnungsformat* gibt es vier Einstellungen:
+- automatisch: Firma bekommt ZUGFeRD, Privatkunde PDF
+- PDF
+- ZUGFeRD
+- XRechnung, mit Feld für die **Leitweg-ID**
+
+Eine XRechnung wird als eigene XML-Datei archiviert. Beim E-Mail-Versand hängt das Programm die XML mit an.
+
+**Prüfung vor dem Festschreiben:** Fehlen Stammdaten, wird nicht festgeschrieben und das Programm nennt den Grund auf
+Deutsch. Fehlen können:
+- Ihre IBAN, Anschrift, Steuernummer bzw. USt-IdNr.
+- PLZ/Ort des Kunden
+- bei XRechnung: Leitweg-ID, E-Mail des Kunden, Ihre Telefonnummer
+
+Die erzeugte XML wird gegen das offizielle Schema (XSD) und die wichtigsten Rechenregeln der EN 16931 geprüft. Ist sie
+ungültig, wird nicht festgeschrieben und auch keine Nummer verbraucht.
+
+**Dokument-Ansicht:** zeigt das Format und bietet „XML herunterladen“ an. Die XML ist mit SHA-256 gesichert und wird
+in der Datenprüfung mitgeprüft.
+
+**E-Rechnungen empfangen:** ZUGFeRD-PDFs und XRechnungen (CII oder UBL) beim Hochladen oder aus dem Postfach werden
+erkannt. Lieferant, Nummer, Datum, Fälligkeit und Beträge werden übernommen. Den Lieferanten ordnet das Programm über
+USt-IdNr., E-Mail oder Namen zu. Mit **„E-Rechnung lesbar anzeigen“** sehen Sie die XRechnung übersichtlich und
+können sie **als PDF speichern**.
+
+### Wichtig / ehrlich
+- Geprüft wird gegen das XSD und die zentralen Rechenregeln. Die vollständige Schematron- bzw. KoSIT-Prüfung braucht
+  einen externen Validator und wird bewusst nicht im Programm gemacht. Für die erste echte XRechnung an eine Behörde
+  empfehle ich, sie einmal mit einem Validator zu prüfen, z. B. dem kostenlosen KoSIT-Prüftool.
+- Die ZUGFeRD-PDFs tragen PDF/A-3-Kennzeichnung und sRGB-Farbprofil. Eine formale PDF/A-Prüfung (z. B. mit veraPDF)
+  habe ich nicht durchgeführt.
+
+### Technisch
+- Neue Bibliotheken: `factur-x` und `drafthorse` (Open Source).
+- Neue Spalten:
+  - `kunden.e_rechnung`, `kunden.leitweg_id`
+  - `dokumente.e_format`, `xml_pfad`, `xml_sha256` (geschützt)
+  - `eingangsrechnungen.e_daten`
+- Vor der Umstellung wird automatisch gesichert. Bereits festgeschriebene Rechnungen bleiben unverändert.
 
 ## 0.17.0 – 15.10.2026
 Einkauf: Lieferanten, Bestellungen und Eingangsrechnungen (Ausbaustufe 7 von 10).
