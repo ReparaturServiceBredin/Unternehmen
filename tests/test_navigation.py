@@ -38,7 +38,8 @@ def test_jede_seite_hat_einen_menuepunkt(app):
     assert fehlt == []
     namen = {e.titel for _, e in nav.alle_eintraege()}
     assert {"Übersicht", "Anfragen", "Reparaturaufträge", "Leihgeräte", "Kunden", "Verträge & Lizenzen", "Rechnungen",
-            "Leistungen & Artikel", "Lager", "Einkauf", "Bankabgleich", "Kassenbuch", "DATEV-Export",
+            "Leistungen & Artikel", "Lager", "Einkauf", "Bankabgleich", "Kassenbuch", "Fixkosten", "Finanzen",
+            "DATEV-Export",
             "Einstellungen"} == namen
     assert len([b for _, l in nav.EINSTELLUNGS_GRUPPEN for b in l]) == 16
 

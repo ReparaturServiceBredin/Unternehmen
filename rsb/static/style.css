@@ -520,3 +520,41 @@ form.geaendert .speicherleiste .ungespeichert { display: inline; }
   .karte { padding: 16px; }
   .karte:has(> table.liste), .karte:has(> table) { overflow-x: auto; }
 }
+
+/* ================================================================ Finanzen und Fixkosten */
+:root { --fin-ein: #1C54A3; --fin-aus: #C46F1B; }
+:root[data-theme="dunkel"] { --fin-ein: #4F7FD6; --fin-aus: #C77A2E; }
+.felder .s9 { grid-column: span 9; }
+table.liste tr.summe td { border-top: 2px solid var(--rand); font-weight: 700; }
+table.liste tr.gewaehlt td { background: var(--blau-hell); }
+.fin-steuerung .leiste a { white-space: nowrap; }
+.fin-schalter { margin: 0 10px 0 0; padding: 2px; box-shadow: none; }
+.fin-schalter a { padding: 4px 10px; font-size: 12px; }
+.fin-kacheln .kachel { display: block; }
+.fin-diff { display: inline-block; margin-top: 6px; font-size: 11.5px; font-weight: 600; color: var(--grau); }
+.fin-diff.gut { color: var(--gruen); }
+.fin-diff.schlecht { color: var(--rot); }
+svg.diagramm { width: 100%; height: auto; display: block; overflow: visible; }
+svg.diagramm .gitter { stroke: var(--rand); stroke-width: 1; }
+svg.diagramm .null { stroke: var(--grau); stroke-width: 1; }
+svg.diagramm .achse { fill: var(--grau); font-size: 11px; font-family: inherit; }
+svg.diagramm .ein { fill: var(--fin-ein); }
+svg.diagramm .aus { fill: var(--fin-aus); }
+svg.diagramm .treffer { fill: transparent; }
+svg.diagramm .marke:hover .ein, svg.diagramm .marke:hover .aus { opacity: .8; }
+svg.diagramm .linie { fill: none; stroke: var(--fin-ein); stroke-width: 2; }
+svg.diagramm .punkt { fill: var(--fin-ein); stroke: var(--flaeche); stroke-width: 2; }
+svg.diagramm .punkt.neg { fill: var(--rot); }
+svg.diagramm .marke:hover .punkt { r: 6; }
+.fin-legende { display: flex; gap: 16px; font-size: 12px; color: var(--grau); margin-bottom: 6px; }
+.fin-legende i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.fin-legende i.ein { background: var(--fin-ein); } .fin-legende i.aus { background: var(--fin-aus); }
+a.fin-kat { display: grid; grid-template-columns: minmax(120px, 38%) 1fr auto; gap: 10px; align-items: center; padding: 5px 0; color: var(--text); }
+a.fin-kat:hover { text-decoration: none; background: var(--flaeche-2); }
+.fin-kat-balken { height: 10px; background: var(--grau-hell); border-radius: 4px; overflow: hidden; }
+.fin-kat-balken i { display: block; height: 100%; background: var(--fin-aus); border-radius: 4px; }
+.fin-kat-wert { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.fin-fortschritt { height: 14px; background: var(--grau-hell); border-radius: 99px; overflow: hidden; margin: 10px 0 6px; border: 1px solid var(--rand); }
+.fin-fortschritt i { display: block; height: 100%; background: var(--gruen); border-radius: 99px; transition: width var(--dauer) ease; }
+@media (max-width: 900px) { .diagramm-rahmen { overflow-x: auto; } .diagramm-rahmen svg.diagramm { min-width: 600px; }
+  .felder .s9 { grid-column: span 12; } a.fin-kat { grid-template-columns: 1fr auto; } .fin-kat-balken { grid-column: 1 / -1; } }

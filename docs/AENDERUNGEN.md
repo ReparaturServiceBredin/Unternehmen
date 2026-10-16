@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.24.0 | 16.10.2026 | Fixkosten und Finanzübersicht |
 | 0.23.1 | 16.10.2026 | Technik: feste Versionen, sichere Dateinamen, Pfadprüfung, Entwickler-Regeln |
 | 0.23.0 | 16.10.2026 | Fester Datenordner – egal, von wo das Programm gestartet wird |
 | 0.22.2 | 16.10.2026 | Sicherung wiederherstellen mit Inhaltsvorschau, Hinweis bei OneDrive |
@@ -45,6 +46,65 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.24.0 – 16.10.2026
+Fixkosten und Finanzübersicht. Vor der Erweiterung der Datenbank legt das Programm automatisch eine Sicherung an.
+Alle bisherigen Daten bleiben unverändert.
+
+### Neu: Fixkosten (*Buchhaltung → Fixkosten*)
+- Wiederkehrende Ausgaben wie Miete, Strom, Internet, Telefon, Versicherungen, Leasing, Software-Abos, Kfz,
+  Steuerberater und Kammerbeiträge.
+- **Felder:**
+  - Bezeichnung, Kategorie (einstellbar), Betrag netto/brutto mit Steuersatz
+  - Rhythmus (monatlich, vierteljährlich, halbjährlich, jährlich) und Fälligkeitstag (31 = Monatsende)
+  - Beginn, Ende, Kündigungsfrist, Zahlungsart
+  - Empfänger bzw. Lieferant, Suchbegriff für den Kontoauszug, Notiz, Vertrag als PDF
+- **Betragsänderungen mit „gültig ab“:** Der alte Betrag bleibt für vergangene Zeiträume gültig, etwa bei einer
+  Mieterhöhung ab 01.01.2027. Der Verlauf wird angezeigt. Ein noch nicht gültiger Betrag lässt sich wieder entfernen.
+- **Übersicht:** Summe pro Monat und pro Jahr, jeweils nach Kategorie. Jährliche und vierteljährliche Kosten werden
+  anteilig umgerechnet.
+- **Bankabgleich:**
+  - Abbuchungen werden der passenden Fixkosten-Position vorgeschlagen (Empfänger bzw. Suchbegriff und Betrag). Sie
+    bestätigen per Klick; eine Zuordnung lässt sich wieder lösen.
+  - Fehlt eine erwartete Zahlung in einem Monat mit eingelesenem Kontoauszug oder weicht der Betrag ab, wird das
+    markiert: in der Fixkosten-Liste und im Bankabgleich.
+- **Hinweise** auf bald endende Verträge und nahende Kündigungsfristen (Standard: 30 Tage vorher), auch in der
+  Glocke.
+- Eingangsrechnungen lassen sich einer Fixkosten-Position zuordnen, z. B. die Jahresrechnung des Steuerberaters.
+  Sie zählen dann nur einmal.
+
+### Neu: Finanzübersicht (*Buchhaltung → Finanzen*)
+- **Zeitraum:** Monat, Quartal, Halbjahr, Jahr oder frei wählbar. Dazu Schnellauswahl und Pfeile zum Blättern.
+- **Kennzahlen:**
+  - Umsatz netto und brutto (Rechnungen minus Stornos und Gutschriften), aufgeteilt in Reparaturen &
+    Dienstleistungen, Artikelverkauf, Leihgebühren und KVA-Gebühren
+  - Zahlungseingänge; Einnahmen umschaltbar „nach Rechnungsdatum“ bzw. „nach Zahlungseingang“
+  - Ausgaben: Fixkosten, Wareneinsatz, sonstige Eingangsrechnungen, Kassenausgaben, jeweils nach Kategorie
+  - Rohertrag und Ergebnis
+  - Umsatzsteuer, Vorsteuer und Zahllast als Orientierung (bei Kleinunternehmer ausgeblendet)
+  - Offene Forderungen und Verbindlichkeiten zum Stichtag
+  - Aufträge, Ø Auftragswert, Ø Marge
+- **Fixkosten im Monat:** anteilig (Standard) oder im Fälligkeitsmonat.
+- **Diagramme:** Einnahmen und Ausgaben je Monat, Ergebnisverlauf, Ausgaben nach Kategorie. Darunter eine
+  Monatstabelle mit Summenzeile.
+- **Vergleich** mit Vorjahreszeitraum oder Vorperiode, absolut und in %.
+- **Break-even** mit Fortschrittsbalken und **Vorschau** der nächsten 3 Monate.
+- **Jede Zahl ist anklickbar** und zeigt die Belege dahinter.
+- **Export** als PDF und CSV (öffnet in Excel).
+- Deutlicher Hinweis: betriebswirtschaftliche Übersicht, nicht die steuerliche Gewinnermittlung bzw. EÜR.
+
+### Einstellungen
+- Unter *Einstellungen → Einkauf*: Kategorien für Fixkosten, Kostenarten für den Wareneinsatz und die Vorlaufzeit
+  für Hinweise.
+
+### Technisch
+- Neue Tabellen `fixkosten`, `fixkosten_betraege` (Beträge sind gegen Überschreiben geschützt) und
+  `hinweise_gelesen`.
+- Neue Felder `bank_umsaetze.fixkosten_id/fixkosten_monat` und `eingangsrechnungen.fixkosten_id`.
+- Vertrags-PDFs liegen im Datenordner unter `belege/fixkosten` und sind damit im Backup.
+- Datumswerte der neuen Funktionen werden ausdrücklich in Europe/Berlin berechnet.
 
 ---
 

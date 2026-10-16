@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.23.1"
+VERSION_NUMMER = "0.24.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -160,6 +160,13 @@ def create_app(daten_dir=None, testing=False):
         except Exception as e:
             print(f"Hinweis: Benachrichtigungen nicht verfügbar ({e})")
             glocke = []
+        try:
+            from .fixkosten import hinweise as fix_hinweise
+            fix_hinweise = fix_hinweise(con, nur_ungelesen=True)
+        except Exception as e:
+            print(f"Hinweis: Fixkosten-Hinweise nicht verfügbar ({e})")
+            fix_hinweise = []
+        glocke_ungelesen += len(fix_hinweise)
         ui = einst.get(f"oberflaeche:{session.get('benutzer') or 'inhaber'}") or {}
         if not isinstance(ui, dict):
             ui = {}
@@ -169,7 +176,7 @@ def create_app(daten_dir=None, testing=False):
         return {"einst": einst, "offene_anfragen": offene_anfragen, "leihen_ueberfaellig": leihen_ueberfaellig,
                 "posten_ueberfaellig": posten_ueberfaellig, "benachrichtigungen_offen": benachrichtigungen_offen,
                 "lager_unter_min": lager_unter_min, "offene_auftraege": offene_auftraege, "glocke": glocke,
-                "glocke_ungelesen": glocke_ungelesen, "ui": ui, "nav": navigation,
+                "glocke_ungelesen": glocke_ungelesen, "ui": ui, "nav": navigation, "fix_hinweise": fix_hinweise,
                 "zaehler": {"offene_anfragen": offene_anfragen, "offene_auftraege": offene_auftraege,
                             "leihen_ueberfaellig": leihen_ueberfaellig, "posten_ueberfaellig": posten_ueberfaellig,
                             "lager_unter_min": lager_unter_min},

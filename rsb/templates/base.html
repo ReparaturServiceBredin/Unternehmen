@@ -86,12 +86,17 @@
             {% if glocke_ungelesen %}<form method="post" action="{{ url_for('main.benachrichtigungen_gelesen') }}" class="glocke-alle">
               <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="weiter" value="{{ request.full_path }}">
               <button class="zweit klein">{{ symbol('check-check') }}Alle als gelesen</button></form>{% endif %}</div>
+          {% for h in fix_hinweise %}
+          <a href="{{ url_for('main.fixkosten_hinweis', s=h.schluessel, fid=h.f.id) }}" class="glocke-eintrag neu">
+            <span class="punkt-neu" aria-hidden="true"></span>
+            <span><b>{{ h.text }}</b><span class="klein">Fixkosten · {{ h.f.kategorie }}</span></span>
+          </a>{% endfor %}
           {% for b in glocke %}{% set neu = not b.gelesen_am and b.status in ('offen', 'fehler') %}
           <a href="{{ url_for('main.benachrichtigung_oeffnen', bid=b.id) }}" class="glocke-eintrag{{ ' neu' if neu }}" data-id="{{ b.id }}">
             <span class="punkt-neu" aria-hidden="true"></span>
             <span><b>{{ b.betreff or b.anlass }}</b><span class="klein">{{ b.auftragsnr }}{{ (' · ' ~ b.geraet) if b.geraet }} · {{ {'offen': 'wartet auf Freigabe', 'gesendet': 'gesendet', 'fehler': 'Fehler'}.get(b.status, b.status) }} · {{ b.erstellt_am|zeit }}</span></span>
           </a>
-          {% else %}<div class="klein glocke-leer">Keine Benachrichtigungen.</div>{% endfor %}
+          {% else %}{% if not fix_hinweise %}<div class="klein glocke-leer">Keine Benachrichtigungen.</div>{% endif %}{% endfor %}
           <a class="glocke-fuss" href="{{ url_for('main.benachrichtigungen') }}">Alle Benachrichtigungen anzeigen{% if benachrichtigungen_offen %} ({{ benachrichtigungen_offen }} offen){% endif %}</a>
         </div>
       </div>

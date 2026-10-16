@@ -757,7 +757,9 @@ CREATE TABLE IF NOT EXISTS bank_umsaetze (
     zahlung_id         INTEGER REFERENCES zahlungen(id),
     er_zahlung_id      INTEGER,                   -- Ausgang: Zahlung auf eine Eingangsrechnung
     bearbeitet_am      TEXT,
-    bearbeitet_von     TEXT
+    bearbeitet_von     TEXT,
+    fixkosten_id       INTEGER,                   -- Ausgang: Abbuchung einer Fixkosten-Position
+    fixkosten_monat    TEXT                       -- zu welcher Fälligkeit (JJJJ-MM)
 );
 CREATE INDEX IF NOT EXISTS ix_bank_status ON bank_umsaetze(status);
 
@@ -1081,7 +1083,8 @@ CREATE TABLE IF NOT EXISTS eingangsrechnungen (
     benutzer      TEXT,
     storniert_am  TEXT,
     storno_grund  TEXT,
-    exportiert_am TEXT                       -- DATEV-Export (Ausbaustufe 9)
+    exportiert_am TEXT,                      -- DATEV-Export (Ausbaustufe 9)
+    fixkosten_id  INTEGER                    -- gehört zu einer Fixkosten-Position (zählt in Finanzen dort)
 );
 CREATE INDEX IF NOT EXISTS ix_er_status ON eingangsrechnungen(status, faellig_am);
 CREATE TRIGGER IF NOT EXISTS er_datei_schutz BEFORE UPDATE ON eingangsrechnungen
@@ -1225,3 +1228,50 @@ CREATE TABLE IF NOT EXISTS loesch_zurueckstellungen (
     aufgehoben_am TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_loesch_zurueck ON loesch_zurueckstellungen(art, objekt_id);
+
+-- Fixkosten (0.24.0): wiederkehrende Ausgaben; Beträge mit „gültig ab“ (nie überschrieben, Verlauf bleibt)
+CREATE TABLE IF NOT EXISTS fixkosten (
+    id                 INTEGER PRIMARY KEY,
+    bezeichnung        TEXT NOT NULL,
+    kategorie          TEXT,
+    rhythmus           TEXT NOT NULL DEFAULT 'monatlich'
+                       CHECK (rhythmus IN ('monatlich', 'vierteljaehrlich', 'halbjaehrlich', 'jaehrlich')),
+    faellig_tag        INTEGER NOT NULL DEFAULT 1,       -- Tag im Monat (31 = Monatsende)
+    beginn             TEXT NOT NULL,                    -- erste Fälligkeit frühestens an diesem Tag
+    ende               TEXT,                             -- Vertragsende (optional)
+    kuendigung_wert    INTEGER,                          -- Kündigungsfrist, z. B. 3
+    kuendigung_einheit TEXT CHECK (kuendigung_einheit IS NULL OR kuendigung_einheit IN ('tage', 'wochen', 'monate')),
+    zahlungsart        TEXT NOT NULL DEFAULT 'lastschrift',
+    empfaenger         TEXT,
+    lieferant_id       INTEGER REFERENCES lieferanten(id),
+    bank_suchbegriff   TEXT,                             -- optional: Text im Kontoauszug (Name, IBAN, Mandat)
+    notiz              TEXT,
+    datei              TEXT,                             -- Vertrags-PDF (relativ zum Datenordner)
+    datei_name         TEXT,
+    datei_sha256       TEXT,
+    erstellt_am        TEXT NOT NULL,
+    geaendert_am       TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS fixkosten_betraege (
+    id            INTEGER PRIMARY KEY,
+    fixkosten_id  INTEGER NOT NULL REFERENCES fixkosten(id),
+    gueltig_ab    TEXT NOT NULL,
+    netto         INTEGER NOT NULL,                      -- Cent je Fälligkeit
+    steuersatz    REAL NOT NULL DEFAULT 0,
+    brutto        INTEGER NOT NULL,
+    notiz         TEXT,
+    erfasst_am    TEXT NOT NULL,
+    benutzer      TEXT,
+    UNIQUE (fixkosten_id, gueltig_ab)
+);
+CREATE TRIGGER IF NOT EXISTS fixkosten_betrag_schutz BEFORE UPDATE ON fixkosten_betraege
+BEGIN
+    SELECT RAISE(ABORT, 'Fixkosten-Beträge werden nicht überschrieben – bitte einen neuen Betrag mit „gültig ab“ erfassen.');
+END;
+
+-- Gelesene Hinweise in der Glocke (z. B. „Kündigungsfrist endet bald“)
+CREATE TABLE IF NOT EXISTS hinweise_gelesen (
+    schluessel  TEXT PRIMARY KEY,
+    gelesen_am  TEXT NOT NULL
+);

@@ -9,6 +9,8 @@
   <div class="leiste"><input type="file" name="datei" accept=".csv,.txt,.xml,.zip" required style="max-width:420px"><button>Einlesen</button></div>
   {% if importe %}<p class="klein" style="margin-top:8px">Zuletzt: {% for i in importe[:3] %}{{ i.dateiname }} ({{ i.format }}, {{ i.anzahl }} neu{{ ', ' ~ i.doppelt ~ ' doppelt' if i.doppelt }}) am {{ i.importiert_am|zeit }}{{ ' · ' if not loop.last }}{% endfor %}</p>{% endif %}
 </form>
+{% if fix_fehlt %}<div class="meldung warnung"><b>Fixkosten ohne passende Abbuchung:</b>
+  {% for f, s in fix_fehlt %}<a href="{{ url_for('main.fixkosten', fid=f.id) }}">{{ f.bezeichnung }}</a> {{ s.datum.strftime('%m/%Y') }} ({{ 'fehlt' if s.status == 'fehlt' else 'weicht ab: ' ~ (s.gezahlt|euro) ~ ' statt ' ~ (s.erwartet|euro) }}){{ ' · ' if not loop.last }}{% endfor %}</div>{% endif %}
 <div class="reiter">
   {% for a, n in [('offen', 'Zuzuordnen'), ('zugeordnet', 'Zugeordnet'), ('ignoriert', 'Ignoriert')] %}<a href="{{ url_for('main.bank', ansicht=a) }}" class="{{ 'aktiv' if ansicht == a }}">{{ n }} <span class="zahl">{{ zahl[a] or 0 }}</span></a>{% endfor %}
 </div>
@@ -31,9 +33,17 @@
           <select name="eingangsrechnung_id" style="width:auto;max-width:260px"><option value="">– Eingangsrechnung wählen –</option>
             {% for e in offene_er %}<option value="{{ e.id }}" {{ 'selected' if ve and ve.e.id == e.id }}>{{ e.lfd_nr }} · {{ e.lieferant or '' }} {{ e.nummer or '' }} · offen {{ (e.brutto - e.bezahlt)|euro }}</option>{% endfor %}</select>
           <button class="klein">Bestätigen</button></form>
-        {% if ve %}<div class="klein" style="color:{{ 'var(--gruen)' if ve.sicher else '#7a5b00' }}">Vorschlag: {{ ve.e.lfd_nr }} – {{ ve.grund }}</div>{% else %}<div class="klein">kein Vorschlag – ggf. erst die <a href="{{ url_for('main.eingangsrechnung_neu', neu=1) }}">Eingangsrechnung erfassen</a></div>{% endif %}
+        {% if ve %}<div class="klein" style="color:{{ 'var(--gruen)' if ve.sicher else '#7a5b00' }}">Vorschlag: {{ ve.e.lfd_nr }} – {{ ve.grund }}</div>{% elif not fix_vorschlaege.get(u.id) %}<div class="klein">kein Vorschlag – ggf. erst die <a href="{{ url_for('main.eingangsrechnung_neu', neu=1) }}">Eingangsrechnung erfassen</a></div>{% endif %}
+        {% set vf = fix_vorschlaege.get(u.id) %}{% if fix_liste %}
+        <form method="post" action="{{ url_for('main.bank_fixkosten', uid=u.id) }}" class="leiste" style="margin-top:6px">{{ csrf() }}
+          <select name="fixkosten_id" style="width:auto;max-width:260px"><option value="">– oder Fixkosten wählen –</option>
+            {% for f in fix_liste %}<option value="{{ f.id }}" {{ 'selected' if vf and vf.f.id == f.id }}>{{ f.bezeichnung }} · {{ f.kategorie }}</option>{% endfor %}</select>
+          <button class="klein {{ 'zweit' if not vf }}">Als Fixkosten bestätigen</button></form>
+        {% if vf %}<div class="klein" style="color:{{ 'var(--gruen)' if vf.sicher else '#7a5b00' }}">Fixkosten-Vorschlag: {{ vf.f.bezeichnung }} – {{ vf.grund }}</div>{% endif %}{% endif %}
         <form method="post" action="{{ url_for('main.bank_ignorieren', uid=u.id) }}">{{ csrf() }}<button class="zweit klein" style="margin-top:4px">Ignorieren</button></form>
       {% elif u.status == 'zugeordnet' %}<span class="marke-status zs-bezahlt">zugeordnet</span> <span class="klein">{{ u.bearbeitet_am|zeit }} ({{ u.bearbeitet_von }})</span>
+        {% if u.fixkosten_id %}<div class="klein">Fixkosten: <a href="{{ url_for('main.fixkosten', fid=u.fixkosten_id) }}">{{ fix_namen.get(u.fixkosten_id, '?') }}</a> (Fälligkeit {{ u.fixkosten_monat }})
+          <form method="post" action="{{ url_for('main.bank_fixkosten', uid=u.id) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="loesen" value="1"><input type="hidden" name="ansicht" value="zugeordnet"><button class="zweit klein">Zuordnung lösen</button></form></div>{% endif %}
       {% else %}<span class="marke-status zs-storniert">ignoriert</span>
         <form method="post" action="{{ url_for('main.bank_ignorieren', uid=u.id) }}" style="display:inline">{{ csrf() }}<input type="hidden" name="oeffnen" value="1"><input type="hidden" name="ansicht" value="ignoriert"><button class="zweit klein">wieder öffnen</button></form>{% endif %}
     </td></tr>

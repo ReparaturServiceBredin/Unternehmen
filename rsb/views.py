@@ -982,6 +982,7 @@ def eingangsrechnung(eid):
         flash(meldung, "ok")
         return redirect(url_for("main.eingangsrechnung", eid=eid))
     return render_template("eingangsrechnung.html", e=e, vorlage={}, werte=dict(e), lieferanten=ek.lieferanten(con),
+                           fix_liste=fxk.alle(con),
                            kostenarten=_kostenarten(), bestellungen=ek.bestellungen(con),
                            zahlungen=con.execute("SELECT * FROM er_zahlungen WHERE eingangsrechnung_id=? ORDER BY datum, id",
                                                  (eid,)).fetchall(), zahlarten=ek.ZAHLARTEN,
@@ -1600,7 +1601,7 @@ EINSTELLUNGS_BEREICHE = {
     "datenschutz": ["ds_auto", "interessent_loeschen_monate", "ds_kunde_inaktiv_jahre", "ds_fotos_jahre",
                     "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "ds_verantwortlicher"],
     "einkauf": ["mindest_marge_prozent", "praefix_bestellung", "praefix_eingangsrechnung", "kostenarten",
-                "er_imap_ordner"],
+                "er_imap_ordner", "fixkosten_kategorien", "fixkosten_hinweis_tage", "wareneinsatz_kostenarten"],
     "annahme": ["garantie_monate", "garantie_text", "kva_gebuehren", "annahme_kva_text", "annahme_zubehoer",
                 "annahme_datenschutz", "annahme_abholbedingungen",
                 "abholschein_text", "handy_im_netz", "handy_adresse"],
@@ -1617,7 +1618,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"ds_auto", "benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"ds_kunde_inaktiv_jahre", "ds_fotos_jahre", "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"fixkosten_hinweis_tage", "ds_kunde_inaktiv_jahre", "ds_fotos_jahre", "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
@@ -3085,8 +3086,15 @@ def bank():
                       if u["status"] == "offen" and u["betrag"] < 0}
     importe = con.execute("SELECT * FROM bank_importe ORDER BY id DESC LIMIT 10").fetchall()
     zahl = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM bank_umsaetze GROUP BY status")}
+    fix_liste = fxk.alle(con)
+    fix_vorschlaege = {u["id"]: fxk.bank_vorschlag(con, u, fix_liste) for u in umsaetze
+                       if u["status"] == "offen" and u["betrag"] < 0}
+    fix_namen = {f["id"]: f["bezeichnung"] for f in fix_liste}
+    fix_fehlt = [(f, s) for f in fix_liste for s in fxk.zahlungsstand(con, [f]).get(f["id"], [])
+                 if s["status"] != "bezahlt"][-12:]
     return render_template("bank.html", umsaetze=umsaetze, vorschlaege=vorschlaege, offene=offene, importe=importe,
-                           offene_er=offene_er, er_vorschlaege=er_vorschlaege,
+                           offene_er=offene_er, er_vorschlaege=er_vorschlaege, fix_liste=fix_liste,
+                           fix_vorschlaege=fix_vorschlaege, fix_namen=fix_namen, fix_fehlt=fix_fehlt,
                            ansicht=ansicht, zahl=zahl)
 
 
@@ -3961,6 +3969,8 @@ def benachrichtigungen_gelesen():
                         (dbm.jetzt_berlin(), bid))
         else:
             con.execute("UPDATE benachrichtigungen SET gelesen_am=? WHERE gelesen_am IS NULL", (dbm.jetzt_berlin(),))
+            from .fixkosten import hinweis_gelesen
+            hinweis_gelesen(con)  # auch Fixkosten-Hinweise (Vertragsende, Kündigungsfrist)
     if request.headers.get("X-Requested-With") == "fetch":
         return jsonify({"ok": True})
     return _zurueck(url_for("main.benachrichtigungen"))
@@ -4060,6 +4070,11 @@ def schnellsuche():
             "ORDER BY aktiv DESC, name LIMIT 6", {"m": muster}).fetchall(),
          lambda a: (a["name"], " · ".join(x for x in (a["artikelnr"], euro(a["preis"])) if x),
                     url_for("main.artikel", aid=a["id"]))),
+        ("Fixkosten", "calendar-clock", con.execute(
+            "SELECT * FROM fixkosten WHERE bezeichnung LIKE :m OR kategorie LIKE :m OR empfaenger LIKE :m "
+            "ORDER BY bezeichnung LIMIT 6", {"m": muster}).fetchall(),
+         lambda f: (f["bezeichnung"], " · ".join(x for x in (f["kategorie"], f["empfaenger"]) if x),
+                    url_for("main.fixkosten", fid=f["id"]))),
         ("Leihgeräte", "laptop", con.execute(
             "SELECT * FROM leihgeraete WHERE bezeichnung LIKE :m OR inventarnr LIKE :m OR seriennummer LIKE :m "
             "ORDER BY bezeichnung LIMIT 6", {"m": muster}).fetchall(),
@@ -4093,3 +4108,211 @@ def wiederherstellen():
     dbm.festschreiben(current_app.config["DB_PFAD"])
     upd.neu_starten(verzoegerung=1.5)
     return render_template("wiederherstellung_laeuft.html", gestartet=current_app.config.get("GESTARTET"))
+
+
+# ====================================================================== Fixkosten
+
+from . import fixkosten as fxk  # noqa: E402
+from .hilfen import heute_datum  # noqa: E402
+
+
+def _fix_betrag_aus_formular():
+    satz = zahl_aus_text(_f("steuersatz"), 0) if _f("steuersatz") else 0.0
+    netto, brutto = cent_aus_text(_f("netto"), None), cent_aus_text(_f("brutto"), None)
+    if netto is None and brutto is None:
+        return None
+    netto, _ = fxk.betrag_rechnen(netto=netto, steuersatz=satz) if netto is not None else \
+        fxk.betrag_rechnen(brutto=brutto, steuersatz=satz)
+    return netto, satz
+
+
+@bp.route("/fixkosten")
+def fixkosten_liste():
+    con = dbm.get_db()
+    heute_d = heute_datum()
+    liste = fxk.alle(con)
+    stand = fxk.zahlungsstand(con, liste, heute_d)
+    for f in liste:
+        f["aktuell"] = fxk.betrag_am(f, heute_d)
+        f["naechste"] = fxk.naechste_faelligkeit(f, heute_d)
+        f["aktiv"] = fxk.aktiv_am(f, heute_d) or fxk._d(f["beginn"]) > heute_d
+        f["kuendigung_bis"] = fxk.kuendigung_bis(f)
+        f["stand"] = [s for s in stand.get(f["id"], []) if s["status"] != "bezahlt"][-6:]
+    return render_template("fixkosten.html", liste=liste, ue=fxk.uebersicht(con, heute_d, liste),
+                           hinweise=fxk.hinweise(con, heute_d, liste), rhythmen=fxk.RHYTHMEN,
+                           zahlungsarten=fxk.ZAHLUNGSARTEN, heute=heute_d)
+
+
+@bp.route("/fixkosten/neu", methods=["GET", "POST"])
+@bp.route("/fixkosten/<int:fid>", methods=["GET", "POST"])
+def fixkosten(fid=None):
+    con = dbm.get_db()
+    einst = dbm.einstellungen(con)
+    f = fxk.eine(con, fid) if fid else None
+    if fid and not f:
+        abort(404)
+    if request.method == "POST":
+        aktion = request.form.get("aktion", "speichern")
+        with dbm.Transaktion(con):
+            if aktion == "speichern":
+                werte = {k: request.form.get(k, "") for k in fxk.FELDER}
+                fid = fxk.speichern(con, werte, einst, fid, None if fid else _fix_betrag_aus_formular())
+                datei = request.files.get("vertrag")
+                if datei and datei.filename:
+                    rel, sha = fxk.vertrag_ablegen(daten_dir(), datei.read(), datei.filename)
+                    con.execute("UPDATE fixkosten SET datei=?, datei_name=?, datei_sha256=? WHERE id=?",
+                                (rel, datei.filename, sha, fid))
+                    dbm.ereignis_erfassen(con, "fixkosten", fid, "Vertrag hochgeladen", datei.filename)
+                meldung = "Fixkosten gespeichert."
+            elif aktion == "betrag":
+                b = _fix_betrag_aus_formular()
+                if not b:
+                    raise EingabeFehler("Bitte den neuen Betrag angeben.")
+                fxk.betrag_neu(con, fid, _f("gueltig_ab"), *b, notiz=_f("notiz_betrag"))
+                meldung = f"Neuer Betrag ab {datum_de(_f('gueltig_ab'))} gespeichert – frühere Zeiträume bleiben unverändert."
+            elif aktion == "betrag_entfernen":
+                fxk.betrag_entfernen(con, request.form.get("betrag_id", type=int))
+                meldung = "Geplanten Betrag entfernt."
+            elif aktion == "loeschen":
+                fxk.loeschen(con, fid)
+                flash("Fixkosten-Position gelöscht.", "ok")
+                return redirect(url_for("main.fixkosten_liste"))
+            else:
+                abort(400)
+        flash(meldung, "ok")
+        return redirect(url_for("main.fixkosten", fid=fid))
+    stand = fxk.zahlungsstand(con, [f], heute_datum()).get(fid, []) if f else []
+    zahlungen = con.execute("SELECT * FROM bank_umsaetze WHERE fixkosten_id=? ORDER BY buchungstag DESC",
+                            (fid,)).fetchall() if fid else []
+    rechnungen = con.execute(ek.ER_SQL + "WHERE e.fixkosten_id=? ORDER BY e.datum DESC", (fid,)).fetchall() if fid else []
+    return render_template("fixkosten_form.html", f=f, kategorien=fxk.kategorien(einst), rhythmen=fxk.RHYTHMEN,
+                           zahlungsarten=fxk.ZAHLUNGSARTEN, einheiten=fxk.EINHEITEN, lieferanten=ek.lieferanten(con),
+                           stand=list(reversed(stand))[:24], zahlungen=zahlungen, rechnungen=rechnungen,
+                           heute=heute_datum().isoformat(), aktuell=fxk.betrag_am(f, heute_datum()) if f else None,
+                           kuendigung_bis=fxk.kuendigung_bis(f) if f else None,
+                           aenderungen=dbm.aenderungen_liste(con, "fixkosten", fid) if fid else [],
+                           standard_satz=einst.get("regel_steuersatz") or 19)
+
+
+@bp.route("/fixkosten/<int:fid>/vertrag")
+def fixkosten_vertrag(fid):
+    f = dbm.get_db().execute("SELECT * FROM fixkosten WHERE id=?", (fid,)).fetchone()
+    if not f or not f["datei"]:
+        abort(404)
+    pfad = Path(daten_dir()) / f["datei"]
+    if not pfad.is_file():
+        abort(404)
+    endung = f["datei"].rsplit(".", 1)[-1].lower()
+    return send_file(pfad, mimetype={"pdf": "application/pdf", "png": "image/png"}.get(endung, "image/jpeg"),
+                     download_name=f["datei_name"] or f"Vertrag.{endung}")
+
+
+@bp.route("/fixkosten/hinweis")
+def fixkosten_hinweis():
+    """Hinweis aus der Glocke öffnen: als gelesen markieren und zur Position springen."""
+    con = dbm.get_db()
+    s = request.args.get("s", "")
+    if s.startswith("fixkosten:"):
+        with dbm.Transaktion(con):
+            fxk.hinweis_gelesen(con, s)
+    return redirect(url_for("main.fixkosten", fid=request.args.get("fid", type=int)) if request.args.get("fid")
+                    else url_for("main.fixkosten_liste"))
+
+
+@bp.route("/fixkosten/hinweis-gelesen", methods=["POST"])
+def fixkosten_hinweis_gelesen():
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        fxk.hinweis_gelesen(con, request.form.get("schluessel") or None)
+    if request.headers.get("X-Requested-With") == "fetch":
+        return jsonify({"ok": True})
+    return _zurueck(url_for("main.fixkosten_liste"))
+
+
+@bp.route("/bank/<int:uid>/fixkosten", methods=["POST"])
+def bank_fixkosten(uid):
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        if request.form.get("loesen"):
+            fxk.bank_loesen(con, uid)
+            flash("Zuordnung gelöst – der Umsatz ist wieder offen.", "ok")
+        else:
+            fxk.bank_zuordnen(con, uid, request.form.get("fixkosten_id", type=int))
+            flash("Abbuchung der Fixkosten-Position zugeordnet.", "ok")
+    return redirect(url_for("main.bank", ansicht=request.form.get("ansicht", "offen")))
+
+
+@bp.route("/eingangsrechnungen/<int:eid>/fixkosten", methods=["POST"])
+def eingangsrechnung_fixkosten(eid):
+    con = dbm.get_db()
+    fid = request.form.get("fixkosten_id", type=int)
+    with dbm.Transaktion(con):
+        con.execute("UPDATE eingangsrechnungen SET fixkosten_id=? WHERE id=?", (fid, eid))
+        dbm.ereignis_erfassen(con, "eingangsrechnung", eid, "Fixkosten-Zuordnung",
+                              (fxk.eine(con, fid) or {}).get("bezeichnung", "") if fid else "aufgehoben")
+    flash("Zuordnung gespeichert. In der Finanzübersicht zählt die Rechnung jetzt bei den Fixkosten." if fid
+          else "Zuordnung aufgehoben.", "ok")
+    return redirect(url_for("main.eingangsrechnung", eid=eid))
+
+
+# ====================================================================== Finanzübersicht
+
+from . import finanzen as fin  # noqa: E402
+
+
+def _fin_parameter():
+    a = request.args
+    art = a.get("art") if a.get("art") in fin.ARTEN else "monat"
+    return dict(art=art, jahr=a.get("jahr", type=int), nr=a.get("nr", type=int), von=a.get("von"), bis=a.get("bis"),
+                basis="zahlung" if a.get("basis") == "zahlung" else "rechnung",
+                fix_modus="faellig" if a.get("fix") == "faellig" else "anteilig")
+
+
+@bp.route("/finanzen")
+def finanzen():
+    con = dbm.get_db()
+    p = _fin_parameter()
+    vgl = "vorperiode" if request.args.get("vergleich") == "vorperiode" else "vorjahr"
+    a = fin.auswertung(con, **p, vergleich_mit=vgl)
+    if request.args.get("export") == "csv":
+        return send_file(io.BytesIO(fin.csv_export(a)), mimetype="text/csv", as_attachment=True,
+                         download_name=f"Finanzuebersicht_{a['von']}_{a['bis']}.csv")
+    if request.args.get("export") == "pdf":
+        return send_file(io.BytesIO(fin.pdf_export(a, dbm.einstellung("firma_name") or "")),
+                         mimetype="application/pdf", download_name=f"Finanzuebersicht_{a['von']}_{a['bis']}.pdf")
+    jahr, nr = a["von"].year, None
+    if p["art"] in ("monat", "quartal", "halbjahr"):
+        nr = {"monat": a["von"].month, "quartal": (a["von"].month - 1) // 3 + 1,
+              "halbjahr": (a["von"].month - 1) // 6 + 1}[p["art"]]
+    basis_args = {k: v for k, v in dict(basis=p["basis"], fix=p["fix_modus"], vergleich=vgl).items()}
+    nav_ = {}
+    if p["art"] != "frei":
+        for name, s in (("zurueck", -1), ("vor", 1)):
+            j, n = fin.blaettern(p["art"], jahr, nr or 1, s)
+            nav_[name] = url_for("main.finanzen", art=p["art"], jahr=j, nr=n if p["art"] != "jahr" else None,
+                                 **basis_args)
+    return render_template("finanzen.html", a=a, p=p, jahr=jahr, nr=nr, blaettern=nav_, basis_args=basis_args,
+                           schnell=[(t, {**x, **basis_args}) for t, x in fin.schnellauswahl()], vgl=vgl, balken=fin.svg_balken(a["monate"]),
+                           linie=fin.svg_linie(a["monate"]), be=fin.break_even(con, ku=a["ku"]),
+                           vorschau=fin.vorschau(con, ku=a["ku"]), arten=fin.ARTEN, monate_namen=fin.MONATE,
+                           max_kat=max([w for _, w, _ in a["kategorien"]] + [1]))
+
+
+@bp.route("/finanzen/belege")
+def finanzen_belege():
+    con = dbm.get_db()
+    p = _fin_parameter()
+    schluessel = request.args.get("s", "umsatz")
+    titel, liste = fin.belege(con, schluessel, **p)
+    ziele = {"dokument": lambda i: url_for("main.dokument", did=i),
+             "eingangsrechnung": lambda i: url_for("main.eingangsrechnung", eid=i),
+             "kasse": None,
+             "fixkosten": lambda i: url_for("main.fixkosten", fid=i),
+             "auftrag": lambda i: url_for("main.auftrag", aid=i)}
+    for x in liste:
+        art_, i = x["ziel"]
+        x["url"] = (url_for("main.kassenbuch", von=x["datum"].isoformat(), bis=x["datum"].isoformat()) + f"#k{i}"
+                    if art_ == "kasse" else ziele[art_](i))
+    return render_template("finanzen_belege.html", liste=liste, titel=titel, schluessel=schluessel,
+                           zurueck=url_for("main.finanzen", **{k: v for k, v in request.args.items() if k != "s"}),
+                           summe=sum(x["wert"] for x in liste))

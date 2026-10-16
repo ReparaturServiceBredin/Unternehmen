@@ -575,6 +575,28 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
 2. Monatlich *Buchhaltung → DATEV-Export*: Zeitraum (Standard: Vormonat), Vorschau prüfen,
    **Export erstellen**, ZIP herunterladen und an den Steuerberater geben.
 
+### Fixkosten und Finanzübersicht
+
+**Fixkosten** (*Buchhaltung → Fixkosten → + Neue Fixkosten*):
+1. Bezeichnung, Kategorie, Betrag (netto oder brutto), Rhythmus, Fälligkeitstag und Beginn eintragen. Optional: Ende,
+   Kündigungsfrist, Empfänger, Vertrag als PDF.
+2. **Betrag ändert sich** (z. B. Mieterhöhung): Position öffnen → „Neuer Betrag“ mit „gültig ab“. Der alte Betrag
+   bleibt für frühere Monate erhalten.
+3. **Bankabgleich:** Bei Abbuchungen erscheint „Fixkosten-Vorschlag …“ → „Als Fixkosten bestätigen“. Fehlende oder
+   abweichende Zahlungen sind in der Fixkosten-Liste rot bzw. gelb markiert.
+4. Endet ein Vertrag bald oder läuft eine Kündigungsfrist ab, erscheint ein Hinweis, auch in der Glocke.
+
+**Finanzen** (*Buchhaltung → Finanzen*):
+- Oben den Zeitraum wählen oder mit ‹ › blättern.
+- Umschalter:
+  - Einnahmen nach Rechnungsdatum oder nach Zahlungseingang
+  - Fixkosten anteilig oder im Fälligkeitsmonat
+  - Vergleich mit Vorjahr oder Vorperiode
+- **Jede Zahl ist anklickbar** und zeigt die Belege, aus denen sie besteht.
+- Export: „PDF“ oder „CSV / Excel“.
+- Wichtig: Die Übersicht ist betriebswirtschaftlich, keine EÜR und keine Umsatzsteuer-Voranmeldung.
+- Welche Kostenarten als Wareneinsatz zählen, stellen Sie unter *Einstellungen → Einkauf* ein.
+
 ## 25. TSE (Technische Sicherheitseinrichtung) – was gilt für Sie?
 
 *Keine Steuerberatung, sondern eine Einordnung zur Vorbereitung auf das Gespräch mit dem Steuerberater.*

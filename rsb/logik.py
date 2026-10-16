@@ -470,6 +470,7 @@ DATEIPFADE = [  # (Tabelle, Spalte, Bezeichnung, Bedingung, Datei hier pr√ºfen ‚
     ("eingangsrechnungen", "datei", "Eingangsrechnung", "datei IS NOT NULL", False),
     ("kassenbuch", "beleg_datei", "Kassenbeleg", "beleg_datei IS NOT NULL", True),
     ("datev_exporte", "datei", "DATEV-Export", "datei IS NOT NULL", True),
+    ("fixkosten", "datei", "Fixkosten-Vertrag", "datei IS NOT NULL", True),
 ]
 
 

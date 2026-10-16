@@ -71,8 +71,15 @@ def zeit_de(iso):
         return str(iso)
 
 
+def heute_datum():
+    """Heutiges Datum in Europe/Berlin – unabhängig von der Zeitzone des Rechners (z. B. UTC im Docker-Container)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    return datetime.now(ZoneInfo("Europe/Berlin")).date()
+
+
 def heute():
-    return date.today().isoformat()
+    return heute_datum().isoformat()
 
 
 def plus_tage(iso, tage):

@@ -8,7 +8,7 @@ WURZEL = Path(__file__).resolve().parent.parent
 QUELLEN = sorted((WURZEL / "rsb").glob("*.py")) + [WURZEL / "start_exe.py"]
 WINDOWS_ERLAUBT = {"fenster.py", "update.py"}
 # Übergang bis zum Arbeitspaket „Zeitzone“: diese Zahl darf nur sinken, nie steigen.
-ZEITZONE_HOECHSTENS = 98
+ZEITZONE_HOECHSTENS = 97
 
 
 def _baum(datei):

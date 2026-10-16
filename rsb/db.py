@@ -199,6 +199,10 @@ STANDARD_EINSTELLUNGEN = {
                    "Software & Lizenzen\nPorto & Versand\nWerbung\nFahrzeugkosten\nBürobedarf\nFortbildung\n"
                    "Versicherungen & Beiträge\nBankgebühren\nSonstiges",
     "er_imap_ordner": "INBOX",
+    "fixkosten_kategorien": "Werkstattmiete\nStrom\nInternet\nTelefon\nVersicherungen\nLeasing\nSoftware-Abos\nKfz\n"
+                            "Steuerberater\nKammerbeiträge\nSonstiges",
+    "fixkosten_hinweis_tage": 30,          # Hinweis auf Vertragsende / Kündigungsfrist so viele Tage vorher
+    "wareneinsatz_kostenarten": "Wareneinkauf / Ersatzteile",  # Kostenarten, die als Wareneinsatz zählen (Finanzen)
     # DATEV-Export (Kontenrahmen SKR03/SKR04; leere Konten = Standard des Kontenrahmens)
     "datev_beraternr": "",
     "datev_mandantennr": "",
@@ -391,6 +395,9 @@ MIGRATIONEN = [
     ("auftraege", "geraetetyp", "TEXT"),
     ("leihen", "protokoll_geloescht_am", "TEXT"),
     ("benachrichtigungen", "gelesen_am", "TEXT"),
+    ("bank_umsaetze", "fixkosten_id", "INTEGER"),          # Abbuchung einer Fixkosten-Zahlung (0.24.0)
+    ("bank_umsaetze", "fixkosten_monat", "TEXT"),          # Monat der erwarteten Fälligkeit (JJJJ-MM)
+    ("eingangsrechnungen", "fixkosten_id", "INTEGER"),     # Rechnung gehört zu einer Fixkosten-Position
     ("loeschprotokolle", "frist", "TEXT"),
 ]
 
@@ -401,7 +408,8 @@ NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "s
                  "lager_reservierungen", "inventuren", "inventur_positionen", "inventur_zugaenge", "lieferanten",
                  "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
                  "er_zahlungen", "kassenbuch", "kassen_abschluesse", "datev_exporte", "datev_posten",
-                 "loeschprotokolle", "loeschfreigaben", "loesch_zurueckstellungen"]
+                 "loeschprotokolle", "loeschfreigaben", "loesch_zurueckstellungen", "fixkosten",
+                 "fixkosten_betraege", "hinweise_gelesen"]
 
 
 def _migrieren(con, pfad=None):

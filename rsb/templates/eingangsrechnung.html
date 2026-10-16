@@ -45,6 +45,10 @@
       <div class="s3"><label>Zahlart</label><select name="zahlart">{% for k, n in zahlarten.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
       <div class="s3"><label>&nbsp;</label><button>Zahlung erfassen</button></div><input type="hidden" name="notiz" value=""></form>{% endif %}
   </div>
+  {% if fix_liste %}<form method="post" action="{{ url_for('main.eingangsrechnung_fixkosten', eid=e.id) }}" class="karte">{{ csrf() }}
+    <h2>Gehört zu Fixkosten</h2>
+    <div class="leiste"><select name="fixkosten_id" style="width:auto;max-width:320px"><option value="">– nein –</option>{% for f in fix_liste %}<option value="{{ f.id }}" {{ 'selected' if e.fixkosten_id == f.id }}>{{ f.bezeichnung }} · {{ f.kategorie }}</option>{% endfor %}</select><button class="zweit klein">Speichern</button></div>
+    <p class="klein">Zum Beispiel die Jahresrechnung des Steuerberaters. Die Finanzübersicht zählt den Betrag dann nur einmal, nämlich bei den Fixkosten.</p></form>{% endif %}
   {% if e.status != 'storniert' %}<details class="karte"><summary>Eingangsrechnung stornieren …</summary><form method="post" class="leiste" style="margin-top:8px">{{ csrf() }}<input type="hidden" name="aktion" value="stornieren"><input type="text" name="grund" required minlength="3" placeholder="Grund (z. B. doppelt erfasst)" style="flex:1"><button class="gefahr">Stornieren</button></form></details>{% endif %}
   {{ aenderungen_karte(aenderungen) }}
   {% endif %}

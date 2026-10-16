@@ -54,6 +54,10 @@ SEITENLEISTE = [
     Gruppe("buchhaltung", "Buchhaltung", [
         Eintrag("bank", "Bankabgleich", "landmark", "main.bank", stichworte="Kontoauszug Zahlungen CSV"),
         Eintrag("kasse", "Kassenbuch", "wallet", "main.kassenbuch", stichworte="Bargeld Kassensturz Privateinlage"),
+        Eintrag("fixkosten", "Fixkosten", "calendar-clock", "main.fixkosten_liste",
+                stichworte="Miete Strom Versicherung Leasing Abo wiederkehrende Ausgaben Kündigungsfrist"),
+        Eintrag("finanzen", "Finanzen", "chart-column", "main.finanzen",
+                stichworte="Finanzübersicht Umsatz Ergebnis Rohertrag Break-even Auswertung Gewinn"),
         Eintrag("datev", "DATEV-Export", "file-output", "main.datev", stichworte="Steuerberater Buchungsstapel"),
     ]),
 ]
@@ -76,7 +80,7 @@ ZUORDNUNG = [
     ("dokument", "rechnungen"), ("kostenvoranschlaege", "rechnungen"), ("offene_posten", "rechnungen"),
     ("mahn", "rechnungen"), ("zahlung", "rechnungen"), ("artikel", "artikel"), ("lager", "lager"),
     ("inventur", "lager"), ("bestellung", "einkauf"), ("lieferant", "einkauf"), ("eingangsrechnung", "einkauf"),
-    ("bank", "bank"), ("kasse", "kasse"), ("datev", "datev"),
+    ("bank", "bank"), ("kasse", "kasse"), ("datev", "datev"), ("fixkosten", "fixkosten"), ("finanz", "finanzen"),
     ("einstellungen", "einstellungen"), ("backup", "einstellungen"), ("logo", "einstellungen"),
     ("musterrechnung", "einstellungen"), ("textbaustein", "einstellungen"), ("protokoll", "einstellungen"),
     ("pruefung", "einstellungen"), ("datenschutz", "einstellungen"), ("verfahrensdoku", "einstellungen"),

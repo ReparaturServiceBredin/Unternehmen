@@ -325,6 +325,13 @@
       <div class="hilfe">Für die Zuordnung der Eingangsrechnungen und später für die Konten im DATEV-Export.</div></div>
     <div class="s6"><label>Postfach-Ordner mit Eingangsrechnungen</label><input type="text" name="er_imap_ordner" value="{{ einst.er_imap_ordner }}">
       <div class="hilfe">Nutzt den IMAP-Zugang unter „Anfragen“. Tipp: im Mailprogramm eine Regel anlegen, die Rechnungen in einen eigenen Ordner (z. B. „Rechnungen“) verschiebt.</div></div>
+  </div>
+  <br><h2>Fixkosten und Finanzen</h2>
+  <div class="felder">
+    <div class="s6"><label>Kategorien für Fixkosten (eine je Zeile)</label><textarea name="fixkosten_kategorien" style="min-height:220px">{{ einst.fixkosten_kategorien }}</textarea></div>
+    <div class="s6"><label>Kostenarten, die als Wareneinsatz zählen (eine je Zeile)</label><textarea name="wareneinsatz_kostenarten" style="min-height:100px">{{ einst.wareneinsatz_kostenarten }}</textarea>
+      <div class="hilfe">Eingangsrechnungen und Kassenausgaben mit diesen Kostenarten gehen in der Finanzübersicht in den Wareneinsatz (Rohertrag), alle anderen in „sonstige Ausgaben“.</div>
+      <label style="margin-top:12px">Hinweis auf Vertragsende und Kündigungsfrist (Tage vorher)</label><input type="number" min="1" name="fixkosten_hinweis_tage" value="{{ einst.fixkosten_hinweis_tage }}"></div>
   </div><br><button>Speichern</button>
 </form>
 
