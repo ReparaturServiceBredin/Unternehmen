@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.23.0 | 16.10.2026 | Fester Datenordner – egal, von wo das Programm gestartet wird |
 | 0.22.2 | 16.10.2026 | Sicherung wiederherstellen mit Inhaltsvorschau, Hinweis bei OneDrive |
 | 0.22.1 | 16.10.2026 | Fehlerbehebung: Einstellungen werden nie mehr leer angezeigt |
 | 0.22.0 | 16.10.2026 | Neue Navigation: Gruppen, Schnellsuche (Strg+K), Glocke, Einstellungen mit Suche, Dunkelmodus |
@@ -43,6 +44,26 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.23.0 – 16.10.2026
+Ein fester Datenordner – nie mehr getrennte Datenbestände.
+
+### Geändert
+- Bisher lag der Ordner `Daten` neben der EXE bzw. dem Programmordner. Wurde das Programm von einer anderen Stelle
+  gestartet (Downloads, Desktop, start.bat), entstand dort ein neuer, leerer Datenbestand.
+- **Jetzt liegen alle Daten an einem festen Ort**, egal von wo das Programm gestartet wird. Unter Windows ist das
+  `%LOCALAPPDATA%\RSB-Buchhaltung\Daten`; der Ordner wird nicht von OneDrive synchronisiert.
+- **Automatische Übernahme beim ersten Start:**
+  - Das Programm sucht die bisherigen Datenordner (neben dem Programm, Desktop, Downloads, Dokumente, OneDrive) und
+    übernimmt den mit den meisten Daten.
+  - Es kopiert, verschiebt nicht. Danach prüft es, ob jede Tabelle gleich viele Datensätze hat und keine Datei fehlt.
+    Stimmt etwas nicht, verwirft es die Kopie und arbeitet mit dem bisherigen Ordner weiter.
+  - Der alte Ordner bleibt mit einer Notiz liegen.
+  - Auf der Übersicht erscheint einmal ein Hinweis, auch zu weiteren gefundenen Ordnern.
+- Der Datenordner steht unter *Einstellungen → Backup* und ist über das Symbol neben der Uhr erreichbar.
+- Mit der Umgebungsvariable `RSB_DATEN` lässt sich der Ort weiterhin selbst festlegen (z. B. für Docker).
 
 ---
 

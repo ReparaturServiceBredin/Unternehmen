@@ -98,10 +98,30 @@ def abmelden():
 
 # ====================================================================== Start
 
+def _umzug_hinweis(con):
+    """Einmaliger Hinweis nach der Übernahme der Daten an den festen Ort."""
+    pfad = Path(daten_dir()) / "umzug.json"
+    if not pfad.is_file() or dbm.einstellung("umzug_hinweis_gezeigt", con):
+        return
+    try:
+        b = json.loads(pfad.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return
+    flash(f"Ihre Daten liegen jetzt fest an einem Ort ({b['nach']}) – egal, von wo das Programm gestartet wird. "
+          f"Übernommen aus {b['von']}, Datensätze und Dateien geprüft.", "info")
+    if b.get("weitere_ordner"):
+        flash("Weitere ältere Datenordner gefunden: " + ", ".join(b["weitere_ordner"]) + ". Falls dort etwas "
+              "fehlt: Einstellungen → Backup → Sicherung wiederherstellen.", "warnung")
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({"umzug_hinweis_gezeigt": dbm.jetzt()}, con)
+        dbm.protokollieren("daten_umgezogen", "system", None, b, con=con)
+
+
 @bp.route("/")
 def start():
     con = dbm.get_db()
     jahr = date.today().year
+    _umzug_hinweis(con)
 
     def umsatz(j):
         return con.execute(

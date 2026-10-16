@@ -132,7 +132,10 @@ Jeder Versand und jeder Fehlversuch steht unter **Protokoll**.
 
 ## 6. Backup und Wiederherstellung
 
-**Automatisch:** Beim Programmstart entsteht einmal täglich eine ZIP-Datei unter `Daten\backups`.
+**Datenordner:** Alle Daten liegen an einem festen Ort, egal von wo das Programm gestartet wird (Windows:
+`%LOCALAPPDATA%\RSB-Buchhaltung\Daten`). Öffnen: Rechtsklick auf das Symbol neben der Uhr → „Daten-Ordner öffnen“.
+
+**Automatisch:** Beim Programmstart entsteht einmal täglich eine ZIP-Datei im Unterordner `backups` des Datenordners.
 Die letzten 30 Backups bleiben erhalten (einstellbar).
 
 **NAS:** Unter *Einstellungen → Backup* tragen Sie einen zweiten Ordner ein, z. B. `\\NAS\Backup\Buchhaltung`
@@ -141,9 +144,13 @@ oder ein Netzlaufwerk wie `Z:\Backup\Buchhaltung`. Jedes Backup wird dorthin kop
 
 **Manuell:** *Einstellungen → Backup → Backup jetzt erstellen*.
 
-**Wiederherstellen** (z. B. auf einem neuen PC):
-1. `RSB-Buchhaltung.exe` in einen Ordner legen, aber noch **nicht** starten (bzw. das schwarze Fenster schließen).
-2. Die Backup-ZIP in den Ordner `Daten` entpacken und vorhandene Dateien ersetzen.
+**Wiederherstellen auf demselben PC:** *Einstellungen → Backup → Sicherung wiederherstellen*. Jede Sicherung wird mit
+ihrem Inhalt angezeigt; vorher wird der aktuelle Stand vollständig gesichert.
+
+**Wiederherstellen auf einem neuen PC:**
+1. `RSB-Buchhaltung.exe` irgendwohin legen und einmal starten, dann über das Symbol neben der Uhr beenden.
+2. Die Backup-ZIP in den Datenordner (`%LOCALAPPDATA%\RSB-Buchhaltung\Daten`) entpacken und vorhandene Dateien
+   ersetzen.
 3. Die EXE starten (falls der Passwortschutz eingeschaltet war: mit dem bisherigen Passwort anmelden).
 4. Unter *Einstellungen → E-Mail* das E-Mail-Passwort **neu eingeben**. Der Schlüssel dafür ist aus Sicherheitsgründen nicht im Backup enthalten.
 5. Unter **Datenprüfung** kontrollieren, ob alles „In Ordnung“ ist.

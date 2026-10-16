@@ -9,8 +9,10 @@ if __name__ == "__main__":
     if sys.stdout is None or sys.stderr is None:
         # EXE ohne Konsolenfenster: Meldungen in Daten/programm.log schreiben
         import os
-        from pathlib import Path
-        daten = Path(os.environ.get("RSB_DATEN") or Path(sys.executable).resolve().parent / "Daten")
+        from rsb.datenort import ermitteln
+        meldungen = []
+        daten = ermitteln(ausgabe=meldungen.append)  # fester Datenordner (übernimmt beim ersten Mal die alten Daten)
+        os.environ["RSB_DATEN"] = str(daten)
         daten.mkdir(parents=True, exist_ok=True)
         log = daten / "programm.log"
         if log.exists() and log.stat().st_size > 1_000_000:
@@ -18,6 +20,8 @@ if __name__ == "__main__":
         datei = open(log, "a", encoding="utf-8", buffering=1)
         sys.stdout = sys.stdout or datei
         sys.stderr = sys.stderr or datei
+        for m in meldungen:
+            print(m)
     for strom in (sys.stdout, sys.stderr):
         try:
             strom.reconfigure(errors="replace")  # Umlaute nie zum Absturz werden lassen

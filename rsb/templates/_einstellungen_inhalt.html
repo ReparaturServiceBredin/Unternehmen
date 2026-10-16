@@ -204,6 +204,7 @@
 </div>
 <div class="karte" id="wiederherstellen">
   <h2>Sicherung wiederherstellen</h2>
+  <p class="klein">Datenordner: <b>{{ daten_ordner }}</b> (fester Ort, egal von wo das Programm gestartet wird; öffnen über das Symbol neben der Uhr → „Daten-Ordner öffnen“).</p>
   {% set wb = einst.wiederherstellung_bericht %}
   {% if wb %}<div class="meldung {{ 'ok' if wb.ok else 'fehler' }}">{% if wb.ok %}Zuletzt eingespielt: <b>{{ wb.quelle }}</b> – jetzt {{ wb.inhalt.anzahl.kunden or 0 }} Kunden, {{ wb.inhalt.anzahl.auftraege or 0 }} Aufträge, {{ wb.inhalt.anzahl.artikel or 0 }} Artikel. Der vorherige Stand liegt in {{ wb.sicherung }}.{% else %}{{ wb.meldung }}{% endif %}</div>{% endif %}
   {% if onedrive %}<div class="meldung warnung"><b>Ihr Datenordner liegt in OneDrive</b> ({{ daten_ordner }}). OneDrive kann eine geöffnete Datenbank durch eine ältere Fassung ersetzen. Empfehlung: Programm samt Ordner „Daten“ in einen Ordner außerhalb von OneDrive verschieben, z. B. C:\RSB-Buchhaltung, und Sicherungen über „Zusätzlicher Backup-Ordner“ anlegen.</div>{% endif %}
@@ -385,8 +386,8 @@
   <h2>Version {{ version }}</h2>
   {% if not ist_exe %}
     <div class="meldung info">Sie nutzen die Installation per <code>start.bat</code>. Automatische Updates gibt es nur in der
-      EXE-Version (<b>RSB-Buchhaltung.exe</b>, siehe Anleitung). Ihre Daten können Sie einfach mitnehmen: den Ordner
-      <code>Daten</code> neben die EXE kopieren.</div>
+      EXE-Version (<b>RSB-Buchhaltung.exe</b>, siehe Anleitung). Die EXE benutzt denselben festen Datenordner – Ihre
+      Daten sind dort sofort da.</div>
   {% endif %}
   {% if update_da %}
     <div class="meldung warnung"><b>Neue Version {{ update_da }} verfügbar.</b>

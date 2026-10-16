@@ -1,5 +1,4 @@
 """Reparatur Service Bredin – Buchhaltung & Rechnungen."""
-import os
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -11,17 +10,18 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.22.2"
+VERSION_NUMMER = "0.23.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
-    # EXE-Version: der Ordner „Daten“ liegt direkt neben RSB-Buchhaltung.exe
+    # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
     PROJEKT = Path(sys.executable).resolve().parent
 else:
     PROJEKT = Path(__file__).resolve().parent.parent
 
 
 def create_app(daten_dir=None, testing=False):
-    daten = Path(daten_dir or os.environ.get("RSB_DATEN") or PROJEKT / "Daten").resolve()
+    from .datenort import ermitteln
+    daten = Path(daten_dir).resolve() if daten_dir else ermitteln()  # fester Ort, unabhängig vom Startordner
     for unterordner in ("dokumente", "belege", "bilder", "backups", "geheim", "fotos"):
         (daten / unterordner).mkdir(parents=True, exist_ok=True)
 

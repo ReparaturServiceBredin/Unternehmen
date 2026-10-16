@@ -37,7 +37,7 @@ E-Mail-Versand mit Protokoll, Storno, unveränderbare fortlaufende Nummern, Pass
 - **Mit Windows starten:** `Win + R`, `shell:startup` eingeben und dort eine Verknüpfung zur EXE ablegen.
 - Ein Doppelklick auf die EXE, während das Programm schon läuft, öffnet einfach wieder das Fenster.
 - Lieber als Tab im normalen Browser? *Einstellungen → Programm & Updates → Programmfenster*.
-- Meldungen des Programms stehen in `Daten\programm.log`.
+- Meldungen des Programms stehen in `programm.log` im Datenordner.
 
 ### Updates – automatisch
 
@@ -52,16 +52,26 @@ mit einer Prüfsumme kontrolliert.
 
 ### Umstieg von der bisherigen Installation (start.bat)
 
-1. Altes Programm beenden (bei start.bat: schwarzes Fenster schließen).
-2. Den Ordner **`Daten`** aus dem alten Programmordner neben die neue `RSB-Buchhaltung.exe` kopieren.
-3. EXE starten. Das E-Mail-Passwort muss nicht neu eingegeben werden, weil `Daten\geheim` mitkopiert wurde.
+Nichts zu tun: EXE und start.bat benutzen denselben festen Datenordner (siehe unten). Bisherige Datenordner übernimmt
+das Programm beim ersten Start selbst.
 
 Die alte Variante mit `installieren.bat` / `start.bat` funktioniert weiterhin, bekommt aber keine automatischen
 Updates.
 
-## Ihre Daten – ein einziger Ordner
+## Ihre Daten – ein einziger, fester Ordner
 
-Alles liegt im Ordner **`Daten`** direkt neben `RSB-Buchhaltung.exe`:
+Seit Version 0.23 liegen alle Daten an **einem festen Ort**, egal von wo Sie das Programm starten (Desktop, Downloads,
+start.bat):
+
+- Windows: `%LOCALAPPDATA%\RSB-Buchhaltung\Daten` (z. B. `C:\Users\Name\AppData\Local\RSB-Buchhaltung\Daten`).
+  Dieser Ordner wird nicht von OneDrive synchronisiert.
+- Öffnen: Rechtsklick auf das Programmsymbol neben der Uhr → **Daten-Ordner öffnen**. Der Pfad steht auch unter
+  *Einstellungen → Backup*.
+- Beim ersten Start übernimmt das Programm den bisherigen Ordner `Daten` (neben der EXE bzw. in Desktop, Downloads,
+  Dokumente, OneDrive) mit den meisten Daten. Es **kopiert** ihn, prüft Datensätze und Dateien und lässt den alten
+  Ordner mit einer Notiz liegen. Weitere gefundene Ordner zeigt es an; sie lassen sich unter
+  *Einstellungen → Backup → Sicherung wiederherstellen* einspielen.
+- Für Docker oder Sonderfälle lässt sich der Ort mit der Umgebungsvariable `RSB_DATEN` festlegen.
 
 ```
 Daten\
