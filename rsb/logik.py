@@ -5,7 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from . import db as dbm
-from .hilfen import (EingabeFehler, anrede_brief, anschrift_zeilen, datum_de, euro, kunde_name,
+from .hilfen import (EingabeFehler, heute_datum, anrede_brief, anschrift_zeilen, datum_de, euro, kunde_name,
                      platzhalter_ersetzen, sicherer_dateiname)
 
 DOKUMENTTYPEN = {
@@ -295,7 +295,7 @@ def _pruefen_vor_festschreiben(con, dok, einst):
     fehler, _ = pflichtangaben_pruefen(con, dok, einst)
     if fehler:
         raise EingabeFehler("Festschreiben nicht möglich – Pflichtangaben fehlen: " + " · ".join(fehler))
-    if date.fromisoformat(dok["datum"]) > date.today():
+    if date.fromisoformat(dok["datum"]) > heute_datum():
         raise EingabeFehler("Das Rechnungsdatum darf nicht in der Zukunft liegen.")
     praefix = einst[DOKUMENTTYPEN[dok["typ"]][1]]
     letzte = con.execute(
@@ -375,7 +375,7 @@ def stornieren(con, dok_id, daten_dir, grund=""):
     if orig is None or orig["status"] != "festgeschrieben" or orig["typ"] != "rechnung":
         raise EingabeFehler("Nur festgeschriebene, nicht stornierte Rechnungen können storniert werden.")
     texte = standard_texte(con, "storno")
-    heute = date.today().isoformat()
+    heute = heute_datum().isoformat()
     with dbm.Transaktion(con):
         cur = con.execute(
             "INSERT INTO dokumente (typ, kunde_id, datum, leistungsdatum, leistungsdatum_bis, betreff, einleitung, "

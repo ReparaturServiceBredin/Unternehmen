@@ -70,6 +70,9 @@ automatisch eine Sicherung an. Alle bisherigen Daten bleiben unverändert.
 - **Gmail-Anmeldung:** App-Passwörter dürfen mit Leerzeichen eingetragen werden, so wie Google sie anzeigt
   („abcd efgh ijkl mnop“). Lehnt Gmail die Anmeldung ab, erklärt die Meldung Schritt für Schritt, wie man ein
   App-Passwort erstellt.
+- **Datum „nicht in der Zukunft“:** Rechnungen, Zahlungen und Kassenbuchungen prüfen das Datum jetzt ausdrücklich nach
+  deutscher Zeit. Läuft der Rechner in einer anderen Zeitzone (z. B. ein Server in UTC), ließ sich zwischen
+  Mitternacht und 1 bzw. 2 Uhr nachts nichts mit dem heutigen Datum festschreiben.
 
 ### Geändert
 - Gelöschte Anfragen (Spam nach 30 Tagen, verworfene, Löschung aus Datenschutzgründen) kommen beim Abruf nicht

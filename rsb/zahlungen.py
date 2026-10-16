@@ -6,7 +6,7 @@ Der offene Betrag einer Rechnung = Rechnungsbetrag + festgeschriebene Gutschrift
 from datetime import date
 
 from . import db as dbm
-from .hilfen import EingabeFehler, euro
+from .hilfen import EingabeFehler, euro, heute_datum
 
 ZAHLARTEN = {"ueberweisung": "Überweisung", "bar": "Bar", "karte": "EC/Karte", "paypal": "PayPal",
              "verrechnung": "Verrechnung"}
@@ -16,7 +16,7 @@ STATUS = {"offen": "offen", "teilweise": "teilweise bezahlt", "bezahlt": "bezahl
 
 def stand(con, dok, heute=None):
     """Zahlungsstand einer (festgeschriebenen) Rechnung als dict."""
-    heute = heute or date.today().isoformat()
+    heute = heute or heute_datum().isoformat()
     gutschriften = con.execute("SELECT COALESCE(SUM(summe_brutto), 0) FROM dokumente WHERE bezug_id=? "
                                "AND typ='gutschrift' AND status<>'entwurf'", (dok["id"],)).fetchone()[0]
     bezahlt = con.execute("SELECT COALESCE(SUM(betrag), 0) FROM zahlungen WHERE dokument_id=? AND storniert_am IS NULL",
@@ -64,7 +64,7 @@ def erfassen(con, dok_id, datum, betrag, zahlart, notiz="", bank_umsatz_id=None)
     if not betrag:
         raise EingabeFehler("Bitte einen Betrag angeben.")
     try:
-        if date.fromisoformat(datum) > date.today():
+        if date.fromisoformat(datum) > heute_datum():
             raise EingabeFehler("Das Zahlungsdatum darf nicht in der Zukunft liegen.")
     except (TypeError, ValueError):
         raise EingabeFehler("Bitte ein gültiges Zahlungsdatum angeben.")

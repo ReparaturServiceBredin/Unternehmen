@@ -13,7 +13,7 @@
 from datetime import date, timedelta
 
 from . import db as dbm
-from .hilfen import EingabeFehler, euro
+from .hilfen import EingabeFehler, euro, heute_datum
 
 ARTEN = {"einnahme": "Einnahme", "ausgabe": "Ausgabe", "einlage": "Privateinlage", "entnahme": "Privatentnahme",
          "bank_ein": "Geldtransit von der Bank", "bank_aus": "Einzahlung auf die Bank", "differenz": "Kassendifferenz",
@@ -71,7 +71,7 @@ def buchen(con, datum, art, betrag, text, steuersatz=None, dokument_id=None, zah
         tag = date.fromisoformat(datum)
     except (TypeError, ValueError):
         raise EingabeFehler("Bitte ein gültiges Datum angeben.")
-    if tag > date.today():
+    if tag > heute_datum():
         raise EingabeFehler("Kassenbuchungen dürfen nicht in der Zukunft liegen.")
     text = (text or "").strip()
     if len(text) < 3:
@@ -118,7 +118,7 @@ def gegenbuchen(con, buchung_id, grund, datum=None):
         raise EingabeFehler("Zu dieser Buchung gibt es bereits eine Gegenbuchung.")
     if len((grund or "").strip()) < 3:
         raise EingabeFehler("Bitte einen Grund für die Korrektur angeben.")
-    return buchen(con, datum or date.today().isoformat(), "gegenbuchung", -b["betrag"],
+    return buchen(con, datum or heute_datum().isoformat(), "gegenbuchung", -b["betrag"],
                   f"Gegenbuchung zu Nr. {b['lfd_nr']}: {grund.strip()}", steuersatz=b["steuersatz"],
                   dokument_id=b["dokument_id"], gegenbuchung_zu=buchung_id, negativ_erlaubt=b["betrag"] < 0,
                   kostenart=b["kostenart"])
@@ -171,7 +171,7 @@ def tagesabschluss(con, datum, ist, begruendung="", zaehlung=None):
         tag = date.fromisoformat(datum)
     except (TypeError, ValueError):
         raise EingabeFehler("Bitte ein gültiges Datum angeben.")
-    if tag > date.today():
+    if tag > heute_datum():
         raise EingabeFehler("Ein Tag in der Zukunft kann nicht abgeschlossen werden.")
     letzter = letzter_abschluss(con)
     if letzter and datum <= letzter["datum"]:

@@ -1,6 +1,14 @@
+import os
 import re
+import time
 
 import pytest
+
+# Tests laufen wie das Programm beim Inhaber in deutscher Zeit. Sonst weichen Datumsangaben in den Tests
+# (Rechnerzeit, auf GitHub UTC) zwischen Mitternacht in Berlin und Mitternacht UTC vom Programm ab.
+os.environ["TZ"] = "Europe/Berlin"
+if hasattr(time, "tzset"):
+    time.tzset()
 
 from rsb import create_app
 from rsb import db as dbm
