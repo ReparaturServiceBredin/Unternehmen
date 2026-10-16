@@ -1101,3 +1101,77 @@ CREATE TRIGGER IF NOT EXISTS er_zahlung_schutz_delete BEFORE DELETE ON er_zahlun
 BEGIN
     SELECT RAISE(ABORT, 'Zahlungen können nicht gelöscht, nur storniert werden.');
 END;
+
+-- Kassenbuch (0.19.0): fortlaufend nummeriert, unveränderlich; Korrektur nur per Gegenbuchung
+CREATE TABLE IF NOT EXISTS kassenbuch (
+    id              INTEGER PRIMARY KEY,
+    lfd_nr          INTEGER UNIQUE NOT NULL,
+    datum           TEXT NOT NULL,
+    art             TEXT NOT NULL,
+    betrag          INTEGER NOT NULL,          -- Cent; + Eingang, − Ausgang
+    steuersatz      REAL,
+    kostenart       TEXT,                      -- bei Ausgaben (für den DATEV-Export)
+    text            TEXT NOT NULL,
+    dokument_id     INTEGER REFERENCES dokumente(id),
+    zahlung_id      INTEGER REFERENCES zahlungen(id),
+    er_zahlung_id   INTEGER REFERENCES er_zahlungen(id),
+    beleg_datei     TEXT,
+    beleg_sha256    TEXT,
+    beleg_name      TEXT,
+    gegenbuchung_zu INTEGER REFERENCES kassenbuch(id),
+    erfasst_am      TEXT NOT NULL,
+    benutzer        TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_kassenbuch_datum ON kassenbuch(datum);
+CREATE TRIGGER IF NOT EXISTS kassenbuch_schutz_update BEFORE UPDATE ON kassenbuch
+BEGIN
+    SELECT RAISE(ABORT, 'Kassenbuchungen dürfen nicht geändert werden – bitte eine Gegenbuchung erfassen.');
+END;
+CREATE TRIGGER IF NOT EXISTS kassenbuch_schutz_delete BEFORE DELETE ON kassenbuch
+BEGIN
+    SELECT RAISE(ABORT, 'Kassenbuchungen dürfen nicht gelöscht werden – bitte eine Gegenbuchung erfassen.');
+END;
+
+CREATE TABLE IF NOT EXISTS kassen_abschluesse (
+    id          INTEGER PRIMARY KEY,
+    datum       TEXT UNIQUE NOT NULL,
+    soll        INTEGER NOT NULL,
+    ist         INTEGER NOT NULL,
+    differenz   INTEGER NOT NULL,
+    begruendung TEXT,
+    zaehlung    TEXT,                       -- Zählprotokoll (Scheine/Münzen) als JSON
+    erstellt_am TEXT NOT NULL,
+    benutzer    TEXT
+);
+CREATE TRIGGER IF NOT EXISTS kassen_abschluss_schutz_update BEFORE UPDATE ON kassen_abschluesse
+BEGIN
+    SELECT RAISE(ABORT, 'Tagesabschlüsse dürfen nicht geändert werden.');
+END;
+CREATE TRIGGER IF NOT EXISTS kassen_abschluss_schutz_delete BEFORE DELETE ON kassen_abschluesse
+BEGIN
+    SELECT RAISE(ABORT, 'Tagesabschlüsse dürfen nicht gelöscht werden.');
+END;
+
+-- DATEV-Export: Protokoll und exportierte Buchungen (gegen doppelten Export)
+CREATE TABLE IF NOT EXISTS datev_exporte (
+    id          INTEGER PRIMARY KEY,
+    von         TEXT NOT NULL,
+    bis         TEXT NOT NULL,
+    anzahl      INTEGER NOT NULL,
+    summe       INTEGER NOT NULL,
+    datei       TEXT NOT NULL,
+    sha256      TEXT NOT NULL,
+    erneut      INTEGER NOT NULL DEFAULT 0,  -- 1 = bereits exportierte Buchungen erneut ausgegeben
+    erstellt_am TEXT NOT NULL,
+    benutzer    TEXT
+);
+CREATE TABLE IF NOT EXISTS datev_posten (
+    quelle      TEXT NOT NULL,              -- dokument / zahlung / eingangsrechnung / er_zahlung / kasse
+    quelle_id   INTEGER NOT NULL,
+    export_id   INTEGER NOT NULL REFERENCES datev_exporte(id),
+    PRIMARY KEY (quelle, quelle_id)
+);
+CREATE TRIGGER IF NOT EXISTS datev_export_schutz BEFORE DELETE ON datev_exporte
+BEGIN
+    SELECT RAISE(ABORT, 'Das Exportprotokoll darf nicht gelöscht werden.');
+END;

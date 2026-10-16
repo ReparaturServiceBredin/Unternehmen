@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.19.0 | 16.10.2026 | Kassenbuch mit Tagesabschluss, DATEV-Export |
 | 0.18.0 | 16.10.2026 | E-Rechnung: ZUGFeRD/Factur-X und XRechnung erzeugen und empfangen |
 | 0.17.0 | 15.10.2026 | Lieferanten, Bestellungen, Wareneingang, Eingangsrechnungen |
 | 0.16.0 | 15.10.2026 | Lager: Bestand, Reservierung, Mindestbestand, Inventur, Lagerwert |
@@ -39,6 +40,50 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
 
 ---
+
+## 0.19.0 – 16.10.2026
+Kassenbuch und DATEV-Export (Ausbaustufe 9 von 10).
+
+### Neu
+
+**Kassenbuch** (Menü *Buchhaltung → Kassenbuch*):
+- Jede Buchung bekommt eine fortlaufende Nummer, mit Datum, Betrag, Steuersatz, Text, Kostenart (bei Ausgaben)
+  und Beleg (Foto/PDF).
+- Arten: Einnahme, Ausgabe, Privateinlage, Privatentnahme, Einzahlung auf die Bank, Geld von der Bank,
+  Anfangsbestand.
+- **Barzahlungen** auf Rechnungen und bar bezahlte Eingangsrechnungen kommen automatisch ins Kassenbuch. Bei einer
+  Einnahme können Sie direkt die Rechnung wählen; dann wird gleichzeitig die Zahlung erfasst.
+- Buchungen sind **unveränderlich**. Korrekturen gehen nur per **Gegenbuchung** mit Grund. Storniert man eine
+  Barzahlung, entsteht die Gegenbuchung automatisch.
+- **Der Kassenbestand kann nicht negativ werden.** Eine Buchung, die das verursachen würde, lehnt das Programm mit
+  Erklärung ab.
+- **Tagesabschluss mit Kassensturz:** gezählten Bestand eintragen oder über das Zählprotokoll (Scheine/Münzen)
+  ausrechnen lassen. Eine Differenz wird mit Begründung als eigene Buchung erfasst. Danach ist der Tag gesperrt.
+- Druckansicht des Kassenbuchs für jeden Zeitraum.
+
+**DATEV-Export** (Menü *Buchhaltung → DATEV-Export*):
+- Zeitraum wählen, Vorschau prüfen, „Export erstellen“. Sie bekommen ein ZIP mit dem **DATEV-Buchungsstapel**
+  (EXTF 700) und allen Belegen: Rechnungs-PDFs und -XML, Eingangsrechnungen, Kassenbelege.
+- Enthalten sind: Ausgangsrechnungen, Gutschriften, Stornos, Zahlungseingänge, Eingangsrechnungen,
+  Zahlungsausgänge und Kassenbuchungen.
+- Exportierte Buchungen werden vermerkt und beim nächsten Export nicht erneut ausgegeben. Auf Wunsch geht das doch,
+  dann mit Kennzeichnung „erneut“.
+- Das Exportprotokoll enthält Zeitraum, Zeitpunkt, Anzahl und Prüfsumme (SHA-256). Exportierte
+  Eingangsrechnungen lassen sich nicht mehr ändern.
+- *Einstellungen → DATEV:* Berater- und Mandantennummer, SKR03/SKR04, Beginn des Wirtschaftsjahres,
+  Debitoren-/Kreditorennummern, abweichende Konten und Konten je Kostenart.
+
+### Wichtig
+- Die Kontenzuordnung entspricht den Standardkonten von SKR03/SKR04, z. B. Kleinunternehmer-Erlöse 8195/4185 und
+  Wareneingang 3200/5200. **Bitte den ersten Export mit dem Steuerberater durchgehen.**
+- **Keine TSE:** Hinweise zur TSE-Pflicht stehen in der Anleitung, Abschnitt 25.
+
+### Technisch
+- Neue Tabellen:
+  - `kassenbuch`, `kassen_abschluesse` (beide gegen Ändern und Löschen geschützt)
+  - `datev_exporte`, `datev_posten`
+- Vor der Umstellung wird automatisch gesichert. Die Datenprüfung prüft die lückenlose Nummerierung des
+  Kassenbuchs, die Tagesabschlüsse und den Bestand (nie negativ).
 
 ## 0.18.0 – 16.10.2026
 E-Rechnung (Ausbaustufe 8 von 10).

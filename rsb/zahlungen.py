@@ -78,6 +78,9 @@ def erfassen(con, dok_id, datum, betrag, zahlart, notiz="", bank_umsatz_id=None)
     dbm.protokollieren("zahlung_erfasst", "dokument", dok_id, {"zahlung": cur.lastrowid, "betrag": betrag,
                                                                "datum": datum, "zahlart": zahlart}, con=con)
     _auftrag_verlauf(con, dok_id, "Zahlung erfasst", f"{dok['nummer']}: {text}")
+    if zahlart == "bar":  # Barzahlung → Kassenbuch
+        from .kasse import aus_zahlung
+        aus_zahlung(con, cur.lastrowid)
     return cur.lastrowid
 
 
@@ -94,6 +97,9 @@ def stornieren(con, zahlung_id, grund):
         con.execute("UPDATE bank_umsaetze SET status='offen', zahlung_id=NULL, bearbeitet_am=?, bearbeitet_von=? "
                     "WHERE id=?", (dbm.jetzt_berlin(), dbm.aktueller_benutzer(), z["bank_umsatz_id"]))
     _cache_aktualisieren(con, z["dokument_id"])
+    if z["zahlart"] == "bar":
+        from .kasse import zahlung_storniert
+        zahlung_storniert(con, zahlung_id=zahlung_id, grund=f"Zahlung storniert: {grund}")
     dbm.ereignis_erfassen(con, "dokument", z["dokument_id"], "Zahlung storniert",
                           f"{euro(z['betrag'])} vom {z['datum']} – Grund: {grund}")
     dbm.protokollieren("zahlung_storniert", "dokument", z["dokument_id"], {"zahlung": zahlung_id, "grund": grund},

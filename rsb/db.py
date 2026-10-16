@@ -184,7 +184,17 @@ STANDARD_EINSTELLUNGEN = {
     "kostenarten": "Wareneinkauf / Ersatzteile\nWerkzeug & Geräte\nMiete & Nebenkosten\nTelefon & Internet\n"
                    "Software & Lizenzen\nPorto & Versand\nWerbung\nFahrzeugkosten\nBürobedarf\nFortbildung\n"
                    "Versicherungen & Beiträge\nBankgebühren\nSonstiges",
-    "er_imap_ordner": "INBOX",              # Postfach-Ordner für Eingangsrechnungen                  # freiwillige Garantie auf Reparaturen (6 / 12 Monate …), 0 = keine
+    "er_imap_ordner": "INBOX",
+    # DATEV-Export (Kontenrahmen SKR03/SKR04; leere Konten = Standard des Kontenrahmens)
+    "datev_beraternr": "",
+    "datev_mandantennr": "",
+    "datev_skr": "03",
+    "datev_wj_beginn": "01-01",           # Beginn des Wirtschaftsjahres als MM-TT
+    "datev_kontenlaenge": 4,
+    "datev_debitor_start": 10000,
+    "datev_kreditor_start": 70000,
+    "datev_konten": "",                    # Abweichungen „Name=Konto“, eine je Zeile
+    "datev_kostenarten": "",               # „Kostenart=Konto“, eine je Zeile              # Postfach-Ordner für Eingangsrechnungen                  # freiwillige Garantie auf Reparaturen (6 / 12 Monate …), 0 = keine
     "handy_im_netz": False,                 # Server im WLAN erreichbar machen (für QR-Code am Handy), Neustart nötig
     "handy_adresse": "",                    # optional: feste Adresse, z. B. 192.168.178.20:5000
     # Kundenbenachrichtigung: siehe benachrichtigung.einstellungs_standard() (unten ergänzt)
@@ -354,7 +364,7 @@ NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "s
                  "bank_importe", "bank_umsaetze", "mahnungen", "auftrag_belege", "mobil_zugaenge", "benachrichtigungen", "lagerbewegungen",
                  "lager_reservierungen", "inventuren", "inventur_positionen", "inventur_zugaenge", "lieferanten",
                  "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
-                 "er_zahlungen"]
+                 "er_zahlungen", "kassenbuch", "kassen_abschluesse", "datev_exporte", "datev_posten"]
 
 
 def _migrieren(con, pfad=None):

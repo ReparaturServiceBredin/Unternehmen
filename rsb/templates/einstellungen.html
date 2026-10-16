@@ -11,7 +11,7 @@
 {% block inhalt %}
 <h1>Einstellungen</h1>
 <div class="reiter">
-  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('einkauf','Einkauf'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
+  {% for b, t in [('firma','Firmendaten'),('rechnung','Rechnung & Steuer'),('layout','Layout'),('email','E-Mail'),('anfragen','Anfragen'),('vertraege','Verträge'),('mahnwesen','Mahnwesen'),('leihgeraete','Leihgeräte'),('annahme','Annahme & Abholung'),('benachrichtigung','Benachrichtigungen'),('einkauf','Einkauf'),('datev','DATEV'),('backup','Backup'),('programm','Programm & Updates'),('sicherheit','Passwortschutz')] %}
   <a href="{{ url_for('main.einstellungen', bereich=b) }}" class="{{ 'aktiv' if bereich == b }}">{{ t }}</a>{% endfor %}
 </div>
 
@@ -266,6 +266,25 @@
   <p class="klein">Dieser Text steht im Leihvertrag / Übergabeprotokoll, das der Kunde bei der Ausgabe eines Leihgeräts unterschreibt. <code>{firma}</code> wird durch Ihren Firmennamen ersetzt. Lassen Sie die Bedingungen im Zweifel einmal rechtlich prüfen.</p>
   <textarea name="leihbedingungen" style="min-height:360px">{{ einst.leihbedingungen or '' }}</textarea><br><br>
   <button>Speichern</button>
+</form>
+
+{% elif bereich == 'datev' %}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>DATEV-Export</h2>
+  <p class="klein">Diese Angaben bekommen Sie vom Steuerberater. Die Konten sind Vorschläge aus dem Standardkontenrahmen – bitte einmal mit dem Steuerberater abstimmen.</p>
+  <div class="felder">
+    <div class="s3"><label>Beraternummer</label><input type="text" name="datev_beraternr" value="{{ einst.datev_beraternr }}" inputmode="numeric"></div>
+    <div class="s3"><label>Mandantennummer</label><input type="text" name="datev_mandantennr" value="{{ einst.datev_mandantennr }}" inputmode="numeric"></div>
+    <div class="s3"><label>Kontenrahmen</label><select name="datev_skr"><option value="03" {{ 'selected' if einst.datev_skr != '04' }}>SKR 03</option><option value="04" {{ 'selected' if einst.datev_skr == '04' }}>SKR 04</option></select></div>
+    <div class="s3"><label>Beginn Wirtschaftsjahr (MM-TT)</label><input type="text" name="datev_wj_beginn" value="{{ einst.datev_wj_beginn }}"></div>
+    <div class="s3"><label>Sachkontenlänge</label><input type="number" name="datev_kontenlaenge" value="{{ einst.datev_kontenlaenge }}"></div>
+    <div class="s3"><label>Debitoren ab</label><input type="number" name="datev_debitor_start" value="{{ einst.datev_debitor_start }}"><div class="hilfe">Debitor = Startnummer + Kunden-ID</div></div>
+    <div class="s3"><label>Kreditoren ab</label><input type="number" name="datev_kreditor_start" value="{{ einst.datev_kreditor_start }}"><div class="hilfe">oder Kreditorennummer beim Lieferanten</div></div>
+    <div class="s6"><label>Abweichende Konten (Name=Konto)</label><textarea name="datev_konten" style="min-height:140px" placeholder="bank=1210&#10;kasse=1000">{{ einst.datev_konten }}</textarea>
+      <div class="hilfe">Namen: kasse, bank, geldtransit, erloese_ku, erloese_19, erloese_7, erloese_0, privateinlage, privatentnahme, sonstige_ertraege, sonstige_aufwendungen</div></div>
+    <div class="s6"><label>Konten je Kostenart (Kostenart=Konto)</label><textarea name="datev_kostenarten" style="min-height:140px" placeholder="Werkzeug & Geräte=4985">{{ einst.datev_kostenarten }}</textarea>
+      <div class="hilfe">Leer = Standardkonto des Kontenrahmens.</div></div>
+  </div><br><button>Speichern</button>
 </form>
 
 {% elif bereich == 'einkauf' %}

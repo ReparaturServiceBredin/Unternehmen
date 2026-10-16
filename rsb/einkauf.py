@@ -533,6 +533,9 @@ def er_zahlung(con, eid, datum, betrag, zahlart, notiz="", bank_umsatz_id=None):
     _er_status(con, eid)
     dbm.ereignis_erfassen(con, "eingangsrechnung", eid, "Zahlung erfasst",
                           f"{euro(betrag)} am {datum} ({ZAHLARTEN[zahlart]})")
+    if zahlart == "bar":  # bar bezahlt → Kassenbuch (Ausgabe)
+        from .kasse import aus_er_zahlung
+        aus_er_zahlung(con, cur.lastrowid)
     return cur.lastrowid
 
 
@@ -548,6 +551,9 @@ def er_zahlung_stornieren(con, zid, grund):
         con.execute("UPDATE bank_umsaetze SET status='offen', er_zahlung_id=NULL, bearbeitet_am=?, bearbeitet_von=? "
                     "WHERE id=?", (dbm.jetzt_berlin(), dbm.aktueller_benutzer(), z["bank_umsatz_id"]))
     _er_status(con, z["eingangsrechnung_id"])
+    if z["zahlart"] == "bar":
+        from .kasse import zahlung_storniert
+        zahlung_storniert(con, er_zahlung_id=zid, grund=f"Zahlung storniert: {grund.strip()}")
     dbm.ereignis_erfassen(con, "eingangsrechnung", z["eingangsrechnung_id"], "Zahlung storniert",
                           f"{euro(z['betrag'])} – {grund.strip()}")
 

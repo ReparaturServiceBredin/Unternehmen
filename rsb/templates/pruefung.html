@@ -3,7 +3,7 @@
 {% block inhalt %}
 <h1>Datenprüfung</h1>
 <p class="klein">Prüft, ob archivierte PDFs unverändert sind, ob alle vergebenen Nummern lückenlos vorhanden sind und ob das Protokoll vollständig ist.</p>
-{% for titel, fehler in [('Archivierte PDFs (' ~ e.anzahl_dokumente ~ ' Dokumente)', e.pdf), ('Lückenlose Nummernfolge', e.nummern), ('Protokollkette', e.protokoll), ('Lagerbestand = Summe der Lagerbewegungen', e.lager or [])] %}
+{% for titel, fehler in [('Archivierte PDFs (' ~ e.anzahl_dokumente ~ ' Dokumente)', e.pdf), ('Lückenlose Nummernfolge', e.nummern), ('Protokollkette', e.protokoll), ('Lagerbestand und Kassenbuch', e.lager or [])] %}
 <div class="karte">
   <h2>{{ titel }}</h2>
   {% if fehler %}{% for f in fehler %}<div class="meldung fehler">{{ f }}</div>{% endfor %}

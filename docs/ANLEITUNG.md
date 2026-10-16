@@ -512,3 +512,39 @@ den Haken „Vor jedem Versand Vorschau anzeigen“ heraus. Empfohlen ist das ni
 - **Empfangene E-Rechnung:** Bei *Eingangsrechnungen → Erfassen* nur die Datei wählen und ohne Beträge auf „erfassen“
   klicken. Die Angaben werden ausgelesen, Sie prüfen und speichern. „E-Rechnung lesbar anzeigen“ zeigt den Inhalt
   übersichtlich, auch als PDF.
+
+## 24. Kassenbuch und DATEV-Export
+
+**Kassenbuch:**
+1. Einmalig den **Anfangsbestand** buchen, also das Geld, das gerade in der Kasse ist.
+2. Jede Bareinnahme und -ausgabe sofort buchen, möglichst mit Foto des Belegs. Wird eine Rechnung bar bezahlt, bei
+   „Barzahlung zu Rechnung“ die Rechnung wählen.
+3. Abends **Tag abschließen**: Kasse zählen und den Betrag eintragen. Bei einer Differenz die Begründung angeben.
+4. Fehler korrigieren Sie mit „korrigieren … → Gegenbuchung“. Löschen geht bewusst nicht.
+
+**DATEV-Export:**
+1. Einmalig *Einstellungen → DATEV* ausfüllen (Daten vom Steuerberater).
+2. Monatlich *Buchhaltung → DATEV-Export*: Zeitraum (Standard: Vormonat), Vorschau prüfen,
+   **Export erstellen**, ZIP herunterladen und an den Steuerberater geben.
+
+## 25. TSE (Technische Sicherheitseinrichtung) – was gilt für Sie?
+
+*Keine Steuerberatung, sondern eine Einordnung zur Vorbereitung auf das Gespräch mit dem Steuerberater.*
+
+- **Was ist die TSE?** Nach § 146a AO und der Kassensicherungsverordnung müssen **elektronische
+  Aufzeichnungssysteme mit Kassenfunktion** jede Bargeld-Transaktion über eine zertifizierte TSE absichern. Dazu
+  kommen Belegausgabepflicht und Meldepflicht ans Finanzamt (seit 2025 über ELSTER).
+- **Hat dieses Programm eine TSE?** Nein. Es ist in erster Linie ein Rechnungs- und Buchhaltungsprogramm. Das
+  Kassenbuch ist ein unveränderliches digitales Kassenbuch, aber **keine zertifizierte Registrierkasse**.
+- **Ihre Möglichkeiten:**
+  1. **Offene Ladenkasse** (Geldkassette ohne elektronische Kasse): keine TSE nötig. Dafür muss jeder Bargeldvorgang
+     einzeln aufgezeichnet werden (bei Ihnen über Rechnung bzw. Kassenbuch). Außerdem brauchen Sie täglich einen
+     Kassenbericht bzw. Kassensturz, das ist der Tagesabschluss im Programm. Für eine kleine Werkstatt, in der fast
+     jeder Barverkauf eine Rechnung bekommt, ist das häufig der passende Weg. **Ob dieses Programm dabei selbst als
+     „Aufzeichnungssystem mit Kassenfunktion“ gilt, ist nicht eindeutig. Bitte mit dem Steuerberater klären.**
+  2. **Zertifizierte Kasse für Barverkäufe** (z. B. eine App-Kasse mit Cloud-TSE): Barverkäufe laufen dort, die
+     Tagessummen werden hier als Einnahme gebucht. Kosten: meist ein monatlicher Betrag.
+  3. **Cloud-TSE ins Programm einbauen** (z. B. fiskaly oder Deutsche Fiskal, Programmierschnittstelle vorhanden):
+     technisch möglich, aber kostenpflichtig. Dazu kommen Meldung ans Finanzamt, Belegdruck und
+     Verfahrensdokumentation. Lohnt sich nur bei vielen Barverkäufen ohne Rechnung.
+- **Unabhängig davon:** Kartenzahlungen und Überweisungen sind keine Bargeldvorgänge im Sinne der TSE-Pflicht.

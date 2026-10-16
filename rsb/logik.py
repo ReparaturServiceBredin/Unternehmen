@@ -507,6 +507,8 @@ def integritaet_pruefen(con, daten_dir):
             ergebnisse["pdf"].append(f"Eingangsrechnung {e['lfd_nr']}: Originaldatei wurde verändert.")
     from .lager import integritaet as lager_integritaet
     ergebnisse["lager"] = lager_integritaet(con)
+    from .kasse import integritaet as kasse_integritaet
+    ergebnisse["lager"] += kasse_integritaet(con)
     vergeben = {r["nummer"] for r in con.execute("SELECT nummer FROM dokumente WHERE nummer IS NOT NULL")}
     vergeben |= {r["nummer"] for r in con.execute("SELECT nummer FROM mahnungen")}
     vergeben |= {r["nummer"] for r in con.execute("SELECT nummer FROM bestellungen")}

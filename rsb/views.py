@@ -948,6 +948,127 @@ def bank_er_zuordnen(uid):
     return redirect(url_for("main.bank"))
 
 
+# ====================================================================== Kassenbuch & DATEV
+
+from . import datev as dtv  # noqa: E402
+from . import kasse as kas  # noqa: E402
+
+
+@bp.route("/kasse")
+def kassenbuch():
+    con = dbm.get_db()
+    heute_iso = date.today().isoformat()
+    von = request.args.get("von") or heute_iso[:8] + "01"
+    bis = request.args.get("bis") or heute_iso
+    zeilen = kas.buchungen(con, von, bis)
+    if request.args.get("druck"):
+        return render_template("kasse_druck.html", zeilen=zeilen, von=von, bis=bis, arten=kas.ARTEN,
+                               abschluesse=con.execute("SELECT * FROM kassen_abschluesse WHERE datum BETWEEN ? AND ? "
+                                                       "ORDER BY datum", (von, bis)).fetchall())
+    gegengebucht = {r[0] for r in con.execute("SELECT gegenbuchung_zu FROM kassenbuch WHERE gegenbuchung_zu IS NOT NULL")}
+    offene_re = con.execute(_zlg().RECHNUNG_SQL + "WHERE d.typ='rechnung' AND d.status='festgeschrieben' "
+                            "AND d.summe_brutto > d.bezahlt_betrag ORDER BY d.datum DESC LIMIT 100").fetchall()
+    return render_template("kasse.html", zeilen=zeilen, von=von, bis=bis, arten=kas.ARTEN, heute=heute_iso,
+                           bestand=kas.bestand(con), letzter=kas.letzter_abschluss(con), gegengebucht=gegengebucht,
+                           kostenarten=_kostenarten(), scheine=kas.SCHEINE, offene_re=offene_re,
+                           abschluesse=con.execute("SELECT * FROM kassen_abschluesse ORDER BY datum DESC LIMIT 15").fetchall())
+
+
+@bp.route("/kasse/buchen", methods=["POST"])
+def kasse_buchen():
+    con = dbm.get_db()
+    art = _f("art")
+    betrag = cent_aus_text(_f("betrag"), 0)
+    satz = zahl_aus_text(_f("steuersatz"), None) if _f("steuersatz") else None
+    did = request.form.get("dokument_id", type=int)
+    datei = request.files.get("beleg")
+    beleg = kas.beleg_ablegen(daten_dir(), datei.read(), datei.filename) if datei and datei.filename else None
+    with dbm.Transaktion(con):
+        if art == "einnahme" and did:  # Barzahlung einer Rechnung: als Zahlung erfassen (bucht selbst in die Kasse)
+            _zlg().erfassen(con, did, _f("datum"), betrag, "bar", _f("text"))
+        else:
+            kas.buchen(con, _f("datum"), art, betrag, _f("text"), satz, beleg=beleg, kostenart=_f("kostenart") or None)
+    flash("Kassenbuchung gespeichert.", "ok")
+    return redirect(url_for("main.kassenbuch"))
+
+
+@bp.route("/kasse/<int:bid>/gegenbuchung", methods=["POST"])
+def kasse_gegenbuchung(bid):
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        kas.gegenbuchen(con, bid, _f("grund"))
+    flash("Gegenbuchung erfasst.", "ok")
+    return redirect(url_for("main.kassenbuch"))
+
+
+@bp.route("/kasse/abschluss", methods=["POST"])
+def kasse_abschluss():
+    con = dbm.get_db()
+    zaehlung = {str(w): int(request.form.get(f"anzahl_{w}") or 0) for w in kas.SCHEINE
+                if (request.form.get(f"anzahl_{w}") or "").strip().isdigit() and int(request.form.get(f"anzahl_{w}"))}
+    ist = cent_aus_text(_f("ist"), None)
+    if ist is None and zaehlung:
+        ist = sum(int(w) * n for w, n in zaehlung.items())
+    with dbm.Transaktion(con):
+        _, differenz = kas.tagesabschluss(con, _f("datum"), ist, _f("begruendung"), zaehlung or None)
+    flash("Tagesabschluss gespeichert" + (f" – Differenz {euro(differenz)} gebucht." if differenz else
+                                         " – Kasse stimmt."), "ok")
+    return redirect(url_for("main.kassenbuch"))
+
+
+@bp.route("/kasse/<int:bid>/beleg")
+def kasse_beleg(bid):
+    b = dbm.get_db().execute("SELECT * FROM kassenbuch WHERE id=?", (bid,)).fetchone()
+    if not b or not b["beleg_datei"]:
+        abort(404)
+    pfad = Path(daten_dir()) / b["beleg_datei"]
+    daten = pfad.read_bytes() if pfad.is_file() else None
+    if daten is None or hashlib.sha256(daten).hexdigest() != b["beleg_sha256"]:
+        return render_template("pdf_fehler.html", d={"nummer": f"Kassenbeleg {b['lfd_nr']}", "pdf_pfad": b["beleg_datei"],
+                                                     "pdf_sha256": b["beleg_sha256"]}, fehlt=daten is None), 409
+    endung = b["beleg_datei"].rsplit(".", 1)[-1].lower()
+    return send_file(io.BytesIO(daten), mimetype=ek.ER_ENDUNGEN.get(endung, "application/octet-stream"),
+                     download_name=b["beleg_name"] or f"Kassenbeleg_{b['lfd_nr']}.{endung}")
+
+
+@bp.route("/datev", methods=["GET", "POST"])
+def datev():
+    con = dbm.get_db()
+    heute_d = date.today()
+    erster = heute_d.replace(day=1)
+    vormonat_ende = erster.fromordinal(erster.toordinal() - 1)
+    von = request.values.get("von") or vormonat_ende.replace(day=1).isoformat()
+    bis = request.values.get("bis") or vormonat_ende.isoformat()
+    erneut = bool(request.values.get("erneut"))
+    if request.method == "POST":
+        with dbm.Transaktion(con):
+            eid = dtv.exportieren(con, von, bis, daten_dir(), erneut)
+        flash("DATEV-Export erstellt.", "ok")
+        return redirect(url_for("main.datev", von=von, bis=bis, neu=eid))
+    try:
+        vorschau = dtv.buchungen(con, von, bis, erneut)
+    except ValueError:
+        raise EingabeFehler("Bitte einen gültigen Zeitraum angeben.")
+    einst = dbm.einstellungen(con)
+    return render_template("datev.html", von=von, bis=bis, erneut=erneut, vorschau=vorschau,
+                           exporte=con.execute("SELECT * FROM datev_exporte ORDER BY id DESC LIMIT 30").fetchall(),
+                           neu=request.args.get("neu", type=int),
+                           fehlt=not (einst.get("datev_beraternr") and einst.get("datev_mandantennr")))
+
+
+@bp.route("/datev/<int:eid>/download")
+def datev_download(eid):
+    e = dbm.get_db().execute("SELECT * FROM datev_exporte WHERE id=?", (eid,)).fetchone()
+    if not e:
+        abort(404)
+    pfad = Path(daten_dir()) / e["datei"]
+    daten = pfad.read_bytes() if pfad.is_file() else None
+    if daten is None or hashlib.sha256(daten).hexdigest() != e["sha256"]:
+        return render_template("pdf_fehler.html", d={"nummer": f"DATEV-Export {e['von']}–{e['bis']}", "pdf_pfad": e["datei"],
+                                                     "pdf_sha256": e["sha256"]}, fehlt=daten is None), 409
+    return send_file(io.BytesIO(daten), mimetype="application/zip", as_attachment=True, download_name=Path(e["datei"]).name)
+
+
 # ====================================================================== Dokumente
 
 @bp.route("/dokumente")
@@ -1330,6 +1451,8 @@ EINSTELLUNGS_BEREICHE = {
     "leihgeraete": ["leihbedingungen"],
     "benachrichtigung": ["benachrichtigung_vorschau", "benachrichtigung_kanal", "erinnerung_tage", "oeffnungszeiten"]
     + [f"ben_{a}_{t}" for a in ben.ANLAESSE for t in ("aktiv", "betreff", "text")],
+    "datev": ["datev_beraternr", "datev_mandantennr", "datev_skr", "datev_wj_beginn", "datev_kontenlaenge",
+              "datev_debitor_start", "datev_kreditor_start", "datev_konten", "datev_kostenarten"],
     "einkauf": ["mindest_marge_prozent", "praefix_bestellung", "praefix_eingangsrechnung", "kostenarten",
                 "er_imap_ordner"],
     "annahme": ["garantie_monate", "annahme_zubehoer", "annahme_kva_gebuehr_cent", "annahme_datenschutz", "annahme_abholbedingungen",
@@ -1347,7 +1470,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
@@ -1388,6 +1511,14 @@ def einstellungen():
                 raise EingabeFehler("Für die Ablage im Gesendet-Ordner bitte einen IMAP-Server angeben.")
         if bereich == "benachrichtigung" and neu["benachrichtigung_kanal"] not in ben.KANAELE:
             neu["benachrichtigung_kanal"] = "email"
+        if bereich == "datev":
+            if neu["datev_skr"] not in ("03", "04"):
+                neu["datev_skr"] = "03"
+            if not re.fullmatch(r"\d{2}-\d{2}", neu["datev_wj_beginn"] or ""):
+                raise EingabeFehler("Beginn des Wirtschaftsjahres bitte als MM-TT angeben, z. B. 01-01.")
+            for f in ("datev_beraternr", "datev_mandantennr"):
+                if neu[f] and not neu[f].isdigit():
+                    raise EingabeFehler("Berater- und Mandantennummer bestehen nur aus Ziffern.")
         if bereich == "anfragen" and neu["imap_sicherheit"] not in ("ssl", "starttls"):
             neu["imap_sicherheit"] = "ssl"
         if bereich == "anfragen":
