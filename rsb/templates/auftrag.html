@@ -36,7 +36,7 @@
 
 <nav class="reiter">
   <a href="#auftragsdaten" data-reiter="auftragsdaten">Auftragsdaten</a>
-  <a href="#annahmeschein" data-reiter="annahmeschein">Annahme / Abholung {{ '✓' if belege|selectattr('art', 'equalto', 'annahme')|list else '' }}</a>
+  <a href="#annahmeschein" data-reiter="annahmeschein">Annahme / Abholung {{ '✓' if belege|selectattr('art', 'equalto', 'annahme')|list else ('✉' if a.annahme_gesendet_am else '') }}</a>
   <a href="#kostenvoranschlag" data-reiter="kostenvoranschlag">Kostenvoranschlag {{ '✓' if a.kva_id else '' }}</a>
   <a href="#material" data-reiter="material">Material {% set mat = material|selectattr('status', 'in', ['reserviert', 'ausgebucht'])|list %}{% if mat %}<span class="zahl">{{ mat|length }}</span>{% endif %}</a>
   <a href="#leihgeraet" data-reiter="leihgeraet">Leihgerät{% if a.leihen_offen %} <span class="zahl" {% if a.leihe_bis and a.leihe_bis < heute %}style="background:var(--rot-hell);color:var(--rot)"{% endif %}>🔁 {{ a.leihen_offen }}</span>{% endif %}</a>
@@ -98,7 +98,9 @@
         <a class="knopf" href="{{ url_for('main.auftrag_unterschreiben', aid=a.id, art=art) }}">✍ Hier unterschreiben (PC/Tablet)</a>
         <form method="post" action="{{ url_for('main.auftrag_handy', aid=a.id, zweck=art) }}">{{ csrf() }}<button class="zweit">📱 Am Handy (QR-Code)</button></form>
         <a class="knopf zweit" href="{{ url_for('main.auftrag_schein_vorschau', aid=a.id, art=art) }}" target="_blank">Vorschau / Papier zum Unterschreiben</a>
+        {% if art == 'annahme' %}<a class="knopf zweit" href="{{ url_for('main.auftrag_annahme_email', aid=a.id) }}">📧 Per E-Mail senden (ohne Unterschrift)</a>{% endif %}
       </div>
+      {% if art == 'annahme' and a.annahme_gesendet_am %}<p class="klein" style="margin-top:8px">✓ Per E-Mail gesendet am {{ a.annahme_gesendet_am|zeit }} an {{ a.annahme_gesendet_an }} · <a href="{{ url_for('main.auftrag_annahme_email_pdf', aid=a.id) }}" target="_blank">gesendete Fassung</a></p>{% endif %}
     </div>
     {% endfor %}
   </div>

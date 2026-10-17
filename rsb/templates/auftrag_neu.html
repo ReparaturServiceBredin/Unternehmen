@@ -38,6 +38,16 @@
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
 const formular = document.getElementById('auftragsformular');
+// „+ Neuer Kunde“: Felder direkt im Formular zeigen
+const neuKunde = document.getElementById('neu-kunde');
+function neuKundeZeigen() {
+  const neu = formular.kunde_id.value === 'neu';
+  neuKunde.hidden = !neu;
+  formular.neu_nachname.required = neu && !formular.neu_firma.value;
+  if (neu) formular.neu_vorname.focus();
+}
+formular.kunde_id.addEventListener('change', neuKundeZeigen);
+formular.neu_firma.addEventListener('input', () => { formular.neu_nachname.required = formular.kunde_id.value === 'neu' && !formular.neu_firma.value; });
 // Kundenwechsel: KVA-Liste auf den gewählten Kunden einschränken
 formular.kunde_id.addEventListener('change', () => {
   const box = document.querySelector('.kva-auswahl');

@@ -3,8 +3,21 @@
 {% macro felder(w, kunden, status_namen, leistungsarten) -%}
 <div class="felder">
   <div><label>Kunde</label><select name="kunde_id" id="f_kunde" required><option value="">– bitte wählen –</option>
+    {% if not w.id %}<option value="neu" {{ 'selected' if w.kunde_id == 'neu' }}>+ Neuer Kunde (hier eintragen)</option>{% endif %}
     {% for k in kunden %}<option value="{{ k.id }}" {{ 'selected' if (w.kunde_id|string) == (k.id|string) }}>{{ k.kundennr }} · {{ k|kname }}{{ (' · ' ~ k.ort) if k.ort }}{{ ' (archiviert)' if k.archiviert }}</option>{% endfor %}</select>
-    <div class="hilfe"><a href="{{ url_for('main.kunde') }}" target="_blank">+ neuen Kunden anlegen</a> (danach diese Seite neu laden)</div></div>
+    {% if w.id %}<div class="hilfe"><a href="{{ url_for('main.kunde') }}" target="_blank">+ neuen Kunden anlegen</a> (danach diese Seite neu laden)</div>{% else %}<div class="hilfe">Tipp: Tippen Sie in der Liste die ersten Buchstaben des Namens. Neuer Kunde? „+ Neuer Kunde“ wählen.</div>{% endif %}</div>
+  {% if not w.id %}
+  <div class="s12 neu-kunde" id="neu-kunde" {{ '' if w.kunde_id == 'neu' else 'hidden' }}>
+    <div class="felder">
+      <div class="s3"><label>Vorname</label><input type="text" name="neu_vorname" value="{{ w.neu_vorname or '' }}" autocomplete="off"></div>
+      <div class="s3"><label>Nachname</label><input type="text" name="neu_nachname" value="{{ w.neu_nachname or '' }}" autocomplete="off"></div>
+      <div class="s6"><label>Firma <span class="klein">(optional)</span></label><input type="text" name="neu_firma" value="{{ w.neu_firma or '' }}" autocomplete="off"></div>
+      <div class="s6"><label>Telefon</label><input type="tel" name="neu_telefon" value="{{ w.neu_telefon or '' }}" autocomplete="off"></div>
+      <div class="s6"><label>E-Mail <span class="klein">(für KVA und Annahmeschein)</span></label><input type="email" name="neu_email" value="{{ w.neu_email or '' }}" autocomplete="off"></div>
+    </div>
+    <div class="hilfe">Gibt es schon einen Kunden mit dieser E-Mail-Adresse oder Telefonnummer, wird dieser verwendet – es entsteht kein doppelter Kunde. Anschrift usw. können Sie später beim Kunden ergänzen.</div>
+  </div>
+  {% endif %}
   {% set ts = 'wartet_teil' if w.status == 'in_arbeit' and w.wartet_teil_seit else (w.status or 'offen') %}
   <div class="s3"><label>Status</label><select name="status" id="f_status">{% for s, n in status_namen.items() %}<option value="{{ s }}" {{ 'selected' if ts == s }}>{{ n }}</option>{% endfor %}</select></div>
   <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if w.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>

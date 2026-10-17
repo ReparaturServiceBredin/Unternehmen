@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.26.0 | 17.10.2026 | Schnellannahme: Kunde im Auftrag, Annahmeschein per E-Mail, Auftrag aus KVA |
 | 0.25.0 | 16.10.2026 | Ältere Anfragen prüfen und nachholen, Kunden per Sammelbestätigung |
 | 0.24.1 | 16.10.2026 | Dunkelmodus: alle Texte gut lesbar |
 | 0.24.0 | 16.10.2026 | Fixkosten und Finanzübersicht |
@@ -48,6 +49,31 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.26.0 – 17.10.2026
+Schneller vom Gerät zum Auftrag, auch ohne Drucker und ohne Unterschrift vor Ort. Vor der Erweiterung der
+Datenbank legt das Programm automatisch eine Sicherung an. Alle bisherigen Daten bleiben unverändert.
+
+### Neu: Kunde direkt im Auftrag
+- Bei **+ Neuer Auftrag** in der Kundenliste **„+ Neuer Kunde (hier eintragen)“** wählen: Vorname, Nachname bzw.
+  Firma, Telefon und E-Mail direkt im Auftragsformular eintragen. Ein Klick legt Kunde und Auftrag zusammen an.
+- Kein doppelter Kunde: Gibt es die E-Mail-Adresse oder Telefonnummer schon (auch anders geschrieben), wird der
+  vorhandene Kunde verwendet.
+
+### Neu: Annahmeschein per E-Mail (ohne Unterschrift)
+- Im Auftrag unter **Annahme / Abholung → „Per E-Mail senden (ohne Unterschrift)“**: Der Kunde bekommt den
+  Annahmeschein mit allen Angaben, der KVA-Pauschale und Ihren Bedingungen als PDF. Im Text wird er gebeten, kurz
+  mit „Einverstanden“ zu antworten.
+- Die gesendete Fassung wird unverändert archiviert und steht im Verlauf. Unterschreiben geht später jederzeit,
+  z. B. bei der Abholung.
+- Auftragstafel: Jede Karte zeigt den Stand des Annahmescheins – **„Schein fehlt“**, **„✉ Schein“** (per
+  E-Mail gesendet) oder **„✍ ✓“** (unterschrieben).
+
+### Neu: Auftrag aus einem Kostenvoranschlag
+- Ein KVA, der ohne Auftrag entstanden ist, hat jetzt den Knopf **„+ Auftrag daraus anlegen“**. Kunde und Gerät
+  werden übernommen, der KVA ist sofort verknüpft.
 
 ---
 

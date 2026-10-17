@@ -2201,6 +2201,7 @@ AUFTRAG_SQL = (
     "kv.kva_status AS kva_entscheidung, kv.kunde_id AS kva_kunde_id, kv.versendet_am AS kva_versendet_am, "
     "re.status AS re_status, re.nummer AS re_nummer, re.summe_brutto AS re_betrag, "
     "(SELECT COUNT(*) FROM auftrag_fotos f WHERE f.auftrag_id=a.id AND f.geloescht_am IS NULL) AS foto_anzahl, "
+    "(SELECT COUNT(*) FROM auftrag_belege b WHERE b.auftrag_id=a.id AND b.art='annahme') AS annahme_unterschrieben, "
     "(SELECT COUNT(*) FROM leihen l WHERE l.auftrag_id=a.id AND l.rueckgabe_am IS NULL AND l.storniert_am IS NULL) "
     "AS leihen_offen, (SELECT MIN(l.rueckgabe_geplant) FROM leihen l WHERE l.auftrag_id=a.id "
     "AND l.rueckgabe_am IS NULL AND l.storniert_am IS NULL) AS leihe_bis, "
@@ -2345,6 +2346,12 @@ def auftrag_neu():
         try:
             kid = request.form.get("kunde_id", type=int)
             status = request.form.get("status", "offen")
+            if request.form.get("kunde_id") == "neu":
+                with dbm.Transaktion(con):
+                    kid, neu_angelegt = _schnellkunde(con)
+                werte["kunde_id"] = kid  # bei einem Fehler weiter unten ist der Kunde ausgewählt
+                flash(("Neuer Kunde angelegt: " if neu_angelegt else "Vorhandener Kunde übernommen: ")
+                      + kunde_name(con.execute("SELECT * FROM kunden WHERE id=?", (kid,)).fetchone()) + ".", "ok")
             kva_id = request.form.get("kva_id", type=int)
             if status == "erledigt" and not kva_id and not _ohne_kva_bestaetigt():
                 raise EingabeFehler(KEIN_KVA_TEXT)
@@ -2366,7 +2373,7 @@ def auftrag_neu():
                 flash("Rechnungsentwurf wurde erstellt. Bitte prüfen und festschreiben.", "ok")
                 return redirect(url_for("main.dokument", did=neue_rechnung))
             _benachrichtigungen_automatisch()
-            flash("Jetzt den Annahmeschein vom Kunden unterschreiben lassen (am PC/Tablet oder per QR-Code am Handy).",
+            flash("Annahmeschein: jetzt unterschreiben lassen – oder ist der Kunde schon weg, einfach per E-Mail senden.",
                   "info")
             return redirect(url_for("main.auftrag", aid=aid) + "#annahmeschein")
     if request.method == "GET":
@@ -2378,6 +2385,31 @@ def auftrag_neu():
                            kunden=_kunden_liste(con), token=token, kategorien=fot.KATEGORIEN,
                            fotos=fot.liste(con, upload_token=token, mit_geloeschten=False),
                            kva_vorauswahl=kva_vorauswahl, kein_kva_text=KEIN_KVA_TEXT)
+
+
+def _schnellkunde(con):
+    """Kunde direkt aus „+ Neuer Auftrag“: vorhandenen per E-Mail/Telefon finden, sonst neu anlegen.
+
+    Gibt (kunde_id, neu_angelegt) zurück. Muss in einer Transaktion laufen.
+    """
+    w = {f: " ".join(_f(f"neu_{f}").split()) for f in ("vorname", "nachname", "firma", "telefon", "email")}
+    if not (w["nachname"] or w["firma"]):
+        raise EingabeFehler("Bitte beim neuen Kunden mindestens Nachname oder Firma angeben.")
+    if w["email"] and ("@" not in w["email"] or " " in w["email"]):
+        raise EingabeFehler("Bitte eine gültige E-Mail-Adresse beim neuen Kunden angeben.")
+    vorhanden = anf.passender_kunde(con, w["email"], w["telefon"])
+    if vorhanden:
+        return vorhanden["id"], False
+    felder = {"typ": "firma" if w["firma"] else "privat", "firma": w["firma"], "vorname": w["vorname"],
+              "nachname": w["nachname"], "telefon": w["telefon"], "email": w["email"].lower(), "land": "Deutschland"}
+    nr = logik.naechste_kundennr(con, dbm.einstellungen(con))
+    cur = con.execute(f"INSERT INTO kunden (kundennr, {', '.join(felder)}, quelle, erstellt_am, geaendert_am) "
+                      f"VALUES (?, {', '.join('?' * len(felder))}, 'Auftragsannahme', ?, ?)",
+                      [nr, *felder.values(), dbm.jetzt(), dbm.jetzt()])
+    dbm.protokollieren("kunde_angelegt", "kunde", cur.lastrowid, {"kundennr": nr, "aus": "Auftragsannahme"}, con=con)
+    dbm.aenderungen_erfassen(con, "kunde", cur.lastrowid, None, {"kundennr": nr, **felder}, aktion="angelegt",
+                             namen=KUNDE_FELDNAMEN)
+    return cur.lastrowid, True
 
 
 def _auftrag_laden(aid):
@@ -2502,6 +2534,25 @@ def auftrag_kva(aid):
         did = auf.kva_erstellen(con, aid)
     flash("Kostenvoranschlag erstellt und mit dem Auftrag verknüpft.", "ok")
     return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/dokumente/<int:did>/auftrag-anlegen", methods=["POST"])
+def kva_auftrag_anlegen(did):
+    """KVA ohne Auftrag (z. B. Gerät schon da, Kunde schon weg): Auftrag daraus anlegen und verknüpfen."""
+    con = dbm.get_db()
+    d = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (did,)).fetchone()
+    if not d:
+        abort(404)
+    vorhanden = con.execute("SELECT id FROM auftraege WHERE kva_id=?", (did,)).fetchone()
+    if vorhanden:
+        return redirect(url_for("main.auftrag", aid=vorhanden["id"]))
+    geraet = re.sub(r"^\s*(Kostenvoranschlag|KVA)\b[\s:–-]*", "", d["betreff"] or "", flags=re.I).strip()
+    with dbm.Transaktion(con):
+        aid = auf.anlegen(con, d["kunde_id"], geraet=geraet[:200])
+        auf.kva_verknuepfen(con, aid, did)
+    flash("Auftrag angelegt und mit dem Kostenvoranschlag verknüpft. Bitte Gerät und Fehler ergänzen – den "
+          "Annahmeschein können Sie unterschreiben lassen oder per E-Mail senden.", "ok")
+    return redirect(url_for("main.auftrag", aid=aid))
 
 
 @bp.route("/auftraege/kva-auswahl")
@@ -2767,6 +2818,62 @@ def beleg_email(bid):
     return render_template("beleg_email.html", b=b, a=a, titel=titel, an=k["email"] or "",
                            betreff=f"{titel} {b['nummer']} – {einst.get('firma_name') or ''}", text=text,
                            smtp_ok=bool(einst.get("smtp_host")))
+
+
+@bp.route("/auftraege/<int:aid>/annahme-email", methods=["GET", "POST"])
+def auftrag_annahme_email(aid):
+    """Annahmeschein ohne Unterschrift per E-Mail – für Übergaben ohne Drucker und ohne Unterschrift vor Ort.
+
+    Die gesendete PDF wird unverändert archiviert (SHA-256 im Verlauf). Unterschreiben lässt sich später jederzeit.
+    """
+    con = dbm.get_db()
+    a = _auftrag_laden(aid)
+    einst = dbm.einstellungen(con)
+    k = con.execute("SELECT * FROM kunden WHERE id=?", (a["kunde_id"],)).fetchone()
+    if request.method == "POST":
+        an = _f("an")
+        if "@" not in an:
+            raise EingabeFehler("Bitte eine gültige E-Mail-Adresse angeben.")
+        snap = ann.snapshot(con, aid, "annahme")
+        pdf = ann_pdf.erstellen(snap, daten_dir(), einst)
+        name = f"{a['auftragsnr']}-Annahmeschein.pdf"
+        try:
+            hinweis = senden(con, None, an, _f("betreff"), request.form.get("text", ""), pdf, name)
+        except MailFehler as e:
+            flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+            return redirect(url_for("main.auftrag_annahme_email", aid=aid))
+        zeit = dbm.jetzt_berlin()
+        datei = ann._ordner(daten_dir(), zeit[:4]) / f"{a['auftragsnr']}-AN-Mail-{zeit[:19].replace(':', '').replace('T', '_')}.pdf"
+        datei.write_bytes(pdf)
+        rel = datei.relative_to(daten_dir()).as_posix()
+        with dbm.Transaktion(con):
+            con.execute("UPDATE auftraege SET annahme_gesendet_am=?, annahme_gesendet_an=?, annahme_gesendet_pdf=? "
+                        "WHERE id=?", (zeit, an, rel, aid))
+            auf.verlauf(con, aid, "Annahmeschein per E-Mail gesendet (ohne Unterschrift)",
+                        f"an {an} · SHA-256 {hashlib.sha256(pdf).hexdigest()[:16]}…")
+        flash(f"Annahmeschein an {an} gesendet und archiviert.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
+        return redirect(url_for("main.auftrag", aid=aid) + "#annahmeschein")
+    text = (f"{anrede_brief(k)}\n\nvielen Dank für Ihren Auftrag. Anbei erhalten Sie den Annahmeschein zu Ihrem "
+            f"Reparaturauftrag {a['auftragsnr']}" + (f" ({a['geraet']})" if a["geraet"] else "") + ".\n\n"
+            "Bitte prüfen Sie die Angaben"
+            + (f" und den Hinweis zur Pauschale für den Kostenvoranschlag ({euro(a['kva_gebuehr'])})"
+               if a["kva_gebuehr"] else "")
+            + ". Sind Sie einverstanden, antworten Sie bitte kurz mit „Einverstanden“ auf diese E-Mail. "
+            "Unterschreiben können Sie auch später bei der Abholung.\n\n"
+            f"Mit freundlichen Grüßen\n{einst.get('inhaber') or ''}\n{einst.get('firma_name') or ''}")
+    return render_template("annahme_email.html", a=a, an=k["email"] or "", text=text,
+                           betreff=f"Annahmeschein {a['auftragsnr']} – {einst.get('firma_name') or ''}",
+                           smtp_ok=bool(einst.get("smtp_host")))
+
+
+@bp.route("/auftraege/<int:aid>/annahme-email.pdf")
+def auftrag_annahme_email_pdf(aid):
+    a = _auftrag_laden(aid)
+    if not a["annahme_gesendet_pdf"]:
+        abort(404)
+    return send_file(Path(daten_dir()) / a["annahme_gesendet_pdf"], mimetype="application/pdf")
 
 
 @bp.route("/auftraege/<int:aid>/zugang", methods=["POST"])

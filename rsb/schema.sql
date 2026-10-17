@@ -351,7 +351,11 @@ CREATE TABLE IF NOT EXISTS auftraege (
     garantie_bezug_id INTEGER REFERENCES auftraege(id),  -- Garantiefall: ursprünglicher Auftrag
     garantie_monate INTEGER,                             -- leer = Standard aus den Einstellungen
     interne_kosten  INTEGER,                             -- Cent, z. B. Teile/Arbeitszeit eines Garantiefalls
-    interne_kosten_notiz TEXT
+    interne_kosten_notiz TEXT,
+    -- Annahmeschein ohne Unterschrift per E-Mail (0.25.0): Zeitpunkt, Empfänger, archivierte PDF
+    annahme_gesendet_am  TEXT,
+    annahme_gesendet_an  TEXT,
+    annahme_gesendet_pdf TEXT
 );
 CREATE INDEX IF NOT EXISTS ix_auftraege_status ON auftraege(status);
 
