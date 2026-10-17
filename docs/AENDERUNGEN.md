@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.26.1 | 17.10.2026 | Kundenliste per Klick sortieren |
 | 0.26.0 | 17.10.2026 | Schnellannahme: Kunde im Auftrag, Annahmeschein per E-Mail, Auftrag aus KVA |
 | 0.25.0 | 16.10.2026 | Ältere Anfragen prüfen und nachholen, Kunden per Sammelbestätigung |
 | 0.24.1 | 16.10.2026 | Dunkelmodus: alle Texte gut lesbar |
@@ -49,6 +50,21 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.26.1 – 17.10.2026
+### Neu: Kundenliste sortieren
+- Klick auf einen Spaltenkopf sortiert nach **Nr.**, **Name / Firma**, **Art**, **Ort** oder **Neueste**.
+  Ein zweiter Klick dreht die Reihenfolge um. Der Pfeil zeigt die aktuelle Sortierung.
+- Die gewählte Sortierung bleibt erhalten, auch beim Suchen, im Archiv und bei „Nur Interessenten“.
+- Name und Ort werden wie im Telefonbuch sortiert: Groß-/Kleinschreibung egal, Umlaute wie der Grundbuchstabe
+  (Ö bei O). Kunden ohne Ort stehen bei der Sortierung nach Ort immer am Ende.
+
+### Behoben
+- Bei Kunden, die mit „+ Neuer Kunde“ direkt im Auftrag angelegt wurden (0.26.0), stand in der Kundenliste und im
+  Bearbeiten-Formular „None“ statt eines leeren Felds. Neue Kunden werden richtig angelegt, bereits angelegte
+  korrigiert das Update automatisch.
 
 ---
 

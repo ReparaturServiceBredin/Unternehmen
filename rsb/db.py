@@ -309,6 +309,9 @@ def initialisieren(pfad):
         _sicherung_vor_migration(con, pfad)
     con.executescript(SCHEMA.read_text(encoding="utf-8"))
     _migrieren(con, pfad)
+    # 0.26.1: Kunden aus der Schnellannahme (0.26.0) hatten leere Textfelder als NULL („None“ in Formularen)
+    for feld in ("anrede", "strasse", "plz", "ort", "ust_idnr", "notizen", "email_weitere", "leitweg_id"):
+        con.execute(f"UPDATE kunden SET {feld}='' WHERE {feld} IS NULL AND quelle='Auftragsannahme' AND anonymisiert_am IS NULL")
     vorhanden = {r["schluessel"] for r in con.execute("SELECT schluessel FROM einstellungen")}
     if "imap_sicherheit" not in vorhanden and "imap_port" in vorhanden:
         # Umstellung (0.9.1): bisher immer SSL – vorhandener Port 993 → SSL/TLS, sonst STARTTLS

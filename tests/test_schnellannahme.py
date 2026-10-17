@@ -21,6 +21,9 @@ def test_neuer_kunde_direkt_im_auftrag_ohne_doppelte(client, con):
     k = con.execute("SELECT k.* FROM auftraege a JOIN kunden k ON k.id=a.kunde_id WHERE a.id=?", (aid,)).fetchone()
     assert (k["vorname"], k["nachname"], k["email"], k["quelle"]) == ("Lisa", "Lang", "lisa.lang@example.com",
                                                                       "Auftragsannahme")
+    assert k["plz"] == "" and k["ort"] == "" and k["strasse"] == ""  # nie „None“ in Formularen
+    assert "None" not in client.get("/kunden").get_data(as_text=True)
+    assert 'value="None"' not in client.get(f"/kunden/{k['id']}").get_data(as_text=True)
     # gleiche Telefonnummer anders geschrieben → derselbe Kunde, kein doppelter
     aid2 = neuer_auftrag(client, neu_email="", neu_telefon="015122233344", neu_nachname="Lang")
     assert con.execute("SELECT COUNT(*) FROM kunden").fetchone()[0] == 1

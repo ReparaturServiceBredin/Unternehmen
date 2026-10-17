@@ -156,6 +156,37 @@ def start():
 
 # ====================================================================== Kunden
 
+def _sortiertext(text):
+    """Groß/klein egal, Umlaute wie im Telefonbuch (Ä = A, ß = ss)."""
+    t = (text or "").casefold()
+    for a, b in (("ä", "a"), ("ö", "o"), ("ü", "u"), ("ß", "ss")):
+        t = t.replace(a, b)
+    return t
+
+
+def _kunde_name_schluessel(k):
+    return (_sortiertext(k["firma"] or k["nachname"]), _sortiertext(k["vorname"]))
+
+
+# Spalte: (Beschriftung, Sortierschlüssel)
+KUNDEN_SORTIERUNG = {
+    "name": ("Name / Firma", _kunde_name_schluessel),
+    "nr": ("Nr.", lambda k: (len(k["kundennr"] or ""), k["kundennr"] or "")),
+    "art": ("Art", lambda k: (k["typ"] or "", _kunde_name_schluessel(k))),
+    "ort": ("Ort", lambda k: (_sortiertext(k["ort"]), k["plz"] or "", _kunde_name_schluessel(k))),
+    "neu": ("Neueste", lambda k: (k["erstellt_am"] or "", k["id"])),
+}
+
+
+def _kunden_sortierung():
+    """Sortierung aus der Adresse (?sort=…&ab=1), sonst die zuletzt gewählte (bleibt in der Sitzung)."""
+    s = request.args.get("sort")
+    if s in KUNDEN_SORTIERUNG:
+        session["kunden_sort"] = [s, request.args.get("ab") == "1"]
+    s, ab = session.get("kunden_sort") or ["name", False]
+    return (s, bool(ab)) if s in KUNDEN_SORTIERUNG else ("name", False)
+
+
 @bp.route("/kunden")
 def kunden():
     q = request.args.get("q", "").strip()
@@ -167,8 +198,13 @@ def kunden():
         sql += (" AND (kundennr LIKE ? OR firma LIKE ? OR vorname LIKE ? OR nachname LIKE ? OR email LIKE ? "
                 "OR ort LIKE ? OR telefon LIKE ?)")
         args += [f"%{q}%"] * 7
-    sql += " ORDER BY COALESCE(NULLIF(firma,''), nachname), vorname"
-    return render_template("kunden.html", kunden=dbm.get_db().execute(sql, args).fetchall(), q=q, archiv=archiv,
+    sortierung, absteigend = _kunden_sortierung()
+    kunden_liste = sorted(dbm.get_db().execute(sql, args).fetchall(), key=KUNDEN_SORTIERUNG[sortierung][1],
+                          reverse=absteigend)
+    if sortierung == "ort":  # ohne Ort immer ans Ende
+        kunden_liste.sort(key=lambda k: not (k["ort"] or k["plz"]))
+    return render_template("kunden.html", kunden=kunden_liste, q=q, archiv=archiv,
+                           sortierung=sortierung, absteigend=absteigend, sortier_spalten=KUNDEN_SORTIERUNG,
                            nur_interessenten=nur_interessenten)
 
 
@@ -2401,7 +2437,9 @@ def _schnellkunde(con):
     if vorhanden:
         return vorhanden["id"], False
     felder = {"typ": "firma" if w["firma"] else "privat", "firma": w["firma"], "vorname": w["vorname"],
-              "nachname": w["nachname"], "telefon": w["telefon"], "email": w["email"].lower(), "land": "Deutschland"}
+              "nachname": w["nachname"], "telefon": w["telefon"], "email": w["email"].lower(), "land": "Deutschland",
+              **{f: "" for f in ("anrede", "strasse", "plz", "ort", "ust_idnr", "notizen", "email_weitere",
+                                 "leitweg_id")}}
     nr = logik.naechste_kundennr(con, dbm.einstellungen(con))
     cur = con.execute(f"INSERT INTO kunden (kundennr, {', '.join(felder)}, quelle, erstellt_am, geaendert_am) "
                       f"VALUES (?, {', '.join('?' * len(felder))}, 'Auftragsannahme', ?, ?)",
