@@ -231,3 +231,10 @@ def test_gmail_app_passwort_mit_leerzeichen_und_hinweis():
     assert ("login", "u@gmail.com") in Protokoll.schritte
     with pytest.raises(ImapFehler, match="App-Passwort"):
         verbinden("imap.gmail.com", 993, "ssl", "u@gmail.com", "normales-passwort", imap_ssl=GmailSsl)
+
+
+def test_gmail_nur_ssl_993():
+    with pytest.raises(ImapFehler, match="Port 993 mit SSL/TLS"):
+        verbinden("imap.gmail.com", 143, "starttls", "u@gmail.com", "pw", imap_ssl=FalschesSsl,
+                  imap_plain=FalschesPlain)
+    assert Protokoll.schritte == []  # gar nicht erst verbunden

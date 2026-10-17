@@ -90,6 +90,9 @@ def verbinden(host, port, sicherheit, benutzer, passwort, imap_ssl=None, imap_pl
     if not benutzer or not passwort:
         raise ImapFehler("Für IMAP fehlen Benutzername oder Passwort.")
     gmail = host.lower().endswith(("gmail.com", "googlemail.com"))
+    if gmail and (sicherheit != "ssl" or port != 993):
+        raise ImapFehler("Gmail bietet IMAP nur über Port 993 mit SSL/TLS an. Bitte Port 993 und bei "
+                         "„Verschlüsselung“ SSL/TLS einstellen.")
     if gmail:
         passwort = passwort.replace(" ", "")  # Google zeigt App-Passwörter in Vierergruppen mit Leerzeichen an
     imap_ssl = imap_ssl or imaplib.IMAP4_SSL  # erst hier auflösen (Tests ersetzen imaplib.IMAP4_SSL)

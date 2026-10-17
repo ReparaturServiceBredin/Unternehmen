@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.25.1 | 17.10.2026 | Gmail: klare Meldung bei falschem Port |
 | 0.25.0 | 16.10.2026 | Ältere Anfragen prüfen und nachholen, Kunden per Sammelbestätigung |
 | 0.24.1 | 16.10.2026 | Dunkelmodus: alle Texte gut lesbar |
 | 0.24.0 | 16.10.2026 | Fixkosten und Finanzübersicht |
@@ -48,6 +49,16 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.25.1 – 17.10.2026
+Fehlerbehebung beim Gmail-Postfach.
+
+### Behoben
+- **Gmail mit Port 143/STARTTLS:** Gmail bietet IMAP nur über Port 993 mit SSL/TLS an. Bisher wartete
+  „Verbindung testen“ 20 Sekunden und brach dann ab. Jetzt erscheint sofort der Hinweis, Port 993 mit SSL/TLS
+  einzustellen.
 
 ---
 
