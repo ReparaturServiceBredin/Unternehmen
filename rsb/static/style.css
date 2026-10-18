@@ -569,3 +569,4 @@ th a.sortieren:hover { color: var(--blau); }
 th a.sortieren .pfeil { font-size: 10px; opacity: .45; }
 th a.sortieren.aktiv { color: var(--blau); }
 th a.sortieren.aktiv .pfeil { opacity: 1; }
+.fin-paar { display: inline-flex; gap: 6px; align-items: center; flex-wrap: nowrap; }

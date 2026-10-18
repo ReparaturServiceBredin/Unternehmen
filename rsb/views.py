@@ -4481,6 +4481,10 @@ def _fin_parameter():
 @bp.route("/finanzen")
 def finanzen():
     con = dbm.get_db()
+    if request.args.get("waren") in fin.WAREN_MODI:  # Schalter Wareneinsatz: bleibt gespeichert
+        with dbm.Transaktion(con):
+            dbm.einstellungen_speichern({"finanzen_wareneinsatz": request.args["waren"]}, con=con)
+        return redirect(url_for("main.finanzen", **{k: v for k, v in request.args.items() if k != "waren"}))
     p = _fin_parameter()
     vgl = "vorperiode" if request.args.get("vergleich") == "vorperiode" else "vorjahr"
     a = fin.auswertung(con, **p, vergleich_mit=vgl)
@@ -4505,7 +4509,8 @@ def finanzen():
                            schnell=[(t, {**x, **basis_args}) for t, x in fin.schnellauswahl()], vgl=vgl, balken=fin.svg_balken(a["monate"]),
                            linie=fin.svg_linie(a["monate"]), be=fin.break_even(con, ku=a["ku"]),
                            vorschau=fin.vorschau(con, ku=a["ku"]), arten=fin.ARTEN, monate_namen=fin.MONATE,
-                           max_kat=max([w for _, w, _ in a["kategorien"]] + [1]))
+                           max_kat=max([w for _, w, _ in a["kategorien"]] + [1]),
+                           waren_modus=fin.waren_modus(dbm.einstellungen(con)), waren_modi=fin.WAREN_MODI)
 
 
 @bp.route("/finanzen/belege")

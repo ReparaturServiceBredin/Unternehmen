@@ -35,9 +35,10 @@
   <div class="leiste klein" style="margin-top:8px">Schnellauswahl:
     {% for t, args in schnell %}<a href="{{ url_for('main.finanzen', **args) }}">{{ t }}</a>{{ ' ·' if not loop.last }}{% endfor %}</div>
   <div class="leiste klein" style="margin-top:8px">
-    <span>Einnahmen:</span><nav class="bereichsreiter fin-schalter">{% for k, n in [('rechnung', 'nach Rechnungsdatum'), ('zahlung', 'nach Zahlungseingang')] %}<a href="{{ url_for('main.finanzen', **dict(request.args, basis=k)) }}" class="{{ 'aktiv' if p.basis == k }}">{{ n }}</a>{% endfor %}</nav>
-    <span>Fixkosten:</span><nav class="bereichsreiter fin-schalter">{% for k, n in [('anteilig', 'anteilig'), ('faellig', 'im Fälligkeitsmonat')] %}<a href="{{ url_for('main.finanzen', **dict(request.args, fix=k)) }}" class="{{ 'aktiv' if p.fix_modus == k }}">{{ n }}</a>{% endfor %}</nav>
-    <span>Vergleich:</span><nav class="bereichsreiter fin-schalter">{% for k, n in [('vorjahr', 'Vorjahr'), ('vorperiode', 'Vorperiode')] %}<a href="{{ url_for('main.finanzen', **dict(request.args, vergleich=k)) }}" class="{{ 'aktiv' if vgl == k }}">{{ n }}</a>{% endfor %}</nav>
+    <span class="fin-paar"><span>Einnahmen:</span><nav class="bereichsreiter fin-schalter">{% for k, n in [('rechnung', 'nach Rechnungsdatum'), ('zahlung', 'nach Zahlungseingang')] %}<a href="{{ url_for('main.finanzen', **dict(request.args, basis=k)) }}" class="{{ 'aktiv' if p.basis == k }}">{{ n }}</a>{% endfor %}</nav></span>
+    <span class="fin-paar"><span>Fixkosten:</span><nav class="bereichsreiter fin-schalter">{% for k, n in [('anteilig', 'anteilig'), ('faellig', 'im Fälligkeitsmonat')] %}<a href="{{ url_for('main.finanzen', **dict(request.args, fix=k)) }}" class="{{ 'aktiv' if p.fix_modus == k }}">{{ n }}</a>{% endfor %}</nav></span>
+    <span class="fin-paar"><span>Wareneinsatz:</span><nav class="bereichsreiter fin-schalter">{% for k, n in waren_modi.items() %}<a href="{{ url_for('main.finanzen', **dict(request.args, waren=k)) }}" class="{{ 'aktiv' if waren_modus == k }}" title="{{ 'Einkaufspreise aus den Rechnungspositionen (EK beim Artikel) – Eingangsrechnungen mit Wareneinsatz-Kostenart zählen dann nicht doppelt' if k == 'ek' else 'Eingangsrechnungen und Kassenbuchungen mit Wareneinsatz-Kostenart' }}">{{ n }}</a>{% endfor %}</nav></span>
+    <span class="fin-paar"><span>Vergleich:</span><nav class="bereichsreiter fin-schalter">{% for k, n in [('vorjahr', 'Vorjahr'), ('vorperiode', 'Vorperiode')] %}<a href="{{ url_for('main.finanzen', **dict(request.args, vergleich=k)) }}" class="{{ 'aktiv' if vgl == k }}">{{ n }}</a>{% endfor %}</nav></span>
   </div>
   <p class="klein" style="margin:8px 0 0">{{ a.von.isoformat()|datum }} – {{ a.bis.isoformat()|datum }} · Vergleich: {{ a.vor_von.isoformat()|datum }} – {{ a.vor_bis.isoformat()|datum }}. Jede Zahl ist anklickbar und zeigt die Belege dahinter.</p>
 </div>
@@ -60,12 +61,13 @@
   <div class="karte"><h2>Ausgaben</h2>
     <table class="liste">
       <tr><td>Fixkosten {{ '(anteilig)' if p.fix_modus == 'anteilig' else '(im Fälligkeitsmonat)' }}</td><td class="zahl"><a href="{{ link('fixkosten') }}">{{ a.k.fixkosten|euro }}</a></td><td class="zahl">{{ veraenderung('fixkosten', true) }}</td></tr>
-      <tr><td>Wareneinsatz / Material</td><td class="zahl"><a href="{{ link('wareneinsatz') }}">{{ a.k.wareneinsatz|euro }}</a></td><td class="zahl">{{ veraenderung('wareneinsatz', true) }}</td></tr>
+      <tr><td>Wareneinsatz / Material{% if waren_modus == 'ek' %} <span class="klein">(EK-Preise der Rechnungen)</span>{% endif %}</td><td class="zahl"><a href="{{ link('wareneinsatz') }}">{{ a.k.wareneinsatz|euro }}</a></td><td class="zahl">{{ veraenderung('wareneinsatz', true) }}</td></tr>
       <tr><td>Sonstige Ausgaben</td><td class="zahl"><a href="{{ link('sonstige') }}">{{ a.k.sonstige|euro }}</a></td><td class="zahl">{{ veraenderung('sonstige', true) }}</td></tr>
       <tr class="summe"><td>Summe</td><td class="zahl"><a href="{{ link('ausgaben') }}">{{ a.k.ausgaben|euro }}</a></td><td></td></tr>
       <tr><td class="klein">davon aus Eingangsrechnungen</td><td class="zahl klein"><a href="{{ link('er') }}">{{ a.k.er|euro }}</a></td><td></td></tr>
       <tr><td class="klein">davon Kassenausgaben</td><td class="zahl klein"><a href="{{ link('kasse') }}">{{ a.k.kasse|euro }}</a></td><td></td></tr>
-    </table></div>
+    </table>
+    {% if waren_modus == 'ek' %}<p class="klein">Wareneinsatz = Einkaufspreise (EK) der verkauften Positionen. {% if a.k.waren_beleg %}Eingangsrechnungen/Kassenbuchungen mit Wareneinsatz-Kostenart über <a href="{{ link('waren_beleg') }}">{{ a.k.waren_beleg|euro }}</a> zählen deshalb nicht noch einmal mit.{% endif %} Für die Steuer (EÜR) zählen weiterhin die echten Belege.</p>{% endif %}</div>
 </div>
 
 <div class="karte"><h2>Einnahmen und Ausgaben je Monat</h2>

@@ -148,11 +148,21 @@ def _dokname(d):
     return kunde_name({**dict(d), "typ": d["ktyp"]}) if d["kunde_id"] else ""
 
 
+EK_KATEGORIE = "Material laut EK-Preisen"
+WAREN_MODI = {"ek": "aus EK-Preisen der Rechnungen", "belege": "aus Eingangsrechnungen"}
+
+
+def waren_modus(einst):
+    return einst.get("finanzen_wareneinsatz") if einst.get("finanzen_wareneinsatz") in WAREN_MODI else "ek"
+
+
 def posten(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=False):
     """Alle Einzelposten im Zeitraum. Jeder Posten: datum, monat, art, text, kategorie, gruppe, netto, steuer,
     brutto, wert (netto bzw. bei Kleinunternehmer brutto für Ausgaben), url-Teile, schluessel (set)."""
     v, b = von.isoformat(), bis.isoformat()
     liste = []
+    einst = dbm.einstellungen(con)
+    ek_modus = waren_modus(einst) == "ek"
 
     def neu(datum, art, text, kategorie, gruppe, netto, steuer, brutto, ziel, *zusatz):
         datum = datum if isinstance(datum, date) else date.fromisoformat(datum[:10])
@@ -174,6 +184,13 @@ def posten(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=False):
             (v, b)).fetchall()
         aufteilung = _aufteilung(con, {z["dokument_id"] for z in zahlungen})
         for z in zahlungen:
+            if ek_modus and z["dtyp"] in ("rechnung", "storno", "gutschrift"):
+                tk = aufteilung.get(z["dokument_id"], {}).get("teilekosten", 0)
+                anteil_zahlung = z["betrag"] / z["summe_brutto"] if z["summe_brutto"] else 0
+                ek = int(round(tk * anteil_zahlung))
+                if ek:
+                    neu(z["datum"], "Wareneinsatz (EK)", f"{z['nummer']} · {_dokname(z)}", EK_KATEGORIE,
+                        "wareneinsatz", ek, 0, ek, ("dokument", z["dokument_id"]), "ek")
             faktor = z["summe_netto"] / z["summe_brutto"] if z["summe_brutto"] else 1
             netto = int(round(z["betrag"] * faktor))
             kat = aufteilung.get(z["dokument_id"], {}).get("kat", {})
@@ -187,6 +204,10 @@ def posten(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=False):
                            "AND d.datum BETWEEN ? AND ?", (v, b)).fetchall()
         aufteilung = _aufteilung(con, {d["id"] for d in doks})
         for d in doks:
+            tk = aufteilung.get(d["id"], {}).get("teilekosten", 0)
+            if ek_modus and tk:
+                neu(d["datum"], "Wareneinsatz (EK)", f"{d['nummer']} · {_dokname(d)}", EK_KATEGORIE, "wareneinsatz",
+                    tk, 0, tk, ("dokument", d["id"]), "ek")
             kat = aufteilung.get(d["id"], {}).get("kat", {})
             netto_teile = _verteilen(d["summe_netto"], kat)
             for k, teil in netto_teile.items():
@@ -196,8 +217,9 @@ def posten(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=False):
                     int(round(d["summe_steuer"] * anteil)), int(round(d["summe_brutto"] * anteil)),
                     ("dokument", d["id"]), "umsatz", f"umsatz:{k}")
 
-    # Eingangsrechnungen (Wareneinsatz / sonstige; Rechnungen zu Fixkosten zählen bei den Fixkosten)
-    einst = dbm.einstellungen(con)
+    # Eingangsrechnungen (Wareneinsatz / sonstige; Rechnungen zu Fixkosten zählen bei den Fixkosten).
+    # Im EK-Modus zählt der Wareneinsatz aus den Rechnungspositionen – Belege mit Wareneinsatz-Kostenart werden dann
+    # nur noch als Hinweis geführt (Schlüssel „waren_beleg“), damit nichts doppelt zählt.
     waren = {k.strip() for k in (einst.get("wareneinsatz_kostenarten") or "").splitlines() if k.strip()}
     if basis == "zahlung":
         ers = con.execute(
@@ -216,7 +238,13 @@ def posten(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=False):
             continue
         faktor = e["betrag"] / e["brutto"] if e["brutto"] else 1
         kat = e["kostenart"] or "Sonstiges"
-        neu(e["datum"], "Eingangsrechnung", f"{e['lfd_nr']} · {e['lieferant'] or ''} {e['nummer'] or ''}".strip(), kat,
+        text = f"{e['lfd_nr']} · {e['lieferant'] or ''} {e['nummer'] or ''}".strip()
+        if ek_modus and kat in waren:
+            neu(e["datum"], "Eingangsrechnung (nicht mitgezählt)", text, kat, "waren_beleg",
+                int(round(e["netto"] * faktor)), int(round(e["steuer"] * faktor)), e["betrag"],
+                ("eingangsrechnung", e["id"]))
+            continue
+        neu(e["datum"], "Eingangsrechnung", text, kat,
             "wareneinsatz" if kat in waren else "sonstige", int(round(e["netto"] * faktor)),
             int(round(e["steuer"] * faktor)), e["betrag"], ("eingangsrechnung", e["id"]), "er")
 
@@ -230,6 +258,10 @@ def posten(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=False):
         satz = float(k["satz"] or 0)
         netto = int(round(brutto * 100 / (100 + satz))) if satz else brutto
         kat = k["kart"] or "Sonstiges"
+        if ek_modus and kat in waren:
+            neu(k["datum"], "Kassenbuchung (nicht mitgezählt)", f"Nr. {k['lfd_nr']} · {k['text']}", kat, "waren_beleg",
+                netto, brutto - netto, brutto, ("kasse", k["id"]))
+            continue
         neu(k["datum"], "Kassenbuchung", f"Nr. {k['lfd_nr']} · {k['text']}", kat,
             "wareneinsatz" if kat in waren else "sonstige", netto, brutto - netto, brutto, ("kasse", k["id"]), "kasse")
 
@@ -261,7 +293,8 @@ def kennzahlen(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=None, l
         "umsatz_netto": umsatz, "umsatz_brutto": _summe(liste, "einnahme", "brutto"),
         "umsatz_kat": {k: _summe(liste, f"einnahme:{k}", "netto") for k in KATEGORIEN_EIN},
         "fixkosten": fix, "wareneinsatz": waren, "sonstige": sonst,
-        "kasse": _summe(liste, "kasse"), "er": _summe(liste, "er"),
+        "kasse": _summe(liste, "kasse"), "er": _summe(liste, "er"), "ek": _summe(liste, "ek"),
+        "waren_beleg": _summe(liste, "waren_beleg"),
         "ausgaben": fix + waren + sonst, "rohertrag": rohertrag, "ergebnis": rohertrag - fix - sonst,
         "ust": _summe(liste, "einnahme", "steuer"),
         "vorsteuer": sum(p["steuer"] for p in liste if "ausgaben" in p["schluessel"]),

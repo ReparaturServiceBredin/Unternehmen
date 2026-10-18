@@ -184,6 +184,14 @@ def test_finanzen_nachgerechnet(client, con):
     post(client, "/kasse/buchen", datum=tag, art="ausgabe", betrag="11,90", text="Druckerpapier", steuersatz="19",
          kostenart="Bürobedarf")
 
+    # Wareneinsatz aus EK-Preisen (Standard): Teilekosten der Positionen, Storno hebt R2 auf; W1 zählt nicht doppelt
+    k_ek = fin.auswertung(con, "monat", heute.year, heute.month)["k"]
+    assert k_ek["wareneinsatz"] == k_ek["ek"] == 3800 and k_ek["waren_beleg"] == 2000
+    assert k_ek["sonstige"] == 1000 + 1000 and k_ek["er"] == 1000
+    assert "Wareneinsatz (EK)" in client.get("/finanzen/belege?s=wareneinsatz").get_data(as_text=True)
+    # Umschalten auf Eingangsrechnungen (bleibt gespeichert)
+    client.get("/finanzen?waren=belege")
+    assert dbm.einstellungen(con)["finanzen_wareneinsatz"] == "belege"
     a = fin.auswertung(con, "monat", heute.year, heute.month)
     k = a["k"]
     assert k["umsatz_kat"] == {"Reparaturen & Dienstleistungen": 10000, "Artikelverkauf": 4000, "Leihgebühren": 1500,

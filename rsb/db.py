@@ -202,6 +202,7 @@ STANDARD_EINSTELLUNGEN = {
     "fixkosten_kategorien": "Werkstattmiete\nStrom\nInternet\nTelefon\nVersicherungen\nLeasing\nSoftware-Abos\nKfz\n"
                             "Steuerberater\nKammerbeiträge\nSonstiges",
     "fixkosten_hinweis_tage": 30,          # Hinweis auf Vertragsende / Kündigungsfrist so viele Tage vorher
+    "finanzen_wareneinsatz": "ek",          # Finanzen: Wareneinsatz aus EK-Preisen der Rechnungen (ek) oder Belegen
     "wareneinsatz_kostenarten": "Wareneinkauf / Ersatzteile",  # Kostenarten, die als Wareneinsatz zählen (Finanzen)
     # DATEV-Export (Kontenrahmen SKR03/SKR04; leere Konten = Standard des Kontenrahmens)
     "datev_beraternr": "",

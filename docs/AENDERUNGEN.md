@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.28.0 | 18.10.2026 | Finanzen: Wareneinsatz aus den EK-Preisen der Rechnungen |
 | 0.27.1 | 18.10.2026 | Datenprüfung: Aufträge für ältere KVAs nachträglich anlegen |
 | 0.27.0 | 18.10.2026 | Jeder KVA bekommt automatisch seinen Reparaturauftrag |
 | 0.26.1 | 17.10.2026 | Kundenliste per Klick sortieren |
@@ -52,6 +53,21 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.28.0 – 18.10.2026
+### Neu: Wareneinsatz aus den Einkaufspreisen (Finanzen)
+- Die Finanzübersicht rechnet den Wareneinsatz jetzt standardmäßig aus den **EK-Preisen der Rechnungspositionen**
+  (Teilekosten, z. B. aus dem EK beim Artikel). Sie müssen dafür nicht jede Eingangsrechnung erfassen.
+- Neuer Schalter **„Wareneinsatz: aus EK-Preisen der Rechnungen / aus Eingangsrechnungen“**. Die Wahl bleibt
+  gespeichert und gilt auch für PDF- und CSV-Export, Break-even und Vorschau.
+- Nichts zählt doppelt: Im EK-Modus werden Eingangsrechnungen und Kassenbuchungen mit einer Wareneinsatz-Kostenart
+  nicht mitgezählt. Die Finanzübersicht zeigt deren Summe als Hinweis (anklickbar).
+- Stornos und Gutschriften verringern den Wareneinsatz entsprechend. Nach Zahlungseingang wird er anteilig zur
+  Zahlung gerechnet.
+- Für die Steuer (EÜR) zählen weiterhin die echten Belege – die Finanzübersicht ist eine betriebswirtschaftliche
+  Sicht.
 
 ---
 
