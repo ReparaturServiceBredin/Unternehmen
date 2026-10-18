@@ -240,6 +240,16 @@ def auftrag_fuer_kva(con, kva_id, bestehenden_nutzen=True):
     return aid, "neu"
 
 
+def kvas_ohne_auftrag(con):
+    """Festgeschriebene KVAs, die zu keinem Auftrag gehören (ohne den internen Kunden), älteste zuerst."""
+    return con.execute(
+        "SELECT d.*, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp FROM dokumente d "
+        "JOIN kunden k ON k.id=d.kunde_id WHERE d.typ='kva' AND d.status<>'entwurf' "
+        "AND NOT EXISTS (SELECT 1 FROM auftraege a WHERE a.kva_id=d.id) "
+        "AND d.kunde_id IS NOT (SELECT CAST(wert AS INTEGER) FROM einstellungen WHERE schluessel='interner_kunde_id') "
+        "ORDER BY d.datum, d.id").fetchall()
+
+
 def dokument_ereignis(con, dokument_id, ereignis_kva, ereignis_rechnung):
     """Ereignis (z. B. Versand) eines Dokuments im Verlauf der zugehörigen Aufträge vermerken."""
     d = con.execute("SELECT * FROM dokumente WHERE id=?", (dokument_id,)).fetchone()

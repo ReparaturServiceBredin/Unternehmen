@@ -106,7 +106,7 @@ VERWALTUNG = [
     ("main.textbausteine", "Textbausteine", "type", "Vorlagen E-Mail Texte Einleitung Schlusstext"),
     ("main.datenschutz", "Datenschutz-Übersicht & Löschfristen", "shield", "Löschlauf Löschprotokoll DSGVO Auskunft"),
     ("main.protokoll", "Protokoll", "history", "Änderungsprotokoll Audit GoBD"),
-    ("main.pruefung", "Datenprüfung", "list-checks", "Prüfung Integrität Kontrolle"),
+    ("main.pruefung", "Datenprüfung", "list-checks", "Prüfung Integrität Kontrolle KVA ohne Auftrag nachtragen"),
     ("main.verfahrensdokumentation", "Verfahrensdokumentation", "file-text", "GoBD Dokumentation"),
     ("main.versionen", "Versionsprotokoll", "file-clock", "Änderungen Version Neuerungen"),
 ]

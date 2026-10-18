@@ -2040,8 +2040,29 @@ def protokoll():
 
 @bp.route("/pruefung")
 def pruefung():
-    ergebnis = logik.integritaet_pruefen(dbm.get_db(), daten_dir())
-    return render_template("pruefung.html", e=ergebnis)
+    con = dbm.get_db()
+    ergebnis = logik.integritaet_pruefen(con, daten_dir())
+    return render_template("pruefung.html", e=ergebnis, kvas_ohne_auftrag=auf.kvas_ohne_auftrag(con))
+
+
+@bp.route("/pruefung/kva-auftraege", methods=["POST"])
+def pruefung_kva_auftraege():
+    """Für bestehende KVAs ohne Auftrag nachträglich Aufträge anlegen (einzeln oder alle)."""
+    con = dbm.get_db()
+    offen = {d["id"] for d in auf.kvas_ohne_auftrag(con)}
+    gewaehlt = [did for did in request.form.getlist("did", type=int) if did in offen] if request.form.get("did") \
+        else sorted(offen)
+    zaehler = {"neu": 0, "verknuepft": 0}
+    with dbm.Transaktion(con):
+        for did in gewaehlt:
+            _, art = auf.auftrag_fuer_kva(con, did)
+            if art in zaehler:
+                zaehler[art] += 1
+    teile = ([f"{zaehler['neu']} Reparaturauftrag/-aufträge angelegt"] if zaehler["neu"] else []) + \
+        ([f"{zaehler['verknuepft']} KVA mit einem offenen Auftrag des Kunden verknüpft"] if zaehler["verknuepft"] else [])
+    flash((", ".join(teile) + ". Bitte bei Gelegenheit Gerät und Fehler in den Aufträgen ergänzen.") if teile
+          else "Nichts zu tun – alle KVAs gehören zu einem Auftrag.", "ok")
+    return redirect(url_for("main.pruefung") + "#kva-ohne-auftrag")
 
 
 @bp.route("/verfahrensdokumentation")

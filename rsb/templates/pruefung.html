@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_status.html" import csrf %}
 {% block titel %}Datenprüfung{% endblock %}
 {% block inhalt %}
 <h1>Datenprüfung</h1>
@@ -10,4 +11,18 @@
   {% else %}<div class="meldung ok" style="margin:0">In Ordnung.</div>{% endif %}
 </div>
 {% endfor %}
+<div class="karte" id="kva-ohne-auftrag">
+  <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Kostenvoranschläge ohne Reparaturauftrag</h2>
+    {% if kvas_ohne_auftrag|length > 1 %}<form method="post" action="{{ url_for('main.pruefung_kva_auftraege') }}" onsubmit="return confirm('Für alle {{ kvas_ohne_auftrag|length }} KVAs Aufträge anlegen bzw. verknüpfen?')">{{ csrf() }}<button>Für alle {{ kvas_ohne_auftrag|length }} anlegen</button></form>{% endif %}</div>
+  {% if kvas_ohne_auftrag %}
+  <p class="klein">Seit 0.27.0 bekommt jeder festgeschriebene KVA automatisch seinen Auftrag. Diese älteren KVAs haben noch keinen. „Anlegen“ verknüpft den KVA mit dem offenen Auftrag des Kunden, wenn es genau einen ohne KVA gibt – sonst entsteht ein neuer Auftrag (Gerät aus dem Betreff).</p>
+  <table class="liste"><thead><tr><th>KVA</th><th>Datum</th><th>Kunde</th><th>Betreff</th><th>Status</th><th class="zahl">Betrag</th><th></th></tr></thead><tbody>
+  {% for d in kvas_ohne_auftrag %}<tr>
+    <td><a href="{{ url_for('main.dokument', did=d.id) }}"><b>{{ d.nummer }}</b></a></td><td>{{ d.datum|datum }}</td>
+    <td>{{ d.kundennr }} · {{ d|kname }}</td><td>{{ d.betreff or '' }}</td><td>{{ d.kva_status or 'offen' }}</td>
+    <td class="zahl">{{ d.summe_brutto|euro }}</td>
+    <td class="zahl"><form method="post" action="{{ url_for('main.pruefung_kva_auftraege') }}">{{ csrf() }}<input type="hidden" name="did" value="{{ d.id }}"><button class="zweit klein">Auftrag anlegen</button></form></td>
+  </tr>{% endfor %}</tbody></table>
+  {% else %}<div class="meldung ok" style="margin:0">In Ordnung – jeder KVA gehört zu einem Reparaturauftrag.</div>{% endif %}
+</div>
 {% endblock %}

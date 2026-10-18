@@ -108,3 +108,19 @@ def test_kva_festschreiben_legt_auftrag_an_oder_verknuepft(client, con):
     did3, _ = kva_festschreiben(client, con, kid2, "Zweiter KVA")
     assert con.execute("SELECT COUNT(*) FROM auftraege WHERE kunde_id=?", (kid2,)).fetchone()[0] == 2
     assert aid
+
+
+def test_pruefung_kvas_ohne_auftrag_nachtraeglich(client, con):
+    kid = kunde_anlegen(client)
+    d1, _ = kva_festschreiben(client, con, kid, "Kostenvoranschlag iPad")
+    d2, _ = kva_festschreiben(client, con, kid, "Kostenvoranschlag Laptop")
+    # Zustand vor 0.27.0 nachstellen: KVAs ohne Auftrag
+    con.execute("UPDATE auftraege SET kva_id=NULL, status='erledigt'")
+    con.commit()
+    seite = client.get("/pruefung").get_data(as_text=True)
+    assert "Kostenvoranschläge ohne Reparaturauftrag" in seite and "Für alle 2 anlegen" in seite
+    post(client, "/pruefung/kva-auftraege", did=str(d1))
+    assert con.execute("SELECT geraet FROM auftraege WHERE kva_id=?", (d1,)).fetchone()[0] == "iPad"
+    post(client, "/pruefung/kva-auftraege")
+    assert con.execute("SELECT COUNT(*) FROM auftraege WHERE kva_id IS NOT NULL").fetchone()[0] == 2
+    assert "jeder KVA gehört zu einem Reparaturauftrag" in client.get("/pruefung").get_data(as_text=True)

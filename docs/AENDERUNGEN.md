@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.27.1 | 18.10.2026 | Datenprüfung: Aufträge für ältere KVAs nachträglich anlegen |
 | 0.27.0 | 18.10.2026 | Jeder KVA bekommt automatisch seinen Reparaturauftrag |
 | 0.26.1 | 17.10.2026 | Kundenliste per Klick sortieren |
 | 0.26.0 | 17.10.2026 | Schnellannahme: Kunde im Auftrag, Annahmeschein per E-Mail, Auftrag aus KVA |
@@ -51,6 +52,17 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.27.1 – 18.10.2026
+### Neu: Ältere KVAs nachträglich einem Auftrag zuordnen
+- *Einstellungen → Datenprüfung* (oder Strg+K „Datenprüfung“) zeigt jetzt **„Kostenvoranschläge ohne
+  Reparaturauftrag“**: alle festgeschriebenen KVAs, die noch keinen Auftrag haben, mit Kunde, Betreff, Status
+  und Betrag.
+- **„Auftrag anlegen“** je Zeile oder **„Für alle anlegen“** auf einmal – nach derselben Regel wie beim
+  Festschreiben: genau ein offener Auftrag des Kunden ohne KVA wird verknüpft, sonst entsteht ein neuer
+  Auftrag mit dem Gerät aus dem Betreff.
 
 ---
 
