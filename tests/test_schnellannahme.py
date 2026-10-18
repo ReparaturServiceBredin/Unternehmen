@@ -71,3 +71,40 @@ def test_auftrag_aus_kva_anlegen(client, con):
     # zweiter Klick legt keinen zweiten Auftrag an
     post(client, f"/dokumente/{did}/auftrag-anlegen")
     assert con.execute("SELECT COUNT(*) FROM auftraege").fetchone()[0] == 1
+
+
+def kva_festschreiben(client, con, kid, betreff="Kostenvoranschlag Samsung S21"):
+    client.get(f"/dokumente/neu?typ=kva&kunde_id={kid}")
+    did = con.execute("SELECT MAX(id) FROM dokumente WHERE typ='kva'").fetchone()[0]
+    d = con.execute("SELECT * FROM dokumente WHERE id=?", (did,)).fetchone()
+    r = client.post(f"/dokumente/{did}", data={
+        "csrf": "test-token", "kunde_id": kid, "datum": "", "zahlungsziel_tage": "", "betreff": betreff,
+        "einleitung": d["einleitung"], "schlusstext": d["schlusstext"], "hinweise": "", "aktion": "festschreiben",
+        "p_bezeichnung": ["Displaytausch"], "p_beschreibung": [""], "p_menge": ["1"], "p_einheit": ["pauschal"],
+        "p_preis": ["149,00"], "p_teilekosten": ["70,00"], "p_steuersatz": ["19"], "p_leistungsart": ["Smartphone"],
+        "p_artikel_id": [""]}, follow_redirects=True)
+    return did, r.get_data(as_text=True)
+
+
+def test_kva_festschreiben_legt_auftrag_an_oder_verknuepft(client, con):
+    kid = kunde_anlegen(client)
+    did, seite = kva_festschreiben(client, con, kid)
+    a = con.execute("SELECT * FROM auftraege WHERE kva_id=?", (did,)).fetchone()
+    assert a and a["geraet"] == "Samsung S21" and a["kunde_id"] == kid
+    assert "wurde automatisch angelegt" in seite and a["auftragsnr"] in seite
+    verlauf = [v["ereignis"] for v in con.execute("SELECT ereignis FROM auftrag_verlauf WHERE auftrag_id=?",
+                                                    (a["id"],))]
+    assert "Auftrag automatisch aus Kostenvoranschlag angelegt" in verlauf and "KVA festgeschrieben" in verlauf
+    # Kunde hat genau einen offenen Auftrag ohne KVA → dieser wird verknüpft, kein neuer
+    kid2 = kunde_anlegen(client, nachname="Berg", email="berg@example.com")
+    post(client, "/auftraege/neu", kunde_id=str(kid2), geraet="Pixel 8", fehler="Akku")
+    vorher = con.execute("SELECT COUNT(*) FROM auftraege").fetchone()[0]
+    did2, seite = kva_festschreiben(client, con, kid2, "Kostenvoranschlag Akku")
+    assert con.execute("SELECT COUNT(*) FROM auftraege").fetchone()[0] == vorher
+    assert con.execute("SELECT geraet FROM auftraege WHERE kva_id=?", (did2,)).fetchone()[0] == "Pixel 8"
+    assert "wurde mit diesem KVA verknüpft" in seite
+    # weiterer KVA: kein offener Auftrag ohne KVA mehr → neuer Auftrag
+    aid = con.execute("SELECT id FROM auftraege WHERE kva_id=?", (did2,)).fetchone()[0]
+    did3, _ = kva_festschreiben(client, con, kid2, "Zweiter KVA")
+    assert con.execute("SELECT COUNT(*) FROM auftraege WHERE kunde_id=?", (kid2,)).fetchone()[0] == 2
+    assert aid

@@ -1319,11 +1319,17 @@ def dokument(did):
         if aktion == "festschreiben":
             nummer = logik.festschreiben(con, did, daten_dir())
             with dbm.Transaktion(con):
+                aid, art = auf.auftrag_fuer_kva(con, did) if d["typ"] == "kva" else (None, None)
                 auf.dokument_ereignis(con, did, "KVA festgeschrieben", "Rechnung festgeschrieben")
                 if d["typ"] == "kva":
                     ben.kva_ereignis(con, did, "festgeschrieben")
             _benachrichtigungen_automatisch()
             flash(f"{logik.titel(d['typ'])} {nummer} wurde festgeschrieben und archiviert.", "ok")
+            if art in ("neu", "verknuepft"):
+                nr = con.execute("SELECT auftragsnr FROM auftraege WHERE id=?", (aid,)).fetchone()[0]
+                flash(Markup(f'Reparaturauftrag <a href="{url_for("main.auftrag", aid=aid)}"><b>{nr}</b></a> ')
+                      + ("wurde automatisch angelegt – bitte bei Gelegenheit Gerät und Fehler ergänzen."
+                         if art == "neu" else "des Kunden wurde mit diesem KVA verknüpft."), "info")
             return redirect(url_for("main.dokument", did=did))
         flash("Entwurf gespeichert.", "ok")
         return redirect(url_for("main.dokument", did=did))
@@ -2581,13 +2587,12 @@ def kva_auftrag_anlegen(did):
     d = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (did,)).fetchone()
     if not d:
         abort(404)
-    vorhanden = con.execute("SELECT id FROM auftraege WHERE kva_id=?", (did,)).fetchone()
-    if vorhanden:
-        return redirect(url_for("main.auftrag", aid=vorhanden["id"]))
-    geraet = re.sub(r"^\s*(Kostenvoranschlag|KVA)\b[\s:–-]*", "", d["betreff"] or "", flags=re.I).strip()
     with dbm.Transaktion(con):
-        aid = auf.anlegen(con, d["kunde_id"], geraet=geraet[:200])
-        auf.kva_verknuepfen(con, aid, did)
+        aid, art = auf.auftrag_fuer_kva(con, did, bestehenden_nutzen=False)
+    if not aid:
+        raise EingabeFehler("Bitte im Kostenvoranschlag zuerst einen Kunden auswählen.")
+    if art == "vorhanden":
+        return redirect(url_for("main.auftrag", aid=aid))
     flash("Auftrag angelegt und mit dem Kostenvoranschlag verknüpft. Bitte Gerät und Fehler ergänzen – den "
           "Annahmeschein können Sie unterschreiben lassen oder per E-Mail senden.", "ok")
     return redirect(url_for("main.auftrag", aid=aid))

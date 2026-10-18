@@ -209,6 +209,37 @@ def kva_text(einst, kva_gebuehr):
     return (einst.get("annahme_kva_text") or "").replace("{KVA-Gebühr}", euro(kva_gebuehr))
 
 
+def auftrag_fuer_kva(con, kva_id, bestehenden_nutzen=True):
+    """Sorgt dafür, dass ein KVA zu einem Auftrag gehört. Muss in einer Transaktion laufen.
+
+    Hat der KVA schon einen Auftrag, bleibt alles, wie es ist. Sonst: Hat der Kunde genau einen offenen Auftrag ohne
+    KVA, wird dieser verknüpft (bestehenden_nutzen), andernfalls ein neuer Auftrag angelegt – das Gerät wird aus dem
+    Betreff übernommen. Gibt (auftrag_id, art) zurück: art = "vorhanden" / "verknuepft" / "neu"; (None, None) für
+    KVAs ohne Kunden oder an den internen Kunden.
+    """
+    import re
+    d = con.execute("SELECT * FROM dokumente WHERE id=? AND typ='kva'", (kva_id,)).fetchone()
+    if not d or not d["kunde_id"]:
+        return None, None
+    a = con.execute("SELECT id FROM auftraege WHERE kva_id=?", (kva_id,)).fetchone()
+    if a:
+        return a["id"], "vorhanden"
+    intern = con.execute("SELECT wert FROM einstellungen WHERE schluessel='interner_kunde_id'").fetchone()
+    if intern and str(d["kunde_id"]) == str(intern["wert"]).strip('"'):
+        return None, None
+    if bestehenden_nutzen:
+        offen = con.execute("SELECT id FROM auftraege WHERE kunde_id=? AND kva_id IS NULL AND status<>'erledigt'",
+                            (d["kunde_id"],)).fetchall()
+        if len(offen) == 1:
+            kva_verknuepfen(con, offen[0]["id"], kva_id)
+            return offen[0]["id"], "verknuepft"
+    geraet = re.sub(r"^\s*(Kostenvoranschlag|KVA)\b[\s:–-]*", "", d["betreff"] or "", flags=re.I).strip()
+    aid = anlegen(con, d["kunde_id"], geraet=geraet[:200])
+    kva_verknuepfen(con, aid, kva_id)
+    verlauf(con, aid, "Auftrag automatisch aus Kostenvoranschlag angelegt", d["nummer"] or "Entwurf")
+    return aid, "neu"
+
+
 def dokument_ereignis(con, dokument_id, ereignis_kva, ereignis_rechnung):
     """Ereignis (z. B. Versand) eines Dokuments im Verlauf der zugehörigen Aufträge vermerken."""
     d = con.execute("SELECT * FROM dokumente WHERE id=?", (dokument_id,)).fetchone()

@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.27.0 | 18.10.2026 | Jeder KVA bekommt automatisch seinen Reparaturauftrag |
 | 0.26.1 | 17.10.2026 | Kundenliste per Klick sortieren |
 | 0.26.0 | 17.10.2026 | Schnellannahme: Kunde im Auftrag, Annahmeschein per E-Mail, Auftrag aus KVA |
 | 0.25.0 | 16.10.2026 | Ältere Anfragen prüfen und nachholen, Kunden per Sammelbestätigung |
@@ -50,6 +51,19 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.27.0 – 18.10.2026
+### Neu: Jeder Kostenvoranschlag gehört zu einem Reparaturauftrag
+- Wird ein KVA festgeschrieben, der noch zu keinem Auftrag gehört, kümmert sich das Programm selbst darum:
+  - Hat der Kunde **genau einen offenen Auftrag ohne KVA**, wird der KVA mit diesem verknüpft.
+  - Sonst wird **automatisch ein neuer Reparaturauftrag angelegt**. Das Gerät wird aus dem Betreff des KVA
+    übernommen (z. B. „Kostenvoranschlag Samsung S21“ → Gerät „Samsung S21“).
+- Eine Meldung mit Link zum Auftrag sagt, was passiert ist. Fehler, Zubehör usw. können Sie dort bei
+  Gelegenheit ergänzen. Im Verlauf steht „Auftrag automatisch aus Kostenvoranschlag angelegt“.
+- KVAs, die aus einem Auftrag heraus erstellt wurden, bleiben wie bisher bei ihrem Auftrag. Interne KVAs
+  (Leihgeräte-Schäden) bekommen keinen Auftrag.
 
 ---
 
