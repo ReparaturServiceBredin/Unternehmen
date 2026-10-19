@@ -202,6 +202,8 @@ STANDARD_EINSTELLUNGEN = {
     "fixkosten_kategorien": "Werkstattmiete\nStrom\nInternet\nTelefon\nVersicherungen\nLeasing\nSoftware-Abos\nKfz\n"
                             "Steuerberater\nKammerbeiträge\nSonstiges",
     "fixkosten_hinweis_tage": 30,          # Hinweis auf Vertragsende / Kündigungsfrist so viele Tage vorher
+    "raten_vorlauf_tage": 3,                # Ratenzahlung: Zahlungsaufforderung so viele Tage vor Fälligkeit
+    "raten_letzter_lauf": "",
     "finanzen_wareneinsatz": "ek",          # Finanzen: Wareneinsatz aus EK-Preisen der Rechnungen (ek) oder Belegen
     "wareneinsatz_kostenarten": "Wareneinkauf / Ersatzteile",  # Kostenarten, die als Wareneinsatz zählen (Finanzen)
     # DATEV-Export (Kontenrahmen SKR03/SKR04; leere Konten = Standard des Kontenrahmens)
@@ -350,6 +352,9 @@ def initialisieren(pfad):
 
 # Spalten, die in neueren Versionen dazugekommen sind: (Tabelle, Spalte, Definition)
 MIGRATIONEN = [
+    ("dokumente", "raten_anzahl", "INTEGER"),
+    ("dokumente", "raten_erste", "TEXT"),
+    ("dokumente", "raten_auto", "INTEGER NOT NULL DEFAULT 1"),
     ("auftraege", "annahme_gesendet_am", "TEXT"),
     ("auftraege", "annahme_gesendet_an", "TEXT"),
     ("auftraege", "annahme_gesendet_pdf", "TEXT"),
@@ -416,7 +421,7 @@ NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "s
                  "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
                  "er_zahlungen", "kassenbuch", "kassen_abschluesse", "datev_exporte", "datev_posten",
                  "loeschprotokolle", "loeschfreigaben", "loesch_zurueckstellungen", "fixkosten",
-                 "fixkosten_betraege", "hinweise_gelesen", "anfragen_entfernt"]
+                 "fixkosten_betraege", "hinweise_gelesen", "anfragen_entfernt", "rechnung_raten"]
 
 
 def _migrieren(con, pfad=None):

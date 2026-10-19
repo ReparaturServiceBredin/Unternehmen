@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.29.0 | 19.10.2026 | Ratenzahlung: Rechnung mit Ratenplan und automatischen Zahlungsaufforderungen |
 | 0.28.0 | 18.10.2026 | Finanzen: Wareneinsatz aus den EK-Preisen der Rechnungen |
 | 0.27.1 | 18.10.2026 | Datenprüfung: Aufträge für ältere KVAs nachträglich anlegen |
 | 0.27.0 | 18.10.2026 | Jeder KVA bekommt automatisch seinen Reparaturauftrag |
@@ -53,6 +54,31 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.29.0 – 19.10.2026
+Neu: Ratenzahlung. Vor der Erweiterung der Datenbank legt das Programm automatisch eine Sicherung an.
+
+### Rechnung mit Ratenplan
+- In der Rechnung **„Ratenzahlung vereinbart“** anhaken, Anzahl der Raten (2–24, monatlich) und Fälligkeit der
+  1. Rate eintragen. Die Aufteilung erscheint sofort als Vorschau; ein Rundungsrest kommt auf die 1. Rate.
+- Es bleibt **eine Rechnung über den vollen Betrag** (eine Nummer, ein Umsatz). Auf der Rechnung steht der Ratenplan
+  mit allen Terminen und Beträgen, der GiroCode gilt für die 1. Rate („RE-… Rate 1“).
+- Fällig im Mahnwesen ist die Rechnung erst mit der letzten Rate. Standardtexte wie „Betrag von {betrag} bis zum
+  {faellig_am}“ werden passend ergänzt („gemäß Ratenplan“, „(letzte Rate)“).
+
+### Automatische Zahlungsaufforderung je Rate
+- Ist **„automatisch per E-Mail senden“** angehakt, geht einige Tage vor jeder Fälligkeit eine Mail „Rate 2 von 4 zu
+  Rechnung RE-… – fällig am …“ mit Betrag, Bankverbindung, Verwendungszweck und der Rechnung im Anhang raus.
+  Vorlauf unter *Einstellungen → Rechnung & Steuer* (Standard 3 Tage).
+- Jede Rate wird nur einmal angeschrieben, bezahlte Raten nie. Für die 1. Rate entfällt die Mail, wenn die Rechnung
+  selbst schon per E-Mail verschickt wurde. Bei stornierten Rechnungen geht nichts mehr raus.
+- In der Rechnung zeigt der Bereich **„Ratenzahlung“** jede Rate mit Status (offen, fällig, überfällig, bezahlt),
+  wann die Aufforderung ging – und einen Knopf, um sie von Hand (erneut) zu senden.
+
+### Zahlungen
+- Zahlungseingänge werden den Raten der Reihe nach angerechnet; Teilzahlungen werden berücksichtigt.
 
 ---
 

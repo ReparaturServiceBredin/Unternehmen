@@ -74,7 +74,30 @@ def vertraege_hintergrund(app):
         except Exception as e:  # Hintergrund darf nie abstürzen
             print(f"{datetime.now():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
         datenschutz_lauf(app)
+        raten_lauf(app)
         time.sleep(3600)
+
+
+def raten_lauf(app):
+    """Einmal täglich: Zahlungsaufforderungen für bald fällige Raten senden."""
+    from .raten import lauf
+    try:
+        con = dbm.verbinden(app.config["DB_PFAD"])
+        try:
+            if (dbm.einstellungen(con).get("raten_letzter_lauf") or "")[:10] != datetime.now().date().isoformat():
+                with app.app_context():
+                    e = lauf(con, app.config["DATEN"])
+                with dbm.Transaktion(con):
+                    dbm.einstellungen_speichern({"raten_letzter_lauf": datetime.now().isoformat(timespec="seconds")},
+                                                con=con)
+                if e["gesendet"]:
+                    print(f"{datetime.now():%H:%M} Ratenzahlung: {e['gesendet']} Zahlungsaufforderung(en) gesendet")
+                for f in e["fehler"]:
+                    print(f"{datetime.now():%H:%M} Ratenzahlung: {f}")
+        finally:
+            con.close()
+    except Exception as e:  # Hintergrund darf nie abstürzen
+        print(f"{datetime.now():%H:%M} Ratenzahlung fehlgeschlagen: {e}")
 
 
 def datenschutz_lauf(app):

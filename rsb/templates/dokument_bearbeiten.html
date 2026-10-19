@@ -50,6 +50,18 @@
       {% endif %}
       <div class="s4"><label>{{ 'Gültig (Tage)' if d.typ == 'kva' else 'Zahlungsziel (Tage)' }}</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ d.zahlungsziel_tage }}">
         <div class="hilfe">{{ 'Gültig bis' if d.typ == 'kva' else 'Fällig am' }} {{ d.faellig_am|datum }} (wird beim Speichern neu berechnet)</div></div>
+      {% if d.typ == 'rechnung' %}
+      <div class="s12 raten-box">
+        <label class="check"><input type="checkbox" name="raten_aktiv" value="1" id="raten_aktiv" {{ 'checked' if d.raten_anzahl }}> <b>Ratenzahlung vereinbart</b></label>
+        <div class="felder" id="raten_felder" {{ '' if d.raten_anzahl else 'hidden' }} style="margin-top:6px">
+          <div class="s3"><label>Anzahl Raten (monatlich)</label><input type="number" min="2" max="24" name="raten_anzahl" id="raten_anzahl" value="{{ d.raten_anzahl or 4 }}"></div>
+          <div class="s3"><label>1. Rate fällig am</label><input type="date" name="raten_erste" id="raten_erste" value="{{ d.raten_erste or d.faellig_am or '' }}"></div>
+          <div class="s6"><label class="check" style="margin-top:26px"><input type="checkbox" name="raten_auto" value="1" {{ 'checked' if d.raten_auto or not d.raten_anzahl }}> Zahlungsaufforderung je Rate automatisch per E-Mail senden</label></div>
+          <div class="s12 klein" id="raten_vorschau"></div>
+          <div class="s12 hilfe">Eine Rechnung über den vollen Betrag mit Ratenplan (Beträge und Termine stehen auf der Rechnung). Vor jeder Fälligkeit geht – wenn angehakt – eine Mail „Rate x von n“ mit der Rechnung im Anhang an den Kunden. Zahlungseingänge haken die Raten der Reihe nach ab.</div>
+        </div>
+      </div>
+      {% endif %}
       <div class="s12"><label>Betreff (z. B. Gerät und Seriennummer)</label><input type="text" name="betreff" value="{{ d.betreff or '' }}" placeholder="z. B. Reparatur iPhone 13, IMEI …"></div>
     </div>
   </div>
@@ -183,7 +195,33 @@ function rechne() {
   html += `<div class="gesamt"><span>Gesamtbetrag</span><span>${euro(netto + steuer)}</span></div>`;
   html += `<div class="klein"><span>davon Teilekosten / Marge</span><span>${euro(teile)} / ${euro(netto - teile)}</span></div>`;
   document.getElementById('summen').innerHTML = html;
+  ratenVorschau(netto + steuer);
 }
+// Ratenzahlung: Vorschau der Raten (gleiche Beträge, Rundungsrest auf die erste Rate)
+let letzterBetrag = 0;
+function ratenVorschau(betrag) {
+  if (betrag !== undefined) letzterBetrag = betrag;
+  const box = document.getElementById('raten_vorschau');
+  if (!box) return;
+  const n = parseInt(document.getElementById('raten_anzahl').value, 10);
+  const erste = document.getElementById('raten_erste').value;
+  if (!(n >= 2 && n <= 24) || !erste) { box.textContent = ''; return; }
+  const cent = Math.round(letzterBetrag * 100), grund = Math.floor(cent / n), rest = cent - grund * n;
+  const [j, m, t] = erste.split('-').map(Number);
+  const teile = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date(j, m - 1 + i, 1); const tage = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(t, tage));
+    teile.push(`${i + 1}. Rate ${d.toLocaleDateString('de-DE')}: ${euro((grund + (i ? 0 : rest)) / 100)}`);
+  }
+  box.textContent = teile.join(' · ');
+}
+(function () {
+  const an = document.getElementById('raten_aktiv');
+  if (!an) return;
+  an.addEventListener('change', () => { document.getElementById('raten_felder').hidden = !an.checked; ratenVorschau(); });
+  ['raten_anzahl', 'raten_erste'].forEach(id => document.getElementById(id).addEventListener('input', () => ratenVorschau()));
+})();
 document.getElementById('leerzeile').onclick = () => zeile({ menge: 1, einheit: 'Stk.', steuersatz: 19 });
 document.getElementById('artikelwahl').onchange = e => {
   const a = ARTIKEL.find(x => String(x.id) === e.target.value);

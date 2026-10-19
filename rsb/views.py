@@ -1349,6 +1349,8 @@ def dokument(did):
             zahl = {"stand": _zlg().stand(con, d), "zahlungen": _zlg().liste(con, did), "zahlarten": _zlg().ZAHLARTEN,
                     "mahnungen": con.execute("SELECT * FROM mahnungen WHERE dokument_id=? ORDER BY id", (did,)).fetchall(),
                     "naechste": mw.naechste_stufe(con, d, einst), "titel": mw.TITEL, "heute": heute()}
+            from . import raten as rtn
+            zahl["raten"] = rtn.stand(con, did)
         return render_template("dokument_ansicht.html", d=d, snap=snap, kunde=kunde, versand=versand, zahl=zahl,
                                bezug=bezug, storno=storno, gutschriften=gutschriften,
                                aufbewahren_bis=logik.aufbewahren_bis(d, einst),
@@ -1430,6 +1432,11 @@ def _entwurf_speichern(con, d, einst):
     if d["typ"] == "gutschrift":  # Gutschrift: Eingabe positiv, gespeichert als Minderung (negativ)
         for p in positionen:
             p["preis"], p["teilekosten"], p["katalog"] = -abs(p["preis"]), 0, False
+    raten_anzahl = raten_erste = None
+    if d["typ"] == "rechnung" and f.get("raten_aktiv"):
+        from . import raten as rtn
+        raten_anzahl, raten_erste = rtn.pruefen(f.get("raten_anzahl"), _f("raten_erste") or faellig, datum)
+        faellig = rtn.monate_spaeter(date.fromisoformat(raten_erste), raten_anzahl - 1).isoformat()  # letzte Rate
     alt_kopf = dict(d)
     alt_pos = _positionen_text(con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos",
                                            (d["id"],)).fetchall())
@@ -1437,11 +1444,12 @@ def _entwurf_speichern(con, d, einst):
     with dbm.Transaktion(con):
         con.execute(
             "UPDATE dokumente SET kunde_id=?, datum=?, leistungsdatum=?, leistungsdatum_bis=?, zahlungsziel_tage=?, "
-            "faellig_am=?, betreff=?, einleitung=?, schlusstext=?, hinweise=?, steuer_modus=?, geaendert_am=? "
-            "WHERE id=? AND status='entwurf'",
+            "faellig_am=?, betreff=?, einleitung=?, schlusstext=?, hinweise=?, steuer_modus=?, geaendert_am=?, "
+            "raten_anzahl=?, raten_erste=?, raten_auto=? WHERE id=? AND status='entwurf'",
             (kunde["id"] if kunde else None, datum, _f("leistungsdatum") or None, _f("leistungsdatum_bis") or None,
              ziel, faellig, _f("betreff"), f.get("einleitung", ""), f.get("schlusstext", ""), f.get("hinweise", ""),
-             einst["steuer_modus"], dbm.jetzt(), d["id"]))
+             einst["steuer_modus"], dbm.jetzt(), raten_anzahl, raten_erste,
+             1 if (f.get("raten_auto") or not raten_anzahl) else 0, d["id"]))
         con.execute("DELETE FROM positionen WHERE dokument_id=?", (d["id"],))
         for i, p in enumerate(positionen, 1):
             if p["artikel_id"] is None and p["katalog"]:
@@ -1623,7 +1631,7 @@ def dokument_email(did):
 EINSTELLUNGS_BEREICHE = {
     "firma": ["firma_name", "firma_zusatz", "inhaber", "strasse", "plz", "ort", "land", "telefon", "email", "web",
               "steuernummer", "ust_idnr", "bank_name", "kontoinhaber", "iban", "bic"],
-    "rechnung": ["steuer_modus", "regel_steuersatz", "kleinunternehmer_hinweis", "zahlungsziel_privat",
+    "rechnung": ["steuer_modus", "regel_steuersatz", "kleinunternehmer_hinweis", "zahlungsziel_privat", "raten_vorlauf_tage",
                  "zahlungsziel_firma", "zahlungsarten_text", "kva_gueltig_tage", "anzahlung_prozent",
                  "nummern_format", "praefix_rechnung", "praefix_gutschrift", "praefix_angebot", "praefix_kunde",
                  "leistungsarten", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre"],
@@ -1660,7 +1668,7 @@ EINSTELLUNGS_BEREICHE = {
 }
 JA_NEIN = {f"ben_{a}_aktiv" for a in ben.ANLAESSE} | {"ds_auto", "benachrichtigung_vorschau", "handy_im_netz", "zinsen_aktiv", "historie_aktiv", "gesendet_aktiv", "gesendet_gleiche_zugangsdaten", "update_auto", "faltmarken", "girocode", "bcc_an_mich", "backup_auto", "anfragen_aktiv", "imap_verschieben",
            "anfrage_auto_kunde"}
-GANZZAHL = {"fixkosten_hinweis_tage", "ds_kunde_inaktiv_jahre", "ds_fotos_jahre", "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
+GANZZAHL = {"raten_vorlauf_tage", "fixkosten_hinweis_tage", "ds_kunde_inaktiv_jahre", "ds_fotos_jahre", "ds_leihe_jahre", "ds_vorschau_tage", "ds_zugang_tage", "ds_email_jahre", "datev_kontenlaenge", "datev_debitor_start", "datev_kreditor_start", "mindest_marge_prozent", "garantie_monate", "mahn_erinnerung_tage", "mahn_stufe1_tage", "mahn_stufe2_tage", "mahn_frist_tage",
             "zinsen_aufschlag_privat", "zinsen_aufschlag_firma", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre", "historie_zeitraum_tage", "gesendet_imap_port", "vertrag_erinnerung_tage", "zahlungsziel_privat", "zahlungsziel_firma", "kva_gueltig_tage", "anzahlung_prozent", "mahnstufen", "smtp_port",
             "backup_behalten", "regel_steuersatz", "anfragen_intervall_min", "imap_port", "anfrage_schwelle_unsicher",
             "anfrage_schwelle_spam", "interessent_loeschen_monate"}
@@ -2599,6 +2607,22 @@ def auftrag_kva(aid):
         did = auf.kva_erstellen(con, aid)
     flash("Kostenvoranschlag erstellt und mit dem Auftrag verknüpft.", "ok")
     return redirect(url_for("main.dokument", did=did))
+
+
+@bp.route("/raten/<int:rid>/erinnern", methods=["POST"])
+def rate_erinnern(rid):
+    from . import raten as rtn
+    con = dbm.get_db()
+    r = con.execute("SELECT * FROM rechnung_raten WHERE id=?", (rid,)).fetchone()
+    if not r:
+        abort(404)
+    try:
+        an = rtn.erinnerung_senden(con, daten_dir(), rid)
+    except MailFehler as e:
+        flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+    else:
+        flash(f"Zahlungsaufforderung für Rate {r['nr']} an {an} gesendet.", "ok")
+    return redirect(url_for("main.dokument", did=r["dokument_id"]) + "#raten")
 
 
 @bp.route("/dokumente/<int:did>/auftrag-anlegen", methods=["POST"])

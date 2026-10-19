@@ -292,6 +292,8 @@ def pdf_erzeugen(snap, daten_dir=None, entwurf=False):
         inhalt += [Paragraph(_absatz(snap["hinweise"]), st["klein"]), Spacer(1, 4 * mm)]
     if snap.get("garantie_text"):
         inhalt += [Paragraph(_absatz(snap["garantie_text"]), st["klein"]), Spacer(1, 4 * mm)]
+    if snap.get("raten"):
+        inhalt += [_ratenplan(snap, st, primaer), Spacer(1, 4 * mm)]
     zahlblock = _zahlungsblock(snap, st, primaer)
     if zahlblock:
         inhalt += [zahlblock, Spacer(1, 5 * mm)]
@@ -317,7 +319,9 @@ def _infoblock(snap):
             info.append(("Leistungsdatum", datum_de(snap["leistungsdatum"])))
     if snap.get("bezug"):
         info.append(("Zu Rechnung", snap["bezug"]["nummer"] or ""))
-    if snap["typ"] in ("rechnung", "mahnung") and snap.get("faellig_am"):
+    if snap.get("raten"):
+        info.append(("Zahlung", f"in {len(snap['raten'])} Raten"))
+    elif snap["typ"] in ("rechnung", "mahnung") and snap.get("faellig_am"):
         info.append(("Zahlbar bis", datum_de(snap["faellig_am"])))
     if snap["typ"] == "kva" and snap.get("faellig_am"):
         info.append(("Gültig bis", datum_de(snap["faellig_am"])))
@@ -416,15 +420,39 @@ def _summentabelle(snap, st, primaer):
     return KeepTogether([t])
 
 
+def _ratenplan(snap, st, primaer):
+    """Ratenplan: Rate, Fälligkeit, Betrag."""
+    raten = snap["raten"]
+    zeilen = [[Paragraph("<b>Ratenzahlung</b>", st["zelle"]), Paragraph("<b>fällig am</b>", st["zelle"]),
+               Paragraph("<b>Betrag</b>", st["zelle_r"])]]
+    for r in raten:
+        zeilen.append([Paragraph(f"{r['nr']}. Rate", st["zelle"]), Paragraph(datum_de(r["faellig_am"]), st["zelle"]),
+                       Paragraph(euro(r["betrag"]), st["zelle_r"])])
+    zeilen.append([Paragraph("<b>Gesamt</b>", st["zelle"]), Paragraph("", st["zelle"]),
+                   Paragraph(f"<b>{euro(sum(r['betrag'] for r in raten))}</b>", st["zelle_r"])])
+    t = Table(zeilen, colWidths=[40 * mm, 35 * mm, 30 * mm], hAlign="LEFT")
+    t.setStyle(TableStyle([
+        ("LINEBELOW", (0, 0), (-1, 0), 0.6, primaer), ("LINEABOVE", (0, -1), (-1, -1), 0.6, primaer),
+        ("TOPPADDING", (0, 0), (-1, -1), 2), ("BOTTOMPADDING", (0, 0), (-1, -1), 2),
+    ]))
+    text = Paragraph(f"Wie vereinbart zahlen Sie den Gesamtbetrag in {len(raten)} monatlichen Raten. Bitte geben Sie "
+                     f"bei jeder Überweisung „{escape(snap.get('nummer') or '')} Rate …“ als Verwendungszweck an. "
+                     "Vor jeder Fälligkeit erhalten Sie eine kurze Erinnerung per E-Mail.", st["klein"])
+    return KeepTogether([t, Spacer(1, 2 * mm), text])
+
+
 def _zahlungsblock(snap, st, primaer):
-    """Bankverbindung und GiroCode (QR-Code zum Bezahlen)."""
+    """Bankverbindung und GiroCode (QR-Code zum Bezahlen). Bei Ratenzahlung für die 1. Rate."""
     firma = snap["firma"]
     betrag = snap["summen"]["brutto"]
     if snap["typ"] not in ("rechnung", "mahnung") or betrag <= 0 or not firma.get("iban"):
         return None
     zweck = snap.get("verwendungszweck") or snap.get("nummer") or ""
+    if snap.get("raten"):
+        betrag, zweck = snap["raten"][0]["betrag"], f"{zweck} Rate 1"
     links = (f"<b>Zahlungsinformationen</b><br/>{_absatz(snap.get('zahlungsarten_text'))}<br/>"
-             f"Betrag: <b>{euro(betrag)}</b> · Verwendungszweck: <b>{escape(zweck)}</b>")
+             + ("1. Rate: " if snap.get("raten") else "Betrag: ")
+             + f"<b>{euro(betrag)}</b> · Verwendungszweck: <b>{escape(zweck)}</b>")
     rechts = (f"Empfänger: {escape(firma.get('kontoinhaber') or firma.get('firma_name', ''))}<br/>"
               f"IBAN: {escape(iban_format(firma['iban']))}<br/>"
               + (f"BIC: {escape(firma['bic'])}" if firma.get("bic") else "")

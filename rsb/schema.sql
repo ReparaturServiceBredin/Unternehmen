@@ -114,7 +114,11 @@ CREATE TABLE IF NOT EXISTS dokumente (
     xml_pfad         TEXT,            -- archivierte E-Rechnungs-XML
     xml_sha256       TEXT,            -- Prüfsumme der beim Festschreiben archivierten Rechnungsdaten (JSON)
     erstellt_am      TEXT NOT NULL,
-    geaendert_am     TEXT NOT NULL
+    geaendert_am     TEXT NOT NULL,
+    -- Ratenzahlung (0.29.0): Anzahl Raten, Fälligkeit der ersten Rate, Zahlungsaufforderungen automatisch senden
+    raten_anzahl     INTEGER,
+    raten_erste      TEXT,
+    raten_auto       INTEGER NOT NULL DEFAULT 1
 );
 
 CREATE TABLE IF NOT EXISTS positionen (
@@ -1291,4 +1295,17 @@ END;
 CREATE TABLE IF NOT EXISTS hinweise_gelesen (
     schluessel  TEXT PRIMARY KEY,
     gelesen_am  TEXT NOT NULL
+);
+
+-- Ratenplan einer festgeschriebenen Rechnung (0.29.0); Zahlungen werden der Reihe nach angerechnet
+CREATE TABLE IF NOT EXISTS rechnung_raten (
+    id           INTEGER PRIMARY KEY,
+    dokument_id  INTEGER NOT NULL REFERENCES dokumente(id),
+    nr           INTEGER NOT NULL,
+    faellig_am   TEXT NOT NULL,
+    betrag       INTEGER NOT NULL,          -- Cent brutto
+    erinnert_am  TEXT,                      -- Zahlungsaufforderung gesendet
+    erinnert_an  TEXT,
+    fehler       TEXT,                      -- letzter Versandfehler
+    UNIQUE (dokument_id, nr)
 );

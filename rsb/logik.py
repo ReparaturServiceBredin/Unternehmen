@@ -163,6 +163,13 @@ def platzhalter_werte(dok, kunde, einst, nummer=None, bezug=None):
     }
 
 
+def _raten_plan(dok, brutto):
+    if dok["typ"] != "rechnung" or not dok["raten_anzahl"] or not dok["raten_erste"] or brutto <= 0:
+        return None
+    from .raten import plan
+    return plan(brutto, dok["raten_anzahl"], dok["raten_erste"])
+
+
 def snapshot_bauen(con, dok_id, nummer=None):
     """Stellt alle Daten zusammen, die auf dem Dokument erscheinen. Wird beim Festschreiben eingefroren."""
     einst = dbm.einstellungen(con)
@@ -172,6 +179,10 @@ def snapshot_bauen(con, dok_id, nummer=None):
     pos = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (dok_id,)).fetchall()
     s = summen_berechnen(pos, dok["steuer_modus"])
     werte = platzhalter_werte({**dict(dok), "summe_brutto": s["brutto"]}, kunde, einst, nummer, bezug)
+    raten = _raten_plan(dok, s["brutto"])
+    if raten:  # Standardtexte („Betrag von {betrag} bis zum {faellig_am}“) passend zur Ratenzahlung
+        werte["betrag"] = f"{werte['betrag']} gemäß Ratenplan"
+        werte["faellig_am"] = f"{werte['faellig_am']} (letzte Rate)"
     return {
         "version": 1,
         "typ": dok["typ"],
@@ -189,6 +200,7 @@ def snapshot_bauen(con, dok_id, nummer=None):
         "steuer_modus": dok["steuer_modus"],
         "kleinunternehmer_hinweis": einst["kleinunternehmer_hinweis"] if dok["steuer_modus"] == "kleinunternehmer" else "",
         "zahlungsarten_text": einst["zahlungsarten_text"],
+        "raten": raten,
         "bezug": {"nummer": bezug["nummer"], "datum": bezug["datum"]} if bezug else None,
         "kunde": {
             "kundennr": kunde["kundennr"] if kunde else "",
@@ -336,6 +348,9 @@ def festschreiben(con, dok_id, daten_dir):
         kunde = con.execute("SELECT * FROM kunden WHERE id=?", (dok["kunde_id"],)).fetchone()
         e_format = erechnung.format_fuer(kunde, dok["typ"])
         snap["e_format"] = e_format
+        if snap.get("raten"):
+            from .raten import anlegen as raten_anlegen
+            raten_anlegen(con, dok_id, snap["raten"])
         pdf = pdf_erzeugen(snap, daten_dir=daten_dir, entwurf=False)
         pdf, xml = erechnung.erzeugen(snap, einst, kunde, e_format, pdf)
         sha = hashlib.sha256(pdf).hexdigest()

@@ -41,6 +41,20 @@
         {% if gutschriften %}<tr><td>Gutschriften</td><td>{% for gs in gutschriften %}<a href="{{ url_for('main.dokument', did=gs.id) }}">{{ gs.nummer or 'Entwurf' }}</a>{{ ', ' if not loop.last }}{% endfor %}</td></tr>{% endif %}
       </table>
     </div>
+    {% if zahl and zahl.raten %}
+    <div class="karte" id="raten">
+      <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Ratenzahlung</h2>
+        <span class="klein">{{ zahl.raten|selectattr('status', 'equalto', 'bezahlt')|list|length }} von {{ zahl.raten|length }} Raten bezahlt · Zahlungsaufforderungen {{ 'automatisch per E-Mail' if d.raten_auto else 'nur von Hand' }}</span></div>
+      <table class="liste"><thead><tr><th>Rate</th><th>fällig am</th><th class="zahl">Betrag</th><th class="zahl">offen</th><th>Status</th><th>Zahlungsaufforderung</th><th></th></tr></thead><tbody>
+      {% for r in zahl.raten %}<tr>
+        <td>{{ r.nr }}.</td><td>{{ r.faellig_am|datum }}</td><td class="zahl">{{ r.betrag|euro }}</td><td class="zahl">{{ r.offen|euro if r.offen else '–' }}</td>
+        <td><span class="marke-status {{ {'bezahlt': 'st-gesendet', 'überfällig': 'st-fehler', 'fällig': 'st-warnung', 'teilweise': 'st-warnung'}.get(r.status, 'st-entwurf') }}">{{ r.status }}</span></td>
+        <td class="klein">{% if r.erinnert_am %}gesendet {{ r.erinnert_am|zeit }} an {{ r.erinnert_an }}{% elif r.fehler %}<span style="color:var(--rot)">Fehler: {{ r.fehler }}</span>{% else %}–{% endif %}</td>
+        <td class="zahl">{% if r.status != 'bezahlt' and d.status != 'storniert' %}<form method="post" action="{{ url_for('main.rate_erinnern', rid=r.id) }}">{{ csrf() }}<button class="zweit klein">{{ 'Erneut senden' if r.erinnert_am else 'Jetzt senden' }}</button></form>{% endif %}</td>
+      </tr>{% endfor %}</tbody></table>
+      <p class="klein">Zahlungseingänge werden den Raten der Reihe nach angerechnet. Gemahnt wird die Rechnung erst nach der letzten Rate ({{ d.faellig_am|datum }}).</p>
+    </div>
+    {% endif %}
     {% if zahl %}{% set st = zahl.stand %}
     <div class="karte" id="zahlungen">
       <div class="kopf" style="margin-bottom:6px"><h2 style="margin:0">Zahlungen</h2><span class="marke-status zs-{{ st.status }}">{{ st.status_text }}</span></div>
