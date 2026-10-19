@@ -80,6 +80,10 @@ Neu: Ratenzahlung. Vor der Erweiterung der Datenbank legt das Programm automatis
 ### Zahlungen
 - Zahlungseingänge werden den Raten der Reihe nach angerechnet; Teilzahlungen werden berücksichtigt.
 
+### Behoben
+- E-Mail-Einstellungen: Passen Port und Verschlüsselung nicht zusammen, erscheint der verständliche Hinweis jetzt auch
+  bei neueren Windows-/OpenSSL-Versionen (dort lautet die technische Meldung „record layer failure“).
+
 ---
 
 ## 0.28.0 – 18.10.2026
