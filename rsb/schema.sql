@@ -1307,5 +1307,8 @@ CREATE TABLE IF NOT EXISTS rechnung_raten (
     erinnert_am  TEXT,                      -- Zahlungsaufforderung gesendet
     erinnert_an  TEXT,
     fehler       TEXT,                      -- letzter Versandfehler
+    art          TEXT NOT NULL DEFAULT 'rechnung',  -- rechnung (Ratenplan auf der Rechnung) / vereinbarung (nachträglich)
+    auto         INTEGER,                   -- nur bei Vereinbarung: Zahlungsaufforderungen automatisch senden
+    vereinbart_am TEXT,
     UNIQUE (dokument_id, nr)
 );

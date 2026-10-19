@@ -92,3 +92,39 @@ def test_ohne_automatik_und_eingaben_pruefen(client, con, app, monkeypatch):
     for anzahl, erste in (("1", "2026-11-01"), ("4", "2026-01-01")):
         did2 = raten_rechnung(client, kid, anzahl=anzahl, erste=erste)
         assert con.execute("SELECT status FROM dokumente WHERE id=?", (did2,)).fetchone()[0] == "entwurf"
+
+
+def test_nachtraeglich_vereinbaren_bei_ausgestellter_rechnung(client, con, app, monkeypatch):
+    from conftest import rechnung_anlegen
+    from rsb import mahnwesen as mw
+    monkeypatch.setattr("rsb.mail.smtplib.SMTP", FalscherServer)
+    post(client, "/einstellungen/email", smtp_host="smtp.example.com", smtp_port="587", smtp_sicherheit="starttls",
+         smtp_benutzer="a@example.com", smtp_passwort="x", absender_name="RSB", absender_email="a@example.com")
+    kid = kunde_anlegen(client)
+    did = rechnung_anlegen(client, kid, (("Displaytausch", "300,00", "1"),), festschreiben=True)
+    con.execute("UPDATE dokumente SET versendet_am='2026-10-19T10:00:00' WHERE id=?", (did,))
+    con.commit()
+    post(client, f"/dokumente/{did}/zahlung", datum="2026-10-19", betrag="60,00", zahlart="bar")
+    seite = client.get(f"/dokumente/{did}").get_data(as_text=True)
+    assert "Ratenzahlung vereinbaren" in seite and "240,00" in seite
+    r = post(client, f"/dokumente/{did}/raten", raten_anzahl="3", raten_erste="2026-11-15", raten_auto="1",
+             bestaetigen="1")
+    assert r.status_code == 302
+    raten = con.execute("SELECT nr, faellig_am, betrag, art FROM rechnung_raten WHERE dokument_id=? ORDER BY nr",
+                        (did,)).fetchall()
+    assert [tuple(x) for x in raten] == [(1, "2026-11-15", 8000, "vereinbarung"), (2, "2026-12-15", 8000, "vereinbarung"),
+                                         (3, "2027-01-15", 8000, "vereinbarung")]
+    assert con.execute("SELECT COUNT(*) FROM versandprotokoll WHERE betreff LIKE 'Ratenzahlung zu Rechnung%'"
+                       ).fetchone()[0] == 1
+    # frühere Zahlung (60 €) deckt den Teil vor der Vereinbarung → alle Raten offen
+    assert [x["status"] for x in rtn.stand(con, did, date(2026, 11, 1))] == ["offen", "offen", "offen"]
+    # Fälligkeit/Mahnwesen erst nach der letzten Rate
+    d = con.execute("SELECT * FROM dokumente WHERE id=?", (did,)).fetchone()
+    from rsb import zahlungen as zlg
+    assert zlg.stand(con, d, "2026-12-01")["status"] != "ueberfaellig"
+    assert not mw.vorschlaege(con, "2026-12-20")
+    # Rate 1 wird trotz bereits versandter Rechnung angemahnt (Vereinbarung kam später)
+    assert lauf(app, con, date(2026, 11, 13))["gesendet"] == 1
+    # aufheben
+    post(client, f"/dokumente/{did}/raten", aktion="aufheben")
+    assert not con.execute("SELECT 1 FROM rechnung_raten WHERE dokument_id=?", (did,)).fetchone()

@@ -52,8 +52,21 @@
         <td class="klein">{% if r.erinnert_am %}gesendet {{ r.erinnert_am|zeit }} an {{ r.erinnert_an }}{% elif r.fehler %}<span style="color:var(--rot)">Fehler: {{ r.fehler }}</span>{% else %}–{% endif %}</td>
         <td class="zahl">{% if r.status != 'bezahlt' and d.status != 'storniert' %}<form method="post" action="{{ url_for('main.rate_erinnern', rid=r.id) }}">{{ csrf() }}<button class="zweit klein">{{ 'Erneut senden' if r.erinnert_am else 'Jetzt senden' }}</button></form>{% endif %}</td>
       </tr>{% endfor %}</tbody></table>
-      <p class="klein">Zahlungseingänge werden den Raten der Reihe nach angerechnet. Gemahnt wird die Rechnung erst nach der letzten Rate ({{ d.faellig_am|datum }}).</p>
+      <p class="klein">Zahlungseingänge werden den Raten der Reihe nach angerechnet. Gemahnt wird die Rechnung erst nach der letzten Rate ({{ zahl.raten[-1].faellig_am|datum }}).</p>
+      {% if zahl.raten[0].art == 'vereinbarung' %}<form method="post" action="{{ url_for('main.raten_vereinbaren', did=d.id) }}" onsubmit="return confirm('Ratenvereinbarung aufheben? Danach gilt wieder die ursprüngliche Fälligkeit der Rechnung.')">{{ csrf() }}<input type="hidden" name="aktion" value="aufheben"><button class="zweit klein">Ratenvereinbarung aufheben</button></form>{% endif %}
     </div>
+    {% elif zahl and d.typ == 'rechnung' and zahl.stand.offen > 0 and zahl.stand.status != 'storniert' %}
+    <details class="karte" id="raten-vereinbaren">
+      <summary><b>Ratenzahlung vereinbaren</b> <span class="klein">– Kunde zahlt den offenen Betrag von {{ zahl.stand.offen|euro }} in Raten</span></summary>
+      <form method="post" action="{{ url_for('main.raten_vereinbaren', did=d.id) }}" class="felder" style="margin-top:10px">{{ csrf() }}
+        <div class="s6"><label>Anzahl Raten (monatlich)</label><input type="number" min="2" max="24" name="raten_anzahl" value="4" required></div>
+        <div class="s6"><label>1. Rate fällig am</label><input type="date" name="raten_erste" value="{{ zahl.heute }}" min="{{ zahl.heute }}" required></div>
+        <div class="s12"><label class="check"><input type="checkbox" name="raten_auto" value="1" checked> Zahlungsaufforderung je Rate automatisch per E-Mail</label>
+          <label class="check"><input type="checkbox" name="bestaetigen" value="1" checked> Ratenplan jetzt per E-Mail an den Kunden senden</label></div>
+        <div class="s12 hilfe">Die Rechnung bleibt unverändert (sie ist festgeschrieben). Die Raten werden zusätzlich über den offenen Betrag vereinbart; bereits erhaltene Zahlungen sind berücksichtigt. Gemahnt wird erst nach der letzten Rate.</div>
+        <div class="s12"><button>Ratenzahlung vereinbaren</button></div>
+      </form>
+    </details>
     {% endif %}
     {% if zahl %}{% set st = zahl.stand %}
     <div class="karte" id="zahlungen">

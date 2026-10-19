@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.29.1 | 19.10.2026 | Ratenzahlung auch für bereits ausgestellte Rechnungen |
 | 0.29.0 | 19.10.2026 | Ratenzahlung: Rechnung mit Ratenplan und automatischen Zahlungsaufforderungen |
 | 0.28.0 | 18.10.2026 | Finanzen: Wareneinsatz aus den EK-Preisen der Rechnungen |
 | 0.27.1 | 18.10.2026 | Datenprüfung: Aufträge für ältere KVAs nachträglich anlegen |
@@ -54,6 +55,19 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.29.1 – 19.10.2026
+### Neu: Ratenzahlung nachträglich vereinbaren
+- Bereits ausgestellte (festgeschriebene) Rechnungen dürfen nicht mehr verändert werden. Dort gibt es jetzt unter
+  den Angaben **„Ratenzahlung vereinbaren“**: Anzahl Raten und Fälligkeit der 1. Rate eintragen – die Raten werden
+  über den **noch offenen Betrag** gebildet, bereits erhaltene Zahlungen sind berücksichtigt.
+- Optional geht sofort eine Mail mit dem **Ratenplan** und der Rechnung an den Kunden. Danach laufen die
+  **Zahlungsaufforderungen je Rate** wie bei 0.29.0 automatisch.
+- Die Rechnung gilt erst nach der letzten Rate als überfällig; Offene Posten und Mahnwesen richten sich danach.
+- Eine nachträgliche Vereinbarung lässt sich wieder aufheben („Ratenvereinbarung aufheben“).
+- Die Zahlungsaufforderungen enthalten jetzt immer den kompletten Ratenplan.
 
 ---
 

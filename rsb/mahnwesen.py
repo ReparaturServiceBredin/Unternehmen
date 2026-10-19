@@ -37,6 +37,7 @@ def naechste_stufe(con, dok, einst=None, heute=None):
     if s["status"] in ("bezahlt", "storniert", "erstattung") or s["offen"] <= 0 or not dok["faellig_am"]:
         return None, None
     letzte = s["letzte_mahnung"]
+    dok = {**dict(dok), "faellig_am": s["faellig_am"] or dok["faellig_am"]}  # bei Ratenzahlung: letzte Rate
     stufe = 0 if letzte is None else letzte["stufe"] + 1
     if stufe > 2:
         return None, None

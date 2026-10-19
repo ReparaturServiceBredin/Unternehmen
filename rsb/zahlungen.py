@@ -22,6 +22,9 @@ def stand(con, dok, heute=None):
     bezahlt = con.execute("SELECT COALESCE(SUM(betrag), 0) FROM zahlungen WHERE dokument_id=? AND storniert_am IS NULL",
                           (dok["id"],)).fetchone()[0]
     mahnungen = con.execute("SELECT * FROM mahnungen WHERE dokument_id=? ORDER BY stufe, id", (dok["id"],)).fetchall()
+    letzte_rate = con.execute("SELECT MAX(faellig_am) FROM rechnung_raten WHERE dokument_id=?",
+                              (dok["id"],)).fetchone()[0]
+    faellig = max(x for x in (dok["faellig_am"], letzte_rate) if x) if (dok["faellig_am"] or letzte_rate) else None
     forderung = dok["summe_brutto"] + gutschriften
     offen = forderung - bezahlt
     gebuehren = sum(m["gebuehr"] for m in mahnungen if not m["erledigt_am"])
@@ -34,7 +37,7 @@ def stand(con, dok, heute=None):
         status = "erstattung"
     elif offen <= 0:
         status = "bezahlt"
-    elif dok["faellig_am"] and dok["faellig_am"] < heute:
+    elif faellig and faellig < heute:
         status = "ueberfaellig"
     elif bezahlt:
         status = "teilweise"
@@ -44,8 +47,8 @@ def stand(con, dok, heute=None):
             "offen": max(offen, 0), "ueberzahlt": ueberzahlt, "gebuehren_offen": gebuehren_offen, "status": status,
             "status_text": STATUS[status], "mahnstufe": mahnungen[-1]["stufe"] if mahnungen else None,
             "letzte_mahnung": mahnungen[-1] if mahnungen else None,
-            "tage_ueberfaellig": (date.fromisoformat(heute) - date.fromisoformat(dok["faellig_am"])).days
-            if status in ("ueberfaellig",) else 0}
+            "tage_ueberfaellig": (date.fromisoformat(heute) - date.fromisoformat(faellig)).days
+            if status in ("ueberfaellig",) else 0, "faellig_am": faellig}
 
 
 def _cache_aktualisieren(con, dok_id):

@@ -2609,6 +2609,30 @@ def auftrag_kva(aid):
     return redirect(url_for("main.dokument", did=did))
 
 
+@bp.route("/dokumente/<int:did>/raten", methods=["POST"])
+def raten_vereinbaren(did):
+    """Ratenzahlung für eine bereits ausgestellte Rechnung nachträglich vereinbaren bzw. aufheben."""
+    from . import raten as rtn
+    con = dbm.get_db()
+    _dokument_laden(did)
+    if request.form.get("aktion") == "aufheben":
+        with dbm.Transaktion(con):
+            rtn.aufheben(con, did)
+        flash("Ratenvereinbarung aufgehoben.", "ok")
+        return redirect(url_for("main.dokument", did=did) + "#zahlungen")
+    with dbm.Transaktion(con):
+        p = rtn.vereinbaren(con, did, request.form.get("raten_anzahl"), _f("raten_erste"),
+                            bool(request.form.get("raten_auto")))
+    flash(f"Ratenzahlung vereinbart: {len(p)} Raten über zusammen {euro(sum(r['betrag'] for r in p))}.", "ok")
+    if request.form.get("bestaetigen"):
+        try:
+            an = rtn.vereinbarung_senden(con, daten_dir(), did)
+            flash(f"Ratenplan an {an} gesendet.", "ok")
+        except (MailFehler, EingabeFehler) as e:
+            flash(f"Ratenplan wurde NICHT per E-Mail gesendet: {e}", "warnung")
+    return redirect(url_for("main.dokument", did=did) + "#raten")
+
+
 @bp.route("/raten/<int:rid>/erinnern", methods=["POST"])
 def rate_erinnern(rid):
     from . import raten as rtn
