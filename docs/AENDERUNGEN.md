@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.30.0 | 20.10.2026 | Angebote und Auftragsbestätigungen |
 | 0.29.1 | 19.10.2026 | Ratenzahlung auch für bereits ausgestellte Rechnungen |
 | 0.29.0 | 19.10.2026 | Ratenzahlung: Rechnung mit Ratenplan und automatischen Zahlungsaufforderungen |
 | 0.28.0 | 18.10.2026 | Finanzen: Wareneinsatz aus den EK-Preisen der Rechnungen |
@@ -55,6 +56,23 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.30.0 – 20.10.2026
+### Neu: Angebote und Auftragsbestätigungen
+- Zwei neue Dokumentarten neben Rechnung und Kostenvoranschlag – für Leistungen ohne Reparaturauftrag
+  (z. B. Netzwerk einrichten, PC zusammenbauen, Wartung):
+  - **Angebot** mit eigenem Nummernkreis **AN-Jahr-Nummer** und „Gültig bis“ (Tage wie beim KVA).
+  - **Auftragsbestätigung** mit eigenem Nummernkreis **AB-Jahr-Nummer** und optionalem Ausführungstermin.
+- Zu finden unter *Rechnungen → Angebote & AB*, über **+ Neu → Neues Angebot** und beim Kunden (**+ Angebot**).
+- Festschreiben, PDF, Drucken und **E-Mail-Versand** wie bei Rechnungen – mit eigenen Standardtexten (Einleitung,
+  Schluss, E-Mail), die unter *Textbausteine* änderbar sind.
+- **Weiter**-Knöpfe: Aus einem Angebot (oder KVA) wird mit einem Klick eine **Auftragsbestätigung** (bezieht sich
+  auf das Angebot) oder direkt eine **Rechnung**; aus einer Auftragsbestätigung eine Rechnung.
+- Angebote und Auftragsbestätigungen sind Geschäftsbriefe (6 Jahre Aufbewahrung), zählen nicht zum Umsatz und
+  legen keinen Reparaturauftrag an.
+- Präfixe unter *Einstellungen → Rechnung & Steuer → Nummern* änderbar; jede Dokumentart braucht ein eigenes Präfix.
 
 ---
 

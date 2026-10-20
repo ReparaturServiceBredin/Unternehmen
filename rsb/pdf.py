@@ -306,7 +306,8 @@ def pdf_erzeugen(snap, daten_dir=None, entwurf=False):
 
 def _infoblock(snap):
     nr_label = {"rechnung": "Rechnungsnummer", "storno": "Stornonummer", "gutschrift": "Gutschriftnummer",
-                "kva": "Angebotsnummer", "mahnung": "Mahnnummer"}.get(snap["typ"], "Dokumentnummer")
+                "kva": "Angebotsnummer", "angebot": "Angebotsnummer", "auftragsbestaetigung": "AB-Nummer",
+                "mahnung": "Mahnnummer"}.get(snap["typ"], "Dokumentnummer")
     info = [(nr_label, snap.get("nummer") or "(Entwurf)"),
             ("Datum", datum_de(snap["datum"]))]
     if snap.get("kunde", {}).get("kundennr"):
@@ -316,14 +317,15 @@ def _infoblock(snap):
             info.append(("Leistungszeitraum",
                          f"{datum_de(snap['leistungsdatum'])} – {datum_de(snap['leistungsdatum_bis'])}"))
         else:
-            info.append(("Leistungsdatum", datum_de(snap["leistungsdatum"])))
+            info.append(("Ausführung am" if snap["typ"] == "auftragsbestaetigung" else "Leistungsdatum",
+                         datum_de(snap["leistungsdatum"])))
     if snap.get("bezug"):
-        info.append(("Zu Rechnung", snap["bezug"]["nummer"] or ""))
+        info.append((f"Zu {snap['bezug'].get('titel') or 'Rechnung'}", snap["bezug"]["nummer"] or ""))
     if snap.get("raten"):
         info.append(("Zahlung", f"in {len(snap['raten'])} Raten"))
     elif snap["typ"] in ("rechnung", "mahnung") and snap.get("faellig_am"):
         info.append(("Zahlbar bis", datum_de(snap["faellig_am"])))
-    if snap["typ"] == "kva" and snap.get("faellig_am"):
+    if snap["typ"] in ("kva", "angebot") and snap.get("faellig_am"):
         info.append(("Gültig bis", datum_de(snap["faellig_am"])))
     if snap.get("kunde", {}).get("ust_idnr"):
         info.append(("Ihre USt-IdNr.", snap["kunde"]["ust_idnr"]))

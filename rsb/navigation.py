@@ -42,7 +42,7 @@ SEITENLEISTE = [
     ]),
     Gruppe("verkauf", "Verkauf", [
         Eintrag("rechnungen", "Rechnungen", "receipt", "main.dokumente", "posten_ueberfaellig", True,
-                "überfällige Rechnungen", "Kostenvoranschläge KVA Offene Posten Mahnwesen Gutschrift Storno"),
+                "überfällige Rechnungen", "Kostenvoranschläge KVA Angebote Auftragsbestätigung Offene Posten Mahnwesen Gutschrift Storno"),
         Eintrag("artikel", "Leistungen & Artikel", "tag", "main.artikel_liste", stichworte="Katalog Preise"),
     ]),
     Gruppe("einkauf", "Einkauf & Lager", [
@@ -67,6 +67,7 @@ EINSTELLUNGEN = Eintrag("einstellungen", "Einstellungen", "settings", "main.eins
 # Reiter auf zusammengefassten Seiten
 REITER = {
     "rechnungen": [("Rechnungen", "main.dokumente"), ("Kostenvoranschläge", "main.kostenvoranschlaege"),
+                   ("Angebote & AB", "main.angebote"),
                    ("Offene Posten", "main.offene_posten"), ("Mahnwesen", "main.mahnwesen")],
     "einkauf": [("Bestellungen", "main.bestellungen"), ("Lieferanten", "main.lieferanten"),
                 ("Eingangsrechnungen", "main.eingangsrechnungen")],
@@ -77,7 +78,7 @@ ZUORDNUNG = [
     ("start", "start"), ("anfrage", "anfragen"), ("auftr", "auftraege"),
     ("geraet_pruefen", "auftraege"), ("beleg", "auftraege"), ("foto", "auftraege"),
     ("leihe_ausgeben", "leihgeraete"), ("leih", "leihgeraete"), ("kunde", "kunden"), ("vertr", "vertraege"),
-    ("dokument", "rechnungen"), ("kostenvoranschlaege", "rechnungen"), ("offene_posten", "rechnungen"),
+    ("dokument", "rechnungen"), ("kostenvoranschlaege", "rechnungen"), ("angebote", "rechnungen"), ("offene_posten", "rechnungen"),
     ("mahn", "rechnungen"), ("zahlung", "rechnungen"), ("artikel", "artikel"), ("lager", "lager"),
     ("inventur", "lager"), ("bestellung", "einkauf"), ("lieferant", "einkauf"), ("eingangsrechnung", "einkauf"),
     ("bank", "bank"), ("kasse", "kasse"), ("datev", "datev"), ("fixkosten", "fixkosten"), ("finanz", "finanzen"),
@@ -118,6 +119,7 @@ NEU = [
     ("Neuer Kunde", "main.kunde", {}, "user-plus"),
     ("Neuer KVA", "main.dokument_neu", {"typ": "kva"}, "file-plus"),
     ("Neue Rechnung", "main.dokument_neu", {"typ": "rechnung"}, "receipt"),
+    ("Neues Angebot", "main.dokument_neu", {"typ": "angebot"}, "file-text"),
     ("Leihgerät ausgeben", "main.leihe_ausgabe_waehlen", {}, "laptop"),
 ]
 

@@ -43,13 +43,16 @@
           {% for k in kunden %}<option value="{{ k.id }}" {{ 'selected' if d.kunde_id == k.id }}>{{ k.kundennr }} · {{ k|kname }}{{ (' · ' ~ k.ort) if k.ort }}</option>{% endfor %}
         </select>
         <div class="hilfe"><a href="{{ url_for('main.kunde') }}">+ neuen Kunden anlegen</a></div></div>
-      <div class="s4"><label>{{ 'Datum' if d.typ == 'kva' else 'Rechnungsdatum' }}</label><input type="date" name="datum" value="{{ d.datum }}"></div>
-      {% if d.typ != 'kva' %}
+      <div class="s4"><label>{{ 'Rechnungsdatum' if d.typ == 'rechnung' else 'Datum' }}</label><input type="date" name="datum" value="{{ d.datum }}"></div>
+      {% if d.typ == 'auftragsbestaetigung' %}
+      <div class="s4"><label>Ausführung am (optional)</label><input type="date" name="leistungsdatum" value="{{ d.leistungsdatum or '' }}"></div>
+      <div class="s4"><label>… bis (optional)</label><input type="date" name="leistungsdatum_bis" value="{{ d.leistungsdatum_bis or '' }}"></div>
+      {% elif d.typ not in ('kva', 'angebot') %}
       <div class="s4"><label>Leistungsdatum (Reparatur am)</label><input type="date" name="leistungsdatum" value="{{ d.leistungsdatum or '' }}"></div>
       <div class="s4"><label>… bis (nur bei Zeitraum)</label><input type="date" name="leistungsdatum_bis" value="{{ d.leistungsdatum_bis or '' }}"></div>
       {% endif %}
-      <div class="s4"><label>{{ 'Gültig (Tage)' if d.typ == 'kva' else 'Zahlungsziel (Tage)' }}</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ d.zahlungsziel_tage }}">
-        <div class="hilfe">{{ 'Gültig bis' if d.typ == 'kva' else 'Fällig am' }} {{ d.faellig_am|datum }} (wird beim Speichern neu berechnet)</div></div>
+      <div class="s4"><label>{{ 'Gültig (Tage)' if d.typ in ('kva', 'angebot') else 'Zahlungsziel (Tage)' }}</label><input type="number" min="0" name="zahlungsziel_tage" value="{{ d.zahlungsziel_tage }}">
+        <div class="hilfe">{{ 'Gültig bis' if d.typ in ('kva', 'angebot') else 'Fällig am' }} {{ d.faellig_am|datum }} (wird beim Speichern neu berechnet)</div></div>
       {% if d.typ == 'rechnung' %}
       <div class="s12 raten-box">
         <label class="check"><input type="checkbox" name="raten_aktiv" value="1" id="raten_aktiv" {{ 'checked' if d.raten_anzahl }}> <b>Ratenzahlung vereinbart</b></label>
@@ -124,7 +127,7 @@
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 <script>
 const ARTIKEL = {{ artikel|tojson }};
-const MIT_GARANTIE = {{ 'true' if d.typ in ('rechnung', 'kva') else 'false' }};
+const MIT_GARANTIE = {{ 'true' if d.typ in ('rechnung', 'kva', 'angebot', 'auftragsbestaetigung') else 'false' }};
 const BAUSTEINE = {{ bausteine|tojson }};
 const LEISTUNGSARTEN = {{ leistungsarten|tojson }};
 const MIT_UST = {{ 'true' if einst.steuer_modus == 'regel' else 'false' }};

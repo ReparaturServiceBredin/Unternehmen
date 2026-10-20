@@ -113,6 +113,52 @@ STANDARD_TEXTBAUSTEINE = [
         "text": "{anrede_brief}\n\nanbei erhalten Sie die Gutschrift {nummer} zur Rechnung {bezug_nummer}.\n\n"
                 "Mit freundlichen Grüßen\n{inhaber}\n{firma_name}",
     },
+    {
+        "kategorie": "einleitung", "dokumenttyp": "angebot", "standard": 1,
+        "name": "Angebot – Standard",
+        "text": "{anrede_brief}\n\nvielen Dank für Ihre Anfrage. Gerne biete ich Ihnen Folgendes an:",
+    },
+    {
+        "kategorie": "schluss", "dokumenttyp": "angebot", "standard": 1,
+        "name": "Angebot – Schluss",
+        "text": "Dieses Angebot ist gültig bis zum {gueltig_bis}. Wenn Sie einverstanden sind, geben Sie mir bitte kurz "
+                "per E-Mail oder telefonisch Bescheid – Sie erhalten dann eine Auftragsbestätigung.\n\n"
+                "Mit freundlichen Grüßen\n{inhaber}",
+    },
+    {
+        "kategorie": "email_betreff", "dokumenttyp": "angebot", "standard": 1,
+        "name": "E-Mail Angebot – Betreff",
+        "text": "Ihr Angebot {nummer} – {firma_name}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": "angebot", "standard": 1,
+        "name": "E-Mail Angebot – Text",
+        "text": "{anrede_brief}\n\nanbei erhalten Sie mein Angebot {nummer} über {betrag} als PDF. Es ist gültig bis zum "
+                "{gueltig_bis}.\n\nBei Fragen erreichen Sie mich gerne per E-Mail oder telefonisch.\n\n"
+                "Mit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}\n{firma_web}",
+    },
+    {
+        "kategorie": "einleitung", "dokumenttyp": "auftragsbestaetigung", "standard": 1,
+        "name": "Auftragsbestätigung – Standard",
+        "text": "{anrede_brief}\n\nvielen Dank für Ihren Auftrag. Hiermit bestätige ich Ihnen folgende Leistungen:",
+    },
+    {
+        "kategorie": "schluss", "dokumenttyp": "auftragsbestaetigung", "standard": 1,
+        "name": "Auftragsbestätigung – Schluss",
+        "text": "Die Rechnung erhalten Sie nach Abschluss der Arbeiten. Sollten sich Änderungen ergeben, melde ich mich "
+                "vorher bei Ihnen.\n\nMit freundlichen Grüßen\n{inhaber}",
+    },
+    {
+        "kategorie": "email_betreff", "dokumenttyp": "auftragsbestaetigung", "standard": 1,
+        "name": "E-Mail Auftragsbestätigung – Betreff",
+        "text": "Ihre Auftragsbestätigung {nummer} – {firma_name}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": "auftragsbestaetigung", "standard": 1,
+        "name": "E-Mail Auftragsbestätigung – Text",
+        "text": "{anrede_brief}\n\nvielen Dank für Ihren Auftrag. Anbei erhalten Sie die Auftragsbestätigung {nummer} "
+                "über {betrag} als PDF.\n\nMit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}\n{firma_web}",
+    },
 ]
 
 PLATZHALTER_HILFE = [

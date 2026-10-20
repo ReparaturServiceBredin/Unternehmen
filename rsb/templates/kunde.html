@@ -9,6 +9,7 @@
   {% if k %}<div class="leiste">
     <a class="knopf" href="{{ url_for('main.auftrag_neu', kunde_id=k.id) }}">+ Reparaturauftrag</a>
     <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id, typ='kva') }}">+ KVA</a>
+    <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id, typ='angebot') }}">+ Angebot</a>
     <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id) }}">+ Rechnung</a>
   </div>{% endif %}
 </div>
@@ -56,7 +57,7 @@
     <tr><th>Nummer</th><th>Datum</th><th>Betreff</th><th>Status</th><th class="zahl">Betrag</th></tr>
     {% for d in dokumente %}
     <tr><td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a></td><td>{{ d.datum|datum }}</td>
-      <td>{{ 'KVA · ' if d.typ == 'kva' }}{{ d.betreff }}</td><td>{{ status(d.status) }}</td><td class="zahl">{{ d.summe_brutto|euro }}</td></tr>
+      <td>{{ (dok_kurz.get(d.typ, d.typ) ~ ' · ') if d.typ != 'rechnung' }}{{ d.betreff }}</td><td>{{ status(d.status) }}</td><td class="zahl">{{ d.summe_brutto|euro }}</td></tr>
     {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
   </table>
 </div>

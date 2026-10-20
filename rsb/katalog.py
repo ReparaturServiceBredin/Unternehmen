@@ -107,7 +107,7 @@ def aus_dokumenten_sammeln(con):
     """
     zeilen = con.execute(
         "SELECT p.*, d.datum, d.nummer, d.typ AS dtyp FROM positionen p JOIN dokumente d ON d.id=p.dokument_id "
-        "WHERE p.artikel_id IS NULL AND d.typ IN ('rechnung', 'kva') AND TRIM(p.bezeichnung)<>'' "
+        "WHERE p.artikel_id IS NULL AND d.typ IN ('rechnung', 'kva', 'angebot', 'auftragsbestaetigung') AND TRIM(p.bezeichnung)<>'' "
         "ORDER BY d.datum DESC, d.id DESC, p.pos").fetchall()
     katalog = {schluessel(a["name"]): a for a in con.execute("SELECT * FROM artikel")}
     gruppen = {}

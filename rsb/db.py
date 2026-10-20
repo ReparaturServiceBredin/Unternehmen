@@ -87,7 +87,8 @@ STANDARD_EINSTELLUNGEN = {
     "nummern_format": "{praefix}-{jahr}-{nummer:04d}",
     "praefix_rechnung": "RE",
     "praefix_angebot": "KV",
-    "praefix_auftrag": "AB",
+    "praefix_auftrag": "AB",                # Auftragsbestätigungen
+    "praefix_ang": "AN",                    # Angebote
     "praefix_gutschrift": "GS",
     "praefix_mahnung": "MA",
     "praefix_kunde": "K",

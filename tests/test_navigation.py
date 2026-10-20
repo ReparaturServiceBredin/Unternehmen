@@ -142,7 +142,7 @@ def test_schnellsuche(client, con):
     nummer = con.execute("SELECT nummer FROM dokumente WHERE id=?", (did,)).fetchone()[0]
     leer = _suche(client, "")
     assert [e["titel"] for e in leer["Schnellaktionen"]] == ["Neuer Auftrag", "Neuer Kunde", "Neuer KVA",
-                                                              "Neue Rechnung", "Leihgerät ausgeben"]
+                                                              "Neue Rechnung", "Neues Angebot", "Leihgerät ausgeben"]
     assert "/verkauf/mahnwesen" in [e["url"] for e in _suche(client, "Mahnwesen")["Seiten"]]
     assert _suche(client, "SMTP")["Einstellungen"][0]["url"].startswith("/einstellungen/email#feld-smtp_")
     assert any(e["url"].startswith("/einstellungen/backup") for e in _suche(client, "Backup")["Einstellungen"])

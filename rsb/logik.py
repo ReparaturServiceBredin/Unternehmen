@@ -14,7 +14,13 @@ DOKUMENTTYPEN = {
     "storno": ("Stornorechnung", "praefix_rechnung"),
     "kva": ("Kostenvoranschlag", "praefix_angebot"),
     "gutschrift": ("Gutschrift", "praefix_gutschrift"),  # Rechnungskorrektur zugunsten des Kunden, eigener Nummernkreis
+    "angebot": ("Angebot", "praefix_ang"),                       # reines Angebot (ohne Reparaturauftrag)
+    "auftragsbestaetigung": ("Auftragsbestätigung", "praefix_auftrag"),
 }
+GUELTIG_TYPEN = ("kva", "angebot")                          # haben „gültig bis“ statt Zahlungsziel
+ANGEBOTSARTIGE = ("kva", "angebot", "auftragsbestaetigung")  # Geschäftsbriefe, lassen sich in eine Rechnung übernehmen
+KURZNAMEN = {"rechnung": "Rechnung", "storno": "Storno", "kva": "KVA", "gutschrift": "Gutschrift", "angebot": "Angebot",
+             "auftragsbestaetigung": "AB"}
 RECHNUNGSARTIGE = ("rechnung", "storno", "gutschrift")  # Buchungsbelege mit voller Pflichtangaben-Prüfung
 
 FIRMA_FELDER = ["firma_name", "firma_zusatz", "inhaber", "strasse", "plz", "ort", "land", "telefon", "email",
@@ -44,13 +50,13 @@ def neuer_entwurf(con, einst, typ, kunde_id=None, betreff="", positionen=(), lei
 
     kunde = con.execute("SELECT * FROM kunden WHERE id=?", (kunde_id,)).fetchone() if kunde_id else None
     texte = standard_texte(con, typ)
-    tage = int(einst.get("kva_gueltig_tage") or 30) if typ == "kva" else zahlungsziel(einst, kunde)
-    if typ == "kva":
+    tage = int(einst.get("kva_gueltig_tage") or 30) if typ in GUELTIG_TYPEN else zahlungsziel(einst, kunde)
+    if typ in ANGEBOTSARTIGE and typ != "auftragsbestaetigung":
         leistungsdatum = None
     cur = con.execute(
         "INSERT INTO dokumente (typ, kunde_id, datum, leistungsdatum, zahlungsziel_tage, faellig_am, betreff, "
         "einleitung, schlusstext, hinweise, steuer_modus, erstellt_am, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (typ, kunde["id"] if kunde else None, heute(), leistungsdatum if typ == "kva" else (leistungsdatum or heute()),
+        (typ, kunde["id"] if kunde else None, heute(), leistungsdatum if typ in ANGEBOTSARTIGE else (leistungsdatum or heute()),
          tage, plus_tage(heute(), tage), betreff, texte.get("einleitung", ""), texte.get("schluss", ""),
          texte.get("hinweis", ""), einst["steuer_modus"], dbm.jetzt(), dbm.jetzt()))
     did = cur.lastrowid
@@ -201,7 +207,7 @@ def snapshot_bauen(con, dok_id, nummer=None):
         "kleinunternehmer_hinweis": einst["kleinunternehmer_hinweis"] if dok["steuer_modus"] == "kleinunternehmer" else "",
         "zahlungsarten_text": einst["zahlungsarten_text"],
         "raten": raten,
-        "bezug": {"nummer": bezug["nummer"], "datum": bezug["datum"]} if bezug else None,
+        "bezug": {"nummer": bezug["nummer"], "datum": bezug["datum"], "titel": titel(bezug["typ"])} if bezug else None,
         "kunde": {
             "kundennr": kunde["kundennr"] if kunde else "",
             "name": kunde_name(kunde),

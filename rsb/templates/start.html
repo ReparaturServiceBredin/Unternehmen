@@ -50,7 +50,7 @@
     <tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Status</th><th class="zahl">Betrag</th></tr>
     {% for d in letzte %}
     <tr>
-      <td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a> <span class="klein">{{ {'storno':'Storno','kva':'KVA'}.get(d.typ, '') }}</span></td>
+      <td><a href="{{ url_for('main.dokument', did=d.id) }}">{{ d.nummer or 'Entwurf' }}</a> <span class="klein">{{ dok_kurz.get(d.typ, '') if d.typ != 'rechnung' }}</span></td>
       <td>{{ dokname(d) }}</td><td>{{ d.datum|datum }}</td><td>{{ status(d.status) }}</td>
       <td class="zahl">{{ d.summe_brutto|euro }}</td>
     </tr>

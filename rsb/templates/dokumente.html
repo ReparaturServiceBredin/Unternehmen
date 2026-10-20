@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% from "_status.html" import status, dokname %}
-{% block titel %}{{ {"kva": "Kostenvoranschläge", "alle": "Alle Belege"}.get(typ, "Rechnungen") }}{% endblock %}
+{% block titel %}{{ {"kva": "Kostenvoranschläge", "alle": "Alle Belege", "angebote": "Angebote & Auftragsbestätigungen"}.get(typ, "Rechnungen") }}{% endblock %}
 {% block inhalt %}
 {% set reiter = "rechnungen" %}{% include "_bereichsreiter.html" %}
 <div class="kopf">
-  <h1>{{ {"kva": "Kostenvoranschläge", "alle": "Alle Belege"}.get(typ, "Rechnungen") }}</h1>
+  <h1>{{ {"kva": "Kostenvoranschläge", "alle": "Alle Belege", "angebote": "Angebote & Auftragsbestätigungen"}.get(typ, "Rechnungen") }}</h1>
   <div class="leiste">
     <form class="leiste" method="get">
       {% if typ == 'alle' %}<input type="hidden" name="typ" value="alle">{% endif %}
@@ -16,8 +16,13 @@
       <input type="text" name="q" value="{{ q }}" placeholder="Nummer, Kunde, Betreff …" style="width:220px">
       <button class="zweit">Suchen</button>
     </form>
+    {% if typ == 'angebote' %}
+    <a class="knopf zweit" href="{{ url_for('main.dokument_neu', typ='auftragsbestaetigung') }}">+ Neue Auftragsbestätigung</a>
+    <a class="knopf" href="{{ url_for('main.dokument_neu', typ='angebot') }}">+ Neues Angebot</a>
+    {% else %}
     <a class="knopf zweit" href="{{ url_for('main.dokument_neu', typ='kva') }}">+ Neuer KVA</a>
     <a class="knopf" href="{{ url_for('main.dokument_neu') }}">+ Neue Rechnung</a>
+    {% endif %}
   </div>
 </div>
 <div class="karte">
@@ -26,7 +31,7 @@
   {% for d in dokumente %}
   <tr>
     <td><a href="{{ url_for('main.dokument', did=d.id) }}"><b>{{ d.nummer or 'Entwurf' }}</b></a></td>
-    <td>{{ {'rechnung':'Rechnung','storno':'Storno','kva':'KVA','gutschrift':'Gutschrift'}.get(d.typ, d.typ) }}</td>
+    <td>{{ dok_kurz.get(d.typ, d.typ) }}</td>
     <td>{{ d.datum|datum }}</td><td>{{ dokname(d) }}</td><td>{{ d.betreff or '' }}</td>
     <td>{{ status(d.status) }}</td>
     <td>{% set zs = zahlstatus.get(d.id) %}{% if zs %}<span class="marke-status zs-{{ zs.status }}">{{ zs.status_text }}</span>{% if zs.mahnstufe is not none %} <span class="klein">M{{ zs.mahnstufe }}</span>{% endif %}{% endif %}</td>

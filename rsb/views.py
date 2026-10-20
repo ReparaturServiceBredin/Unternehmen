@@ -1254,6 +1254,11 @@ def kostenvoranschlaege():
     return _dokumentliste("kva")
 
 
+@bp.route("/verkauf/angebote")
+def angebote():
+    return _dokumentliste("angebote")
+
+
 def _dokumentliste(typ):
     status = request.args.get("status", "")
     q = request.args.get("q", "").strip()
@@ -1265,6 +1270,8 @@ def _dokumentliste(typ):
         args.append(status)
     if typ == "kva":
         sql += " AND d.typ='kva'"
+    elif typ == "angebote":
+        sql += " AND d.typ IN ('angebot','auftragsbestaetigung')"
     elif typ == "rechnung":
         sql += " AND d.typ IN ('rechnung','storno','gutschrift')"
     if q:
@@ -1290,7 +1297,7 @@ def _zahlungsziel(einst, kunde):
 def dokument_neu():
     con = dbm.get_db()
     typ = request.args.get("typ", "rechnung")
-    if typ not in ("rechnung", "kva"):
+    if typ not in ("rechnung", "kva", "angebot", "auftragsbestaetigung"):
         abort(400)
     with dbm.Transaktion(con):
         did = logik.neuer_entwurf(con, dbm.einstellungen(con), typ, request.args.get("kunde_id", type=int))
@@ -1396,7 +1403,7 @@ def _entwurf_speichern(con, d, einst):
     ziel = _f("zahlungsziel_tage")
     if ziel.isdigit():
         ziel = int(ziel)
-    elif d["typ"] == "kva":
+    elif d["typ"] in logik.GUELTIG_TYPEN:
         ziel = int(einst.get("kva_gueltig_tage") or 30)
     else:
         ziel = _zahlungsziel(einst, kunde)
@@ -1567,22 +1574,27 @@ def dokument_gutschrift(did):
 
 @bp.route("/dokumente/<int:did>/kopieren", methods=["POST"])
 def dokument_kopieren(did):
-    """Neuer Rechnungsentwurf mit denselben Positionen (Korrektur nach Storno oder KVA → Rechnung)."""
+    """Neuer Entwurf mit denselben Positionen: Rechnung (Korrektur nach Storno, KVA/Angebot/AB → Rechnung) oder
+    Auftragsbestätigung (aus einem Angebot bzw. KVA)."""
     con = dbm.get_db()
     d = _dokument_laden(did)
+    ziel_typ = "auftragsbestaetigung" if request.form.get("typ") == "auftragsbestaetigung" else "rechnung"
     pos = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (did,)).fetchall()
+    uebernehmen = d["typ"] in ("rechnung",) + logik.ANGEBOTSARTIGE
     with dbm.Transaktion(con):
-        neu = logik.neuer_entwurf(con, dbm.einstellungen(con), "rechnung", d["kunde_id"],
-                                  d["betreff"] if d["typ"] in ("rechnung", "kva") else "", pos)
-        if d["typ"] in ("rechnung", "kva") and d["hinweise"]:
+        neu = logik.neuer_entwurf(con, dbm.einstellungen(con), ziel_typ, d["kunde_id"],
+                                  d["betreff"] if uebernehmen else "", pos)
+        if ziel_typ == "auftragsbestaetigung" and d["nummer"]:  # AB nennt das Angebot, auf das sie sich bezieht
+            con.execute("UPDATE dokumente SET bezug_id=? WHERE id=?", (did, neu))
+        if uebernehmen and d["hinweise"]:
             con.execute("UPDATE dokumente SET hinweise=? WHERE id=?", (d["hinweise"], neu))
         # gehört der KVA zu einem Reparaturauftrag ohne Rechnung -> Rechnung dort eintragen
         for a in con.execute("SELECT id FROM auftraege WHERE kva_id=? AND rechnung_id IS NULL", (did,)).fetchall():
             con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE id=?", (neu, dbm.jetzt(), a["id"]))
             auf.verlauf(con, a["id"], "Rechnung erstellt", f"Entwurf aus KVA {d['nummer'] or ''}".strip())
         dbm.protokollieren("entwurf_kopiert", "dokument", neu, {"von": d["nummer"] or did}, con=con)
-    flash("Rechnungsentwurf aus dem Kostenvoranschlag erstellt." if d["typ"] == "kva"
-          else "Neuer Entwurf als Kopie angelegt.", "ok")
+    flash(f"{logik.titel(ziel_typ)}-Entwurf aus {logik.titel(d['typ'])} {d['nummer'] or ''} erstellt."
+          if d["typ"] in logik.ANGEBOTSARTIGE else "Neuer Entwurf als Kopie angelegt.", "ok")
     return redirect(url_for("main.dokument", did=neu))
 
 
@@ -1633,7 +1645,7 @@ EINSTELLUNGS_BEREICHE = {
               "steuernummer", "ust_idnr", "bank_name", "kontoinhaber", "iban", "bic"],
     "rechnung": ["steuer_modus", "regel_steuersatz", "kleinunternehmer_hinweis", "zahlungsziel_privat", "raten_vorlauf_tage",
                  "zahlungsziel_firma", "zahlungsarten_text", "kva_gueltig_tage", "anzahlung_prozent",
-                 "nummern_format", "praefix_rechnung", "praefix_gutschrift", "praefix_angebot", "praefix_kunde",
+                 "nummern_format", "praefix_rechnung", "praefix_gutschrift", "praefix_angebot", "praefix_ang", "praefix_auftrag", "praefix_kunde",
                  "leistungsarten", "aufbewahrung_belege_jahre", "aufbewahrung_briefe_jahre"],
     "layout": ["farbe_primaer", "farbe_sekundaer", "schrift", "schriftgroesse", "logo_breite_mm", "logo_position",
                "kopfzeile_text", "fusszeile_text", "faltmarken", "girocode"],
@@ -1778,6 +1790,15 @@ def einstellungen(bereich=None):
             if neu["praefix_gutschrift"].strip().upper() in (neu["praefix_rechnung"].strip().upper(),
                                                            neu["praefix_angebot"].strip().upper()):
                 raise EingabeFehler("Gutschriften brauchen einen eigenen Nummernkreis – bitte ein anderes Präfix wählen.")
+            alt = dbm.einstellungen()
+            for k in ("praefix_ang", "praefix_auftrag"):  # leer bzw. nicht im Formular: bisherigen Wert behalten
+                if not str(neu.get(k) or "").strip():
+                    neu[k] = alt.get(k) or {"praefix_ang": "AN", "praefix_auftrag": "AB"}[k]
+            praefixe = [neu[k].strip().upper() for k in ("praefix_rechnung", "praefix_gutschrift", "praefix_angebot",
+                                                         "praefix_ang", "praefix_auftrag")]
+            if len(set(praefixe)) < len(praefixe):
+                raise EingabeFehler("Rechnungen, Gutschriften, KVAs, Angebote und Auftragsbestätigungen brauchen je ein "
+                                    "eigenes Präfix (eigener Nummernkreis).")
             if neu["steuer_modus"] not in ("kleinunternehmer", "regel"):
                 neu["steuer_modus"] = "kleinunternehmer"
             try:
@@ -1999,7 +2020,8 @@ def textbausteine():
 
 TB_KATEGORIEN = {"einleitung": "Einleitung", "schluss": "Schlusstext", "hinweis": "Hinweis",
                  "email_betreff": "E-Mail-Betreff", "email_text": "E-Mail-Text"}
-TB_TYPEN = {"alle": "Alle Dokumente", "rechnung": "Rechnung", "storno": "Stornorechnung", "kva": "Kostenvoranschlag"}
+TB_TYPEN = {"alle": "Alle Dokumente", "rechnung": "Rechnung", "storno": "Stornorechnung", "kva": "Kostenvoranschlag",
+            "angebot": "Angebot", "auftragsbestaetigung": "Auftragsbestätigung"}
 
 
 @bp.route("/textbausteine/neu", methods=["GET", "POST"])
@@ -4177,7 +4199,7 @@ def _alte_adresse():
         ziel = "main.kostenvoranschlaege" if typ == "kva" else ziel
         if typ == "":
             args["typ"] = ["alle"]  # früher: alle Arten zusammen
-        elif typ not in ("rechnung", "kva"):
+        elif typ not in ("rechnung", "kva", "angebot", "auftragsbestaetigung"):
             args["typ"] = [typ]
     return redirect(url_for(ziel, **args), 301)
 
@@ -4318,8 +4340,7 @@ def schnellsuche():
             "ON k.id=d.kunde_id WHERE d.nummer LIKE :m OR d.betreff LIKE :m ORDER BY d.datum DESC, d.id DESC LIMIT 6",
             {"m": muster}).fetchall(),
          lambda d: (f"{d['nummer'] or 'Entwurf'} · {d['betreff'] or ''}",
-                    " · ".join(x for x in ({"rechnung": "Rechnung", "kva": "KVA", "storno": "Storno",
-                                            "gutschrift": "Gutschrift"}.get(d["typ"], d["typ"]),
+                    " · ".join(x for x in (logik.KURZNAMEN.get(d["typ"], d["typ"]),
                                            kunde_name({**dict(d), "typ": d["ktyp"]}) if d["kunde_id"] else "",
                                            euro(d["summe_brutto"])) if x),
                     url_for("main.dokument", did=d["id"]))),
