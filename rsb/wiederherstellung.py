@@ -17,7 +17,7 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
-from .hilfen import jetzt_dt
+from .hilfen import BERLIN, jetzt_dt
 
 MARKE = "wiederherstellen.json"
 DATEI_ORDNER = ["dokumente", "belege", "bilder", "fotos", "exporte"]
@@ -99,13 +99,15 @@ def quellen(daten_dir, ordner=None):
     bk = Path(daten_dir) / "backups"
     for f in list(bk.glob("backup_*.zip")) + list(bk.glob("vor_update_*.db")) + list(bk.glob("vor_wiederherstellung_*.zip")):
         liste.append({"pfad": str(f), "art": "Sicherung", "name": f.name})
+    for f in bk.glob("hochgeladen_*.zip"):
+        liste.append({"pfad": str(f), "art": "Hochgeladen", "name": f.name})
     for f in andere_datenordner(daten_dir, ordner):
         liste.append({"pfad": str(f), "art": "Anderer Datenordner", "name": str(f.parent)})
     for q in liste:
         st = Path(q["pfad"]).stat()
         m = re.search(r"(\d{4}-\d{2}-\d{2})_(\d{2})(\d{2})(\d{2})", Path(q["pfad"]).name)
         q["zeit"] = (f"{m.group(1)}T{m.group(2)}:{m.group(3)}:{m.group(4)}" if m
-                     else datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds"))
+                     else datetime.fromtimestamp(st.st_mtime, BERLIN).replace(tzinfo=None).isoformat(timespec="seconds"))
         q["groesse"] = st.st_size
         q["inhalt"] = inhalt(q["pfad"])
     return sorted(liste, key=lambda q: q["zeit"], reverse=True)
@@ -144,6 +146,31 @@ def _datei_ergaenzen(quelle, ziel):
     shutil.copy2(quelle, ziel)
 
 
+def _passwort_lesen(db):
+    """Gespeicherter Passwort-Hash des Inhabers (roh, JSON) oder None."""
+    if not Path(db).is_file():
+        return None
+    try:
+        con = sqlite3.connect(db)
+        try:
+            r = con.execute("SELECT wert FROM einstellungen WHERE schluessel='passwort_hash'").fetchone()
+        finally:
+            con.close()
+    except sqlite3.Error:
+        return None
+    return r[0] if r and r[0] and r[0] not in ('""', "null") else None
+
+
+def _passwort_schreiben(db, wert):
+    con = sqlite3.connect(db)
+    try:
+        with con:
+            con.execute("INSERT INTO einstellungen (schluessel, wert) VALUES ('passwort_hash', ?) "
+                        "ON CONFLICT(schluessel) DO UPDATE SET wert=excluded.wert", (wert,))
+    finally:
+        con.close()
+
+
 def ausfuehren(daten_dir):
     """Beim Programmstart aufrufen, bevor die Datenbank geöffnet wird. Gibt einen Bericht zurück oder None."""
     daten = Path(daten_dir)
@@ -165,8 +192,7 @@ def ausfuehren(daten_dir):
                         continue
                     if n == "buchhaltung.db":
                         z.extract(n, tmp)
-                    elif teile[0] in DATEI_ORDNER + (["geheim"] if quelle.name.startswith("vor_wiederherstellung_")
-                                                    else []):
+                    elif teile[0] in DATEI_ORDNER + ["geheim"]:  # Schlüssel passend zur eingespielten Datenbank
                         z.extract(n, tmp)
                         _datei_ergaenzen(Path(tmp) / n, daten / n)
             neue_db = Path(tmp) / "buchhaltung.db"
@@ -186,9 +212,12 @@ def ausfuehren(daten_dir):
         if not neue_db.is_file():
             return {"ok": False, "meldung": "In der Sicherung ist keine Datenbank – nichts geändert.",
                     "sicherung": str(sicherung)}
+        passwort = _passwort_lesen(db)
         for rest in (db.with_name(db.name + "-wal"), db.with_name(db.name + "-shm")):
             rest.unlink(missing_ok=True)
         shutil.copy2(neue_db, db)
+        if passwort and not _passwort_lesen(db):
+            _passwort_schreiben(db, passwort)  # Sicherung ohne Passwort (z. B. vom PC): nicht aussperren
     bericht = {"ok": True, "quelle": str(quelle), "sicherung": str(sicherung), "inhalt": _db_inhalt(db)}
     (daten / "backups" / "letzte_wiederherstellung.json").write_text(json.dumps(bericht, ensure_ascii=False, indent=1),
                                                                     encoding="utf-8")

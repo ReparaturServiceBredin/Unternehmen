@@ -18,7 +18,7 @@ from . import katalog, logik
 from . import navigation as nav
 from . import lager as lgr
 from .backup import backup_erstellen
-from .hilfen import (EingabeFehler, anrede_brief, cent_aus_text, datum_de, euro, heute, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
+from .hilfen import (EingabeFehler, anrede_brief, cent_aus_text, datum_de, euro, heute, jetzt_dt, kunde_name, menge_text, platzhalter_ersetzen, plus_tage,
                      zahl_aus_text)
 from .mail import MailFehler, senden
 from .pdf import SCHRIFTEN, pdf_erzeugen
@@ -30,6 +30,11 @@ bp = Blueprint("main", __name__)
 
 def daten_dir():
     return current_app.config["DATEN"]
+
+
+def _server_url():
+    """Server-Modus: Adresse, unter der das Programm aufgerufen wurde (hinter dem Proxy die öffentliche)."""
+    return request.host_url if current_app.config.get("SERVER_MODUS") else None
 
 
 def _f(name, standard=""):
@@ -45,9 +50,14 @@ def _benachrichtigungen_automatisch():
 
 # ====================================================================== Anmeldung
 
+def _login_an():
+    """Anmeldung nötig? Im Server-Modus immer."""
+    return bool(dbm.einstellung("login_aktiv")) or bool(current_app.config.get("SERVER_MODUS"))
+
+
 @bp.route("/einrichten", methods=["GET", "POST"])
 def einrichten():
-    if not dbm.einstellung("login_aktiv"):
+    if not _login_an():
         return redirect(url_for("main.start"))
     if dbm.einstellung("passwort_hash"):
         return redirect(url_for("main.login"))
@@ -63,8 +73,7 @@ def einrichten():
                 dbm.einstellungen_speichern({"passwort_hash": generate_password_hash(pw)}, con)
                 dbm.protokollieren("passwort_eingerichtet", "system", con=con)
             session.clear()
-            session["angemeldet"] = True
-            session["benutzer"] = "inhaber"
+            session.update(angemeldet=True, benutzer="inhaber", rolle="inhaber")
             session.permanent = True
             flash("Willkommen! Bitte tragen Sie zuerst Ihre Firmendaten ein.", "ok")
             return redirect(url_for("main.einstellungen"))
@@ -73,21 +82,33 @@ def einrichten():
 
 @bp.route("/login", methods=["GET", "POST"])
 def login():
-    if not dbm.einstellung("login_aktiv"):
+    from . import benutzer as bn
+    if not _login_an():
         return redirect(url_for("main.start"))
+    con = dbm.get_db()
+    adresse = request.remote_addr or "?"
     if request.method == "POST":
-        if check_password_hash(dbm.einstellung("passwort_hash") or "", request.form.get("passwort", "")):
+        warten = bn.gesperrt_sek(adresse)
+        name = request.form.get("benutzer", "")
+        if warten:
+            flash(f"Zu viele falsche Versuche. Bitte in {(warten + 59) // 60} Minuten erneut versuchen.", "fehler")
+            return render_template("login.html", mit_benutzer=bn.anzahl_aktiv(con) > 0, name=name), 429
+        with dbm.Transaktion(con):
+            daten = bn.pruefen(con, name, request.form.get("passwort", ""))
+        if daten:
+            bn.erfolg(adresse)
             session.clear()
-            session["angemeldet"] = True
-            session["benutzer"] = "inhaber"
+            session.update(angemeldet=True, **daten)
             session.permanent = True
             weiter = request.args.get("weiter") or ""
             return redirect(weiter if weiter.startswith("/") and not weiter.startswith("//") else url_for("main.start"))
-        con = dbm.get_db()
+        bn.fehlversuch(adresse)
         with dbm.Transaktion(con):
-            dbm.protokollieren("anmeldung_fehlgeschlagen", "system", con=con)
-        flash("Das Passwort ist falsch.", "fehler")
-    return render_template("login.html")
+            dbm.protokollieren("anmeldung_fehlgeschlagen", "system", None,
+                               {"benutzer": name.strip().lower() or "inhaber", "adresse": adresse}, con=con)
+        flash("Benutzername oder Passwort ist falsch." if name.strip() else "Das Passwort ist falsch.", "fehler")
+    return render_template("login.html", mit_benutzer=bn.anzahl_aktiv(con) > 0,
+                           name=request.form.get("benutzer", ""))
 
 
 @bp.route("/abmelden", methods=["POST"])
@@ -644,8 +665,9 @@ def inventur_handy(iid):
     with dbm.Transaktion(con):
         token = lgr.zaehl_token(con, iid)
     port = current_app.config.get("SERVER_PORT") or request.host.rsplit(":", 1)[-1]
-    url = ann.basis_url(dbm.einstellungen(con), port) + url_for("main.mobil_inventur", token=token)
-    im_netz = current_app.config.get("SERVER_HOST") == "0.0.0.0" or bool(dbm.einstellung("handy_adresse"))
+    url = ann.basis_url(dbm.einstellungen(con), port, _server_url()) + url_for("main.mobil_inventur", token=token)
+    im_netz = current_app.config.get("SERVER_HOST") == "0.0.0.0" or bool(dbm.einstellung("handy_adresse")) \
+        or bool(current_app.config.get("SERVER_MODUS"))
     return render_template("inventur_qr.html", inv=inv, url=url, qr=Markup(ann.qr_svg(url)), im_netz=im_netz)
 
 
@@ -1827,6 +1849,9 @@ def _bereich_gueltig(bereich):
 
 def _einstellungs_werte(bereich):
     extra = {}
+    if bereich == "sicherheit":
+        from . import benutzer as bn
+        extra = dict(benutzer_liste=bn.alle(dbm.get_db()), rollen=bn.ROLLEN)
     if bereich == "backup":
         from . import wiederherstellung as wh
         extra = dict(wh_quellen=wh.quellen(daten_dir(), None if request.args.get("suche") else []),
@@ -1965,6 +1990,8 @@ def passwort_aendern():
     """Passwortschutz ein-/ausschalten oder Passwort ändern."""
     con = dbm.get_db()
     aktion = request.form.get("aktion", "aendern")
+    if aktion == "aus" and current_app.config.get("SERVER_MODUS"):
+        raise EingabeFehler("Auf dem Server ist die Anmeldung immer eingeschaltet.")
     if aktion == "aus":
         with dbm.Transaktion(con):
             dbm.einstellungen_speichern({"login_aktiv": False}, con)
@@ -1985,6 +2012,31 @@ def passwort_aendern():
         dbm.protokollieren("passwortschutz_an" if aktion == "an" else "passwort_geaendert", "system", con=con)
     flash("Passwortschutz eingeschaltet." if aktion == "an" else "Passwort geändert.", "ok")
     return redirect(url_for("main.einstellungen", bereich="sicherheit"))
+
+
+@bp.route("/benutzer/neu", methods=["POST"])
+def benutzer_neu():
+    from . import benutzer as bn
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        bn.anlegen(con, _f("name"), _f("anzeigename"), _f("rolle", "mitarbeiter"), request.form.get("passwort", ""),
+                   request.form.get("passwort2", ""))
+    flash(f"Benutzer „{_f('name').lower()}“ angelegt.", "ok")
+    return redirect(url_for("main.einstellungen", bereich="sicherheit") + "#benutzer")
+
+
+@bp.route("/benutzer/<int:bid>", methods=["POST"])
+def benutzer_aendern(bid):
+    from . import benutzer as bn
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        if request.form.get("passwort"):
+            bn.passwort_setzen(con, bid, request.form.get("passwort", ""), request.form.get("passwort2", ""))
+            flash("Passwort gesetzt – der Benutzer muss sich neu anmelden.", "ok")
+        else:
+            bn.aendern(con, bid, _f("anzeigename"), _f("rolle", "mitarbeiter"), bool(request.form.get("aktiv")))
+            flash("Benutzer gespeichert.", "ok")
+    return redirect(url_for("main.einstellungen", bereich="sicherheit") + "#benutzer")
 
 
 @bp.route("/einstellungen/backup/erstellen", methods=["POST"])
@@ -3027,8 +3079,9 @@ def auftrag_handy(aid, zweck):
         ann.tokens_aufraeumen(con)
         token = ann.token_erstellen(con, aid, zweck)
     port = current_app.config.get("SERVER_PORT") or request.host.rsplit(":", 1)[-1]
-    url = ann.basis_url(dbm.einstellungen(con), port) + url_for("main.mobil", token=token)
-    im_netz = current_app.config.get("SERVER_HOST") == "0.0.0.0" or bool(dbm.einstellung("handy_adresse"))
+    url = ann.basis_url(dbm.einstellungen(con), port, _server_url()) + url_for("main.mobil", token=token)
+    im_netz = current_app.config.get("SERVER_HOST") == "0.0.0.0" or bool(dbm.einstellung("handy_adresse")) \
+        or bool(current_app.config.get("SERVER_MODUS"))
     return render_template("handy_qr.html", a=a, zweck=zweck, zweck_text=ann.ZWECKE[zweck], url=url,
                            qr=Markup(ann.qr_svg(url)), minuten=ann.TOKEN_MINUTEN, im_netz=im_netz,
                            stand=_auftrag_stand(con, aid))
@@ -4381,13 +4434,61 @@ def wiederherstellen():
     con = dbm.get_db()
     with dbm.Transaktion(con):
         dbm.protokollieren("wiederherstellung_vorgemerkt", "system", None, {"quelle": quelle}, con=con)
-    if not upd.ist_exe():
+    if current_app.config.get("SERVER_MODUS"):
+        _server_neu_starten()
+    elif not upd.ist_exe():
         flash("Wiederherstellung vorgemerkt. Bitte das Programm jetzt beenden und neu starten – vorher wird der "
               "aktuelle Stand vollständig gesichert.", "warnung")
         return redirect(url_for("main.einstellungen", bereich="backup"))
-    dbm.festschreiben(current_app.config["DB_PFAD"])
-    upd.neu_starten(verzoegerung=1.5)
+    else:
+        dbm.festschreiben(current_app.config["DB_PFAD"])
+        upd.neu_starten(verzoegerung=1.5)
     return render_template("wiederherstellung_laeuft.html", gestartet=current_app.config.get("GESTARTET"))
+
+
+def _server_neu_starten(verzoegerung=1.5):
+    """Server-Modus: Programm sauber beenden – Docker (restart: unless-stopped) bzw. systemd startet es neu."""
+    import os
+    import signal
+    import threading
+
+    def _los():
+        import time
+        time.sleep(verzoegerung)
+        os.kill(os.getpid(), signal.SIGTERM)
+    if not current_app.config.get("TESTING"):
+        threading.Thread(target=_los, daemon=True).start()
+
+
+UPLOAD_MAX = 4 * 1024 ** 3  # Sicherungen mit vielen Fotos können groß sein
+
+
+@bp.route("/einstellungen/backup/hochladen", methods=["POST"])
+def backup_hochladen():
+    """Sicherung (ZIP) vom eigenen Rechner hochladen – z. B. für den Umzug auf einen Server. Wird danach in der
+    Liste angezeigt und kann von dort eingespielt werden."""
+    import zipfile
+    request.max_content_length = UPLOAD_MAX
+    datei = request.files.get("sicherung")
+    if not datei or not datei.filename:
+        raise EingabeFehler("Bitte eine Sicherung (ZIP-Datei) auswählen.")
+    ziel = Path(daten_dir()) / "backups" / f"hochgeladen_{jetzt_dt():%Y-%m-%d_%H%M%S}.zip"
+    ziel.parent.mkdir(parents=True, exist_ok=True)
+    datei.save(ziel)
+    try:
+        with zipfile.ZipFile(ziel) as z:
+            gueltig = "buchhaltung.db" in z.namelist()
+    except zipfile.BadZipFile:
+        gueltig = False
+    if not gueltig:
+        ziel.unlink(missing_ok=True)
+        raise EingabeFehler("Das ist keine Sicherung dieses Programms (ZIP mit buchhaltung.db).")
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        dbm.protokollieren("sicherung_hochgeladen", "system", None, {"datei": ziel.name,
+                                                                     "original": datei.filename}, con=con)
+    flash(f"Sicherung „{datei.filename}“ hochgeladen. Inhalt prüfen und mit „Wiederherstellen“ einspielen.", "ok")
+    return redirect(url_for("main.einstellungen", bereich="backup") + "#wiederherstellen")
 
 
 # ====================================================================== Fixkosten

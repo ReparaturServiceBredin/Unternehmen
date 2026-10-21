@@ -20,7 +20,7 @@
       if (r.ok && (await r.json()).gestartet !== vorher) { window.location = '/einstellungen/backup#wiederherstellen'; return; }
     } catch (e) {}
     document.getElementById('status').textContent = versuche > 60
-      ? 'Das dauert ungewöhnlich lange. Bitte RSB-Buchhaltung.exe neu starten.'
+      ? {{ ('Das dauert ungewöhnlich lange. Bitte den Server neu starten (docker compose restart).' if server_modus else 'Das dauert ungewöhnlich lange. Bitte RSB-Buchhaltung.exe neu starten.')|tojson }}
       : 'Bitte warten … (' + versuche + ')';
     setTimeout(pruefen, 2000);
   }

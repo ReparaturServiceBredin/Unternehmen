@@ -330,11 +330,12 @@ def main():
         signal.signal(signal.SIGTERM, stopp)
         signal.signal(signal.SIGINT, stopp)
         threads = int(os.environ.get("RSB_THREADS") or 8)
-        serve(app, host=host, port=port, threads=threads, ident="RSB")  # blockiert bis SIGTERM
+        serve(app, host=host, port=port, threads=threads, ident="RSB",
+              max_request_body_size=4 * 1024 ** 3)  # blockiert bis SIGTERM
         return
 
-    server_thread = threading.Thread(target=serve, args=(app,), kwargs={"host": host, "port": port, "threads": 4},
-                                     daemon=True)
+    server_thread = threading.Thread(target=serve, args=(app,), daemon=True, kwargs={
+        "host": host, "port": port, "threads": 4, "max_request_body_size": 4 * 1024 ** 3})
     server_thread.start()
     if not os.environ.get("RSB_KEIN_BROWSER"):
         threading.Timer(1.5, lambda: fenster.oeffnen(adresse, fenster_modus(app.config["DB_PFAD"]))).start()

@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.32.0"
+VERSION_NUMMER = "0.33.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -111,6 +111,9 @@ def create_app(daten_dir=None, testing=False):
 
     @app.before_request
     def anmeldung_pruefen():
+        if request.endpoint == "main.backup_hochladen":  # große Sicherung – Grenze gilt schon für die CSRF-Prüfung
+            from .views import UPLOAD_MAX
+            request.max_content_length = UPLOAD_MAX
         if request.endpoint in ("static", "main.version_info"):  # Versionsabfrage: Healthcheck, „läuft schon?“
             return None
         if request.endpoint in mobil:
@@ -124,16 +127,26 @@ def create_app(daten_dir=None, testing=False):
             return None
         if not login_an:
             # Passwortschutz ausgeschaltet: direkt angemeldet (Programm ist nur am eigenen PC erreichbar)
-            session["angemeldet"] = True
-            session["benutzer"] = "inhaber"
+            session.update(angemeldet=True, benutzer="inhaber", rolle="inhaber")
             csrf_pruefen()
             return None
         if not dbm.einstellung("passwort_hash"):
             return redirect(url_for("main.einrichten"))
         if not session.get("angemeldet"):
             return redirect(url_for("main.login", weiter=request.path))
+        from . import benutzer as bn
+        if not bn.sitzung_gueltig(dbm.get_db(), session):  # deaktiviert oder Passwort geändert
+            session.clear()
+            return redirect(url_for("main.login", weiter=request.path))
+        if session.get("rolle") == "mitarbeiter" and nur_inhaber(request.path):
+            abort(403, "Dieser Bereich ist dem Inhaber vorbehalten.")
         csrf_pruefen()
         return None
+
+    def nur_inhaber(pfad):
+        if pfad in ("/einstellungen/logo.png", "/einstellungen/suche.json"):
+            return False
+        return pfad.startswith(("/einstellungen", "/protokoll", "/update/", "/benutzer"))
 
     @app.context_processor
     def globale_werte():
@@ -198,7 +211,7 @@ def create_app(daten_dir=None, testing=False):
                 "zaehler": {"offene_anfragen": offene_anfragen, "offene_auftraege": offene_auftraege,
                             "leihen_ueberfaellig": leihen_ueberfaellig, "posten_ueberfaellig": posten_ueberfaellig,
                             "lager_unter_min": lager_unter_min},
-                "update_da": update_da, "ist_exe": ist_exe()}
+                "update_da": update_da, "ist_exe": ist_exe(), "server_modus": app.config["SERVER_MODUS"]}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

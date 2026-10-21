@@ -205,7 +205,7 @@
 </div>
 <div class="karte" id="wiederherstellen">
   <h2>Sicherung wiederherstellen</h2>
-  <p class="klein">Datenordner: <b>{{ daten_ordner }}</b> (fester Ort, egal von wo das Programm gestartet wird; öffnen über das Symbol neben der Uhr → „Daten-Ordner öffnen“).</p>
+  <p class="klein">Datenordner: <b>{{ daten_ordner }}</b>{% if not server_modus %} (fester Ort, egal von wo das Programm gestartet wird; öffnen über das Symbol neben der Uhr → „Daten-Ordner öffnen“){% endif %}.</p>
   {% set wb = einst.wiederherstellung_bericht %}
   {% if wb %}<div class="meldung {{ 'ok' if wb.ok else 'fehler' }}">{% if wb.ok %}Zuletzt eingespielt: <b>{{ wb.quelle }}</b> – jetzt {{ wb.inhalt.anzahl.kunden or 0 }} Kunden, {{ wb.inhalt.anzahl.auftraege or 0 }} Aufträge, {{ wb.inhalt.anzahl.artikel or 0 }} Artikel. Der vorherige Stand liegt in {{ wb.sicherung }}.{% else %}{{ wb.meldung }}{% endif %}</div>{% endif %}
   {% if onedrive %}<div class="meldung warnung"><b>Ihr Datenordner liegt in OneDrive</b> ({{ daten_ordner }}). OneDrive kann eine geöffnete Datenbank durch eine ältere Fassung ersetzen. Empfehlung: Programm samt Ordner „Daten“ in einen Ordner außerhalb von OneDrive verschieben, z. B. C:\RSB-Buchhaltung, und Sicherungen über „Zusätzlicher Backup-Ordner“ anlegen.</div>{% endif %}
@@ -219,7 +219,11 @@
     <td class="klein">{{ i.firma }}{% if i.strasse %}<br>{{ i.strasse }}{% endif %}{% if i.imap %}<br>IMAP: {{ i.imap }}{% endif %}</td>{% endif %}
     <td>{% if not i.fehler %}<form method="post" action="{{ url_for('main.wiederherstellen') }}" onsubmit="return confirm('Diese Sicherung einspielen? Der aktuelle Stand wird vorher vollständig gesichert.')">{{ csrf() }}<input type="hidden" name="quelle" value="{{ q.pfad }}"><button class="zweit klein">Wiederherstellen</button></form>{% endif %}</td></tr>
   {% else %}<tr><td colspan="9" class="klein">Keine Sicherungen gefunden.</td></tr>{% endfor %}</tbody></table></div>
-  <p class="klein"><a href="{{ url_for('main.einstellungen', bereich='backup', suche=1) }}#wiederherstellen">Auch andere Datenordner suchen</a> (Desktop, Downloads, Dokumente, OneDrive – z. B. falls das Programm früher an einem anderen Ort lag)</p>
+  <h3>Sicherung hochladen</h3>
+  <form method="post" enctype="multipart/form-data" action="{{ url_for('main.backup_hochladen') }}">{{ csrf() }}
+    <div class="leiste"><input type="file" name="sicherung" accept=".zip" required style="width:auto"><button class="zweit">Hochladen</button></div></form>
+  <p class="klein">ZIP-Sicherung von einem anderen Rechner, z. B. für den Umzug auf einen Server. Danach erscheint sie oben in der Liste – Inhalt prüfen und „Wiederherstellen“ wählen.</p>
+  {% if not server_modus %}<p class="klein"><a href="{{ url_for('main.einstellungen', bereich='backup', suche=1) }}#wiederherstellen">Auch andere Datenordner suchen</a> (Desktop, Downloads, Dokumente, OneDrive – z. B. falls das Programm früher an einem anderen Ort lag)</p>{% endif %}
 </div>
 
 {% elif bereich == 'vertraege' %}
@@ -426,7 +430,7 @@
 </form>
 
 {% elif bereich == 'sicherheit' %}
-{% if not einst.login_aktiv %}
+{% if not einst.login_aktiv and not server_modus %}
 <form method="post" action="{{ url_for('main.passwort_aendern') }}" class="karte">{{ csrf() }}
   <h2>Passwortschutz ist ausgeschaltet</h2>
   <p class="klein">Das Programm öffnet sich ohne Anmeldung. Von anderen Geräten ist es nicht erreichbar (nur dieser PC),
@@ -446,10 +450,41 @@
     <div class="s4"><label>Neues Passwort wiederholen</label><input type="password" name="neu2" required minlength="8"></div>
   </div><br><button name="aktion" value="aendern">Passwort ändern</button>
 </form>
+<div class="karte" id="benutzer">
+  <h2>Weitere Benutzer</h2>
+  <p class="klein">Eigene Zugänge, z. B. für Mitarbeiter. Das Protokoll zeigt dann, wer was geändert hat. Sie selbst melden
+    sich weiter nur mit Ihrem Passwort an (Benutzername leer lassen oder „inhaber“). <b>Mitarbeiter</b> sehen alles außer
+    Einstellungen, Backup und Protokoll.</p>
+  {% if benutzer_liste %}<div style="overflow-x:auto"><table class="liste"><thead><tr><th>Benutzer</th><th>Name</th><th>Rolle</th><th>Aktiv</th><th></th><th>Letzte Anmeldung</th><th>Neues Passwort</th></tr></thead><tbody>
+  {% for b in benutzer_liste %}<tr>
+    <td><form method="post" id="benutzer-{{ b.id }}" action="{{ url_for('main.benutzer_aendern', bid=b.id) }}">{{ csrf() }}</form><b>{{ b.name }}</b></td>
+    <td><input type="text" form="benutzer-{{ b.id }}" name="anzeigename" value="{{ b.anzeigename or '' }}" style="min-width:120px"></td>
+    <td><select form="benutzer-{{ b.id }}" name="rolle" style="min-width:150px">{% for k, txt in rollen.items() %}<option value="{{ k }}" {{ 'selected' if b.rolle == k }}>{{ txt.split(' (')[0] }}</option>{% endfor %}</select></td>
+    <td><input form="benutzer-{{ b.id }}" type="checkbox" name="aktiv" value="1" {{ 'checked' if b.aktiv }}></td>
+    <td><button form="benutzer-{{ b.id }}" class="zweit klein">Speichern</button></td>
+    <td class="klein">{{ b.letzte_anmeldung|zeit if b.letzte_anmeldung else '–' }}</td>
+    <td><form method="post" action="{{ url_for('main.benutzer_aendern', bid=b.id) }}" class="leiste">{{ csrf() }}
+      <input type="password" name="passwort" placeholder="neu" minlength="8" required style="width:110px">
+      <input type="password" name="passwort2" placeholder="wiederholen" minlength="8" required style="width:110px">
+      <button class="zweit klein">Setzen</button></form></td>
+  </tr>{% endfor %}</tbody></table></div>{% endif %}
+  <h3>Benutzer anlegen</h3>
+  <form method="post" action="{{ url_for('main.benutzer_neu') }}">{{ csrf() }}
+    <div class="felder">
+      <div class="s3"><label>Benutzername (klein, ohne Leerzeichen)</label><input type="text" name="name" required autocapitalize="none" pattern="[a-z0-9][a-z0-9._\-]{1,29}"></div>
+      <div class="s3"><label>Name</label><input type="text" name="anzeigename"></div>
+      <div class="s3"><label>Rolle</label><select name="rolle">{% for k, txt in rollen.items() %}<option value="{{ k }}" {{ 'selected' if k == 'mitarbeiter' }}>{{ txt }}</option>{% endfor %}</select></div>
+      <div class="s3"><label>Passwort (mind. 8 Zeichen)</label><input type="password" name="passwort" required minlength="8"></div>
+      <div class="s3"><label>Passwort wiederholen</label><input type="password" name="passwort2" required minlength="8"></div>
+    </div><br><button>Benutzer anlegen</button>
+  </form>
+</div>
+{% if not server_modus %}
 <form method="post" action="{{ url_for('main.passwort_aendern') }}" class="karte">{{ csrf() }}
   <h2>Passwortschutz ausschalten</h2>
-  <p class="klein">Danach öffnet sich das Programm ohne Anmeldung.</p>
+  <p class="klein">Danach öffnet sich das Programm ohne Anmeldung (weitere Benutzer können sich dann nicht anmelden).</p>
   <button name="aktion" value="aus" class="gefahr">Passwortschutz ausschalten</button>
 </form>
+{% endif %}
 {% endif %}
 {% endif %}

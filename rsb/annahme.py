@@ -343,10 +343,13 @@ def netz_adresse():
         return "127.0.0.1"
 
 
-def basis_url(einst, port):
+def basis_url(einst, port, server_url=None):
+    """Adresse für QR-Codes. server_url: im Server-Modus die Adresse, unter der das Programm aufgerufen wurde."""
     fest = (einst.get("handy_adresse") or "").strip().rstrip("/")
     if fest:
         return fest if fest.startswith("http") else f"http://{fest}"
+    if server_url:
+        return server_url.rstrip("/")
     return f"http://{netz_adresse()}:{port}"
 
 

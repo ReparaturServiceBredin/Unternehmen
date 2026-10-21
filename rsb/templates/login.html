@@ -8,7 +8,8 @@
     <h1>Anmelden</h1>
     {% with meldungen = get_flashed_messages(with_categories=true) %}{% for art, text in meldungen %}<div class="meldung {{ art }}">{{ text }}</div>{% endfor %}{% endwith %}
     <form method="post">
-      <label>Passwort</label><input type="password" name="passwort" required autofocus>
+      {% if mit_benutzer %}<label>Benutzername <span class="klein">(Inhaber: leer lassen)</span></label><input type="text" name="benutzer" value="{{ name or '' }}" autocomplete="username" autocapitalize="none" autofocus><br><br>{% endif %}
+      <label>Passwort</label><input type="password" name="passwort" required autocomplete="current-password" {{ '' if mit_benutzer else 'autofocus' }}>
       <br><br><button>Anmelden</button>
     </form>
   </div>

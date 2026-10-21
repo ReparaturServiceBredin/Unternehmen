@@ -48,14 +48,14 @@
     {% endfor %}
   </nav>
   <div class="nav-unten">
-    {{ punkt(nav.EINSTELLUNGEN) }}
+    {% if session.rolle != 'mitarbeiter' %}{{ punkt(nav.EINSTELLUNGEN) }}{% endif %}
     <button type="button" class="nav-punkt nav-einklappen" id="nav-einklappen" data-titel="Seitenleiste ausklappen" aria-pressed="{{ 'true' if ui.schmal else 'false' }}">
       {{ symbol('panel-left-close', 'zu-symbol') }}{{ symbol('panel-left-open', 'auf-symbol') }}<span class="nav-text">Seitenleiste einklappen</span></button>
     <div class="fuss">
       <a href="{{ url_for('main.versionen') }}" title="Versionsprotokoll">Version {{ version }}</a>
-      {% if einst.login_aktiv %}<form method="post" action="{{ url_for('main.abmelden') }}">
+      {% if einst.login_aktiv or server_modus %}<form method="post" action="{{ url_for('main.abmelden') }}">
         <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-        <button class="zweit klein" title="Abmelden">{{ symbol('log-out') }}<span class="nav-text">Abmelden</span></button>
+        <button class="zweit klein" title="Abmelden">{{ symbol('log-out') }}<span class="nav-text">Abmelden{% if session.benutzer and session.benutzer != 'inhaber' %} ({{ session.benutzer }}){% endif %}</span></button>
       </form>{% endif %}
     </div>
   </div>

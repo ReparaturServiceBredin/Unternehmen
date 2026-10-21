@@ -15,6 +15,9 @@ from . import db as dbm
 from .hilfen import jetzt_dt
 
 ORDNER_IM_BACKUP = ["dokumente", "belege", "bilder", "fotos", "exporte"]
+# Schlüssel für gespeicherte Zugangsdaten (E-Mail, Bank-API …) – mit in der Sicherung, damit eine Wiederherstellung
+# bzw. ein Umzug auf einen anderen Rechner/Server alles mitbringt (Entscheidung Inhaber, 21.10.2026).
+SCHLUESSEL_IM_BACKUP = ["geheim/schluessel.key"]
 
 
 def backup_erstellen(daten_dir, db_pfad, einst=None):
@@ -37,11 +40,17 @@ def backup_erstellen(daten_dir, db_pfad, einst=None):
                 for datei in (daten / ordner).rglob("*") if (daten / ordner).exists() else []:
                     if datei.is_file():
                         z.write(datei, datei.relative_to(daten).as_posix())
+            for schluessel in SCHLUESSEL_IM_BACKUP:
+                if (daten / schluessel).is_file():
+                    z.write(daten / schluessel, schluessel)
             z.writestr("LIESMICH.txt",
                        "Backup Reparatur Service Bredin – Buchhaltung\n"
                        f"Erstellt: {jetzt_dt():%d.%m.%Y %H:%M}\n\n"
-                       "Wiederherstellen: Programm beenden, Inhalt dieses ZIP in den Ordner 'Daten' entpacken\n"
-                       "(vorhandene Dateien ersetzen), Programm starten, E-Mail-Passwort neu eingeben.\n")
+                       "Wiederherstellen: Einstellungen -> Backup -> Sicherung wiederherstellen (auch: ZIP hochladen).\n"
+                       "Von Hand: Programm beenden, Inhalt dieses ZIP in den Ordner 'Daten' entpacken\n"
+                       "(vorhandene Dateien ersetzen), Programm starten.\n\n"
+                       "ACHTUNG: Enthält den Schlüssel für gespeicherte Zugangsdaten (geheim/). Diese Datei nur an\n"
+                       "zugriffsgeschützten Orten aufbewahren.\n")
     kopiert_nach = None
     if einst and einst.get("backup_ziel"):
         extern = Path(einst["backup_ziel"])

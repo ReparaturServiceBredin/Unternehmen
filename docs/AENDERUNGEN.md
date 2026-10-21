@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.33.0 | 21.10.2026 | Benutzer, Anmeldesperre, Umzug per Browser, Schlüssel in der Sicherung |
 | 0.32.0 | 21.10.2026 | Deutsche Uhrzeit unabhängig vom Rechner, Anleitung IONOS |
 | 0.31.0 | 21.10.2026 | Vorbereitung Server/Cloud: Server-Modus, Docker, Logging, .env |
 | 0.30.0 | 20.10.2026 | Angebote und Auftragsbestätigungen |
@@ -58,6 +59,27 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.33.0 – 21.10.2026
+### Neu
+- **Weitere Benutzer** (*Einstellungen → Anmeldung & Benutzer*): eigene Zugänge, z. B. für Mitarbeiter. Rolle
+  „Mitarbeiter“ sieht alles außer Einstellungen, Backup und Protokoll, Rolle „Inhaber“ hat alle Rechte. Das Protokoll
+  nennt, wer was geändert hat. Deaktivieren oder ein neues Passwort beendet laufende Sitzungen sofort. Sie selbst
+  melden sich wie bisher nur mit Ihrem Passwort an.
+- **Schutz gegen Passwort-Raten:** Nach 5 falschen Passwörtern ist die Anmeldung von dieser Adresse 15 Minuten
+  gesperrt. Fehlversuche stehen mit Adresse im Protokoll.
+- **Sicherung hochladen** (*Einstellungen → Backup*): ZIP von einem anderen Rechner hochladen, Inhalt prüfen und
+  einspielen – so zieht das Programm auf den Server um. Auf dem Server startet es danach von selbst neu.
+
+### Geändert
+- **Jede Sicherung enthält jetzt den Schlüssel** für gespeicherte Zugangsdaten. Nach einer Wiederherstellung oder
+  einem Umzug funktionieren E-Mail- und Bank-Zugang weiter. Sicherungen deshalb nur an geschützten Orten ablegen.
+- Beim Einspielen einer Sicherung ohne Passwort (z. B. vom PC ohne Passwortschutz) bleibt das bisherige Passwort
+  erhalten.
+- Server: Passwortschutz lässt sich nicht ausschalten, keine Weiterleitungsschleife auf der Anmeldeseite, QR-Codes
+  fürs Handy zeigen die Server-Adresse, Uploads bis 4 GB.
 
 ---
 

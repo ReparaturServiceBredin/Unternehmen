@@ -1312,3 +1312,15 @@ CREATE TABLE IF NOT EXISTS rechnung_raten (
     vereinbart_am TEXT,
     UNIQUE (dokument_id, nr)
 );
+
+-- Weitere Benutzer neben dem Inhaber (0.33.0); der Inhaber selbst bleibt in den Einstellungen (passwort_hash)
+CREATE TABLE IF NOT EXISTS benutzer (
+    id               INTEGER PRIMARY KEY,
+    name             TEXT NOT NULL UNIQUE,      -- Anmeldename, klein geschrieben
+    anzeigename      TEXT,
+    rolle            TEXT NOT NULL DEFAULT 'mitarbeiter',  -- inhaber / mitarbeiter
+    passwort_hash    TEXT NOT NULL,
+    aktiv            INTEGER NOT NULL DEFAULT 1,
+    angelegt_am      TEXT NOT NULL,
+    letzte_anmeldung TEXT
+);

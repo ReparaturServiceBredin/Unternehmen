@@ -86,7 +86,7 @@ ZUORDNUNG = [
     ("musterrechnung", "einstellungen"), ("textbaustein", "einstellungen"), ("protokoll", "einstellungen"),
     ("pruefung", "einstellungen"), ("datenschutz", "einstellungen"), ("verfahrensdoku", "einstellungen"),
     ("versionen", "einstellungen"), ("passwort", "einstellungen"), ("testmail", "einstellungen"),
-    ("update", "einstellungen"),
+    ("update", "einstellungen"), ("benutzer", "einstellungen"),
 ]
 
 # Einstellungen: Unternavigation (Schlüssel = Bereich, sonst Endpoint für eigene Seiten)
@@ -100,7 +100,7 @@ EINSTELLUNGS_GRUPPEN = [
                        ("benachrichtigung", "Benachrichtigungen", "bell")]),
     ("Einkauf & Buchhaltung", [("einkauf", "Einkauf", "truck"), ("datev", "DATEV", "file-output")]),
     ("System", [("datenschutz", "Datenschutz", "shield"), ("backup", "Backup", "hard-drive"),
-                ("sicherheit", "Passwortschutz", "lock"), ("programm", "Programm & Updates", "refresh-cw")]),
+                ("sicherheit", "Anmeldung & Benutzer", "lock"), ("programm", "Programm & Updates", "refresh-cw")]),
 ]
 # Weitere Verwaltungsseiten (früher eigene Menüpunkte) – in der Einstellungs-Navigation verlinkt
 VERWALTUNG = [

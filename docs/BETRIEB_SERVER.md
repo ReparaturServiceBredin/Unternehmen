@@ -49,13 +49,19 @@ Danach im Browser `http://<server>:5000` (nur lokal, siehe Port-Freigabe in `doc
 Reverse-Proxy öffnen und mit dem Passwort anmelden. **Dann `RSB_ERSTES_PASSWORT` aus der `.env` löschen** und
 `docker compose up -d` ausführen. Das Passwort lässt sich jederzeit unter *Einstellungen → Passwortschutz* ändern.
 
-## Bestehende Daten übernehmen
+## Bestehende Daten übernehmen (Umzug vom PC)
 
-1. In der Windows-Version: *Einstellungen → Backup → Jetzt sichern* (ZIP enthält Datenbank, Belege, Fotos und den
-   Schlüssel für gespeicherte Zugangsdaten).
-2. Auf dem Server den Container stoppen (`docker compose down`), die ZIP in den Ordner `daten/` entpacken
-   (vorhandene Dateien überschreiben), Rechte setzen: `sudo chown -R 1000:1000 daten`.
-3. `docker compose up -d`, anmelden, *Einstellungen → Datenprüfung* ausführen.
+1. In der Windows-Version (ab 0.33.0): *Einstellungen → Backup → Backup jetzt erstellen*. Die ZIP enthält Datenbank,
+   Belege, Fotos und den Schlüssel für gespeicherte Zugangsdaten (E-Mail- und Bank-Passwörter funktionieren danach
+   weiter). Die Datei über die Liste darunter herunterladen.
+2. Auf dem Server im Browser anmelden: *Einstellungen → Backup → Sicherung hochladen*, Datei wählen.
+3. In der Liste prüfen (Kunden, Aufträge, Firmendaten) und **Wiederherstellen** klicken. Der Server sichert vorher den
+   aktuellen Stand, spielt die Sicherung ein und startet von selbst neu (etwa 10 Sekunden).
+4. Neu anmelden – das Server-Passwort bleibt erhalten, auch wenn die Sicherung vom PC keins hatte.
+   *Einstellungen → Datenprüfung* ausführen. Danach die Windows-Version nicht mehr parallel benutzen.
+
+Von Hand geht es auch: `docker compose down`, ZIP in `daten/` entpacken, `sudo chown -R 1000:1000 daten`,
+`docker compose up -d`.
 
 ## Einstellungen (`.env`)
 
@@ -70,7 +76,15 @@ Reverse-Proxy öffnen und mit dem Passwort anmelden. **Dann `RSB_ERSTES_PASSWORT
 | `RSB_ERSTES_PASSWORT` | nur für den allerersten Start |
 | `RSB_LOG_STUFE` | `INFO` (Standard), `DEBUG` zur Fehlersuche |
 
-Im Server-Modus ist die **Anmeldung immer Pflicht**, auch wenn sie in den Einstellungen ausgeschaltet ist.
+Im Server-Modus ist die **Anmeldung immer Pflicht**, auch wenn sie in den Einstellungen ausgeschaltet ist. Nach fünf
+falschen Passwörtern von derselben Adresse ist die Anmeldung dort 15 Minuten gesperrt.
+
+## Benutzer
+
+*Einstellungen → Anmeldung & Benutzer → Weitere Benutzer*: eigene Zugänge für Mitarbeiter. Der Inhaber meldet sich
+weiter nur mit dem Passwort an (Benutzername leer). Rolle **Mitarbeiter**: alles außer Einstellungen, Backup und
+Protokoll; **Inhaber**: alle Rechte. Das Protokoll zeigt, wer was geändert hat. Deaktivieren oder ein neues Passwort
+beendet die Sitzungen des Benutzers sofort.
 
 ## HTTPS mit Caddy (Zugriff aus dem Internet)
 
@@ -103,6 +117,8 @@ Beim Start ergänzt das Programm neue Datenbankfelder selbst und legt vorher aut
 - **Hintergrundaufgaben** (Anfragen abrufen, Verträge abrechnen, Raten-Erinnerungen, Löschfristen) laufen nur in
   einem Prozess je Datenordner (`daten/hintergrund.sperre`).
 - **Stoppen:** `docker compose down` – das Programm schließt die Datenbank sauber.
+- **Neustart nach „Wiederherstellen“** übernimmt Docker (`restart: unless-stopped` in `docker-compose.yml`). Ohne
+  Docker (systemd) braucht der Dienst `Restart=always`.
 - **Uhrzeit:** Alle Zeitpunkte rechnet das Programm selbst in deutscher Zeit – auch wenn der Server auf UTC läuft.
 - **Sicherungen enthalten den Schlüssel** für gespeicherte Zugangsdaten (E-Mail, Bank-API usw.). Sicherungen
   deshalb nur an zugriffsgeschützten Orten ablegen.
