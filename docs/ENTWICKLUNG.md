@@ -28,8 +28,11 @@ Regeln bei jedem Testlauf und vor jeder Veröffentlichung automatisch. Ein Verst
 
 ## 3. Konfiguration über Umgebung bzw. `.env`
 
-- Rechnerabhängige Werte (Datenordner, Host, Port usw.) kommen aus Umgebungsvariablen `RSB_…`, später auch aus einer
-  `.env`. Es gibt sinnvolle Standardwerte.
+- Rechnerabhängige Werte (Datenordner, Host, Port usw.) kommen aus Umgebungsvariablen `RSB_…` oder einer `.env`
+  (`rsb/konfig.py`, Liste aller Werte in `konfig.WERTE`). Es gibt sinnvolle Standardwerte.
+- Ausgaben über das Logging (`from .logbuch import log`), nicht über `print`. Die Protokolldatei liegt in
+  `Daten/logs` und gehört nicht in die Sicherung.
+- Neue Hintergrundaufgaben laufen nur in dem Prozess, der die Sperre hält (`rsb/sperre.py`, siehe `__main__.py`).
 - Passwörter und Schlüssel gehören nie in den Code. Schlüssel liegen in `Daten/geheim`, Zugangsdaten verschlüsselt in
   der Datenbank.
 - Debug-Modus ist immer aus. Server ist Waitress, nie `app.run()`.

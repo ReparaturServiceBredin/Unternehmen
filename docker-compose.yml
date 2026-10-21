@@ -1,0 +1,13 @@
+# Betrieb auf einem Linux-Server. Anleitung: docs/BETRIEB_SERVER.md
+services:
+  rsb:
+    build: .
+    image: rsb-buchhaltung:latest
+    container_name: rsb-buchhaltung
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./daten:/daten          # Datenbank, Belege, Fotos, Sicherungen – regelmäßig extern sichern!
+    ports:
+      - "127.0.0.1:5000:5000"   # nur lokal; von außen über einen Reverse-Proxy mit HTTPS (siehe Anleitung)
+    stop_grace_period: 30s

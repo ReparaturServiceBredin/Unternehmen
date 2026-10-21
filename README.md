@@ -72,6 +72,7 @@ start.bat):
   Ordner mit einer Notiz liegen. Weitere gefundene Ordner zeigt es an; sie lassen sich unter
   *Einstellungen → Backup → Sicherung wiederherstellen* einspielen.
 - Für Docker oder Sonderfälle lässt sich der Ort mit der Umgebungsvariable `RSB_DATEN` festlegen.
+- Betrieb auf einem Linux-Server bzw. in der Cloud (Docker, HTTPS, Datenübernahme): siehe `docs/BETRIEB_SERVER.md`.
 
 ```
 Daten\

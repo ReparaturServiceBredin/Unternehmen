@@ -1,0 +1,35 @@
+name: Docker-Image prüfen
+
+# Baut das Server-Image (Linux) und startet es einmal zur Probe. Veröffentlicht nichts.
+on:
+  push:
+    branches: [main, claude/zen-pascal-p0zb7k]
+    paths:
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
+      - "requirements.txt"
+      - "rsb/**"
+      - ".github/workflows/docker.yml"
+  workflow_dispatch:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Image bauen
+        run: docker build -t rsb-buchhaltung:ci .
+      - name: Container starten und prüfen
+        run: |
+          mkdir -p daten && sudo chown 1000:1000 daten
+          docker run -d --name rsb -p 127.0.0.1:5000:5000 -e RSB_ERSTES_PASSWORT=ci-passwort-123 \
+            -v "$PWD/daten:/daten" rsb-buchhaltung:ci
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:5000/version && break; sleep 2; done
+          curl -sf http://127.0.0.1:5000/version
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5000/)
+          test "$code" = "302" || { echo "Startseite ohne Anmeldung: $code (erwartet 302)"; exit 1; }
+          docker exec rsb date
+          docker stop rsb
+          docker logs rsb 2>&1 | tail -5
+          docker logs rsb 2>&1 | grep -q "sauber geschlossen"

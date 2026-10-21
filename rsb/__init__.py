@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.30.0"
+VERSION_NUMMER = "0.31.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -36,6 +36,14 @@ def create_app(daten_dir=None, testing=False):
         MAX_CONTENT_LENGTH=60 * 1024 * 1024,  # Fotos vom Handy können groß sein
         TESTING=testing,
     )
+    from . import konfig
+    # Server-Modus (Linux/Docker): Anmeldung immer Pflicht – auch für Zugriffe „von localhost“ (Reverse-Proxy)
+    app.config["SERVER_MODUS"] = konfig.server_modus()
+    if konfig.ja("RSB_SICHERE_COOKIES"):
+        app.config["SESSION_COOKIE_SECURE"] = True
+    if konfig.ja("RSB_HINTER_PROXY"):  # echte Client-Adresse und HTTPS aus X-Forwarded-* übernehmen (ein Proxy)
+        from werkzeug.middleware.proxy_fix import ProxyFix
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     from . import wiederherstellung
     bericht = wiederherstellung.ausfuehren(daten)  # vorgemerkte Wiederherstellung – bevor die Datenbank offen ist
     dbm.initialisieren(app.config["DB_PFAD"])
@@ -90,22 +98,31 @@ def create_app(daten_dir=None, testing=False):
     offen = {"main.login", "main.einrichten", "main.version_info", "static"}
 
     mobil = {"main.mobil", "main.mobil_fotos", "main.mobil_foto_vorschau", "main.mobil_inventur"}  # Handy-Seiten (QR-Code mit Zugangs-Token)
-    lokal = {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+    lokal = set() if app.config["SERVER_MODUS"] else {"127.0.0.1", "::1", "::ffff:127.0.0.1"}
+
+    @app.after_request
+    def sicherheits_header(antwort):
+        antwort.headers.setdefault("X-Content-Type-Options", "nosniff")
+        antwort.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        antwort.headers.setdefault("Referrer-Policy", "same-origin")
+        if app.config.get("SESSION_COOKIE_SECURE"):
+            antwort.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+        return antwort
 
     @app.before_request
     def anmeldung_pruefen():
-        if request.endpoint == "static":
+        if request.endpoint in ("static", "main.version_info"):  # Versionsabfrage: Healthcheck, „läuft schon?“
             return None
         if request.endpoint in mobil:
             csrf_pruefen()  # Zugriff nur mit gültigem Token, das prüft die Seite selbst
             return None
-        if (request.remote_addr or "127.0.0.1") not in lokal and not (
-                dbm.einstellung("login_aktiv") and dbm.einstellung("passwort_hash")):
+        login_an = bool(dbm.einstellung("login_aktiv")) or app.config["SERVER_MODUS"]  # Server: immer Anmeldung
+        if (request.remote_addr or "127.0.0.1") not in lokal and not (login_an and dbm.einstellung("passwort_hash")):
             # Aus dem WLAN ohne Passwortschutz: nur die QR-Code-Seiten
             abort(403, "Zugriff aus dem Netzwerk ist nur mit eingeschaltetem Passwortschutz möglich.")
         if request.endpoint in offen:
             return None
-        if not dbm.einstellung("login_aktiv"):
+        if not login_an:
             # Passwortschutz ausgeschaltet: direkt angemeldet (Programm ist nur am eigenen PC erreichbar)
             session["angemeldet"] = True
             session["benutzer"] = "inhaber"

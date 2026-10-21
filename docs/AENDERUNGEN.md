@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.31.0 | 21.10.2026 | Vorbereitung Server/Cloud: Server-Modus, Docker, Logging, .env |
 | 0.30.0 | 20.10.2026 | Angebote und Auftragsbestätigungen |
 | 0.29.1 | 19.10.2026 | Ratenzahlung auch für bereits ausgestellte Rechnungen |
 | 0.29.0 | 19.10.2026 | Ratenzahlung: Rechnung mit Ratenplan und automatischen Zahlungsaufforderungen |
@@ -56,6 +57,27 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.31.0 – 21.10.2026
+Vorbereitung für den Betrieb auf einem Linux-Server bzw. in der Cloud. Für die Windows-Version ändert sich im
+Alltag nichts.
+
+### Neu
+- **Server-Modus** (`RSB_MODUS=server`): ohne Fenster, Symbol und EXE-Update, erreichbar im Netzwerk, beendet sich
+  bei SIGTERM sauber (Datenbank wird geschlossen). Anmeldung ist dort immer Pflicht; das erste Passwort lässt sich
+  über `RSB_ERSTES_PASSWORT` setzen.
+- **Docker:** `Dockerfile`, `docker-compose.yml`, `.env.beispiel` und die Anleitung `docs/BETRIEB_SERVER.md`
+  (Einrichten, Daten übernehmen, HTTPS mit Caddy, Updates, Sicherung). Der Container läuft ohne Root-Rechte und in
+  deutscher Zeit; GitHub baut und prüft das Image bei jeder Änderung.
+- **Konfiguration über `.env`** (`rsb/konfig.py`) – gesetzte Umgebungsvariablen haben Vorrang.
+- **Protokolldatei** `Daten/logs/rsb.log` (rotierend, 5 × 2 MB) für die Fehlersuche – auch in der Windows-Version.
+- **Hintergrundaufgaben nur einmal:** Laufen versehentlich zwei Instanzen mit demselben Datenordner, ruft nur eine
+  Anfragen ab, rechnet Verträge ab und verschickt Raten-Erinnerungen.
+- **Absicherung:** Sicherheits-Header, sichere Cookies bei HTTPS (`RSB_SICHERE_COOKIES`), echte Client-Adresse
+  hinter einem Reverse-Proxy (`RSB_HINTER_PROXY`).
+- Plan und offene Punkte (Zeitzone, SharePoint, Mehrbenutzer, Datenumzug): `docs/LINUX_PLAN.md`.
 
 ---
 

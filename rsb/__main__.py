@@ -10,8 +10,10 @@ from waitress import serve
 
 from . import VERSION, VERSION_NUMMER, create_app
 from . import db as dbm
-from . import fenster, update
+from . import fenster, konfig, update
 from .backup import auto_backup, backup_erstellen
+from .logbuch import einrichten as log_einrichten
+from .logbuch import log
 
 UPDATE_INTERVALL_STUNDEN = 6
 
@@ -31,9 +33,9 @@ def anfragen_hintergrund(app):
                     if faellig(einst):  # E-Mail-Historie: gleiches Intervall wie der Anfragen-Abruf
                         e, fehler = abgleich_mit_protokoll(con)
                         if e and e["neu"]:
-                            print(f"{datetime.now():%H:%M} E-Mail-Historie: {e['neu']} neue Mail(s) bei Kunden")
+                            log.info(f"{datetime.now():%H:%M} E-Mail-Historie: {e['neu']} neue Mail(s) bei Kunden")
                         if fehler:
-                            print(f"{datetime.now():%H:%M} E-Mail-Historie: {fehler}")
+                            log.info(f"{datetime.now():%H:%M} E-Mail-Historie: {fehler}")
                     if not einst.get("anfragen_aktiv"):
                         continue
                     letzter = einst.get("anfragen_letzter_abruf")
@@ -42,14 +44,14 @@ def anfragen_hintergrund(app):
                         continue
                     ergebnis = abruf_mit_protokoll(con)
                     if ergebnis and ergebnis["neu"]:
-                        print(f"{datetime.now():%H:%M} Neue Anfragen: {ergebnis['neu']} "
+                        log.info(f"{datetime.now():%H:%M} Neue Anfragen: {ergebnis['neu']} "
                               f"(echt {ergebnis['echt']}, unsicher {ergebnis['unsicher']}, Spam {ergebnis['spam']})")
                 finally:
                     con.close()
         except AbrufFehler as e:
-            print(f"{datetime.now():%H:%M} Anfragen-Abruf: {e}")
+            log.info(f"{datetime.now():%H:%M} Anfragen-Abruf: {e}")
         except Exception as e:  # Hintergrund darf nie abstürzen
-            print(f"{datetime.now():%H:%M} Anfragen-Abruf unerwarteter Fehler: {e}")
+            log.info(f"{datetime.now():%H:%M} Anfragen-Abruf unerwarteter Fehler: {e}")
 
 
 def vertraege_hintergrund(app):
@@ -65,14 +67,14 @@ def vertraege_hintergrund(app):
                     with app.app_context():
                         e = abrechnungslauf(con, app.config["DATEN"])
                     if e["rechnungen"]:
-                        print(f"{datetime.now():%H:%M} Verträge abgerechnet: {e['rechnungen']} Rechnung(en), "
+                        log.info(f"{datetime.now():%H:%M} Verträge abgerechnet: {e['rechnungen']} Rechnung(en), "
                               f"{e['versendet']} versendet")
                     for f in e["fehler"]:
-                        print(f"{datetime.now():%H:%M} Vertragsabrechnung: {f}")
+                        log.info(f"{datetime.now():%H:%M} Vertragsabrechnung: {f}")
             finally:
                 con.close()
         except Exception as e:  # Hintergrund darf nie abstürzen
-            print(f"{datetime.now():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
+            log.info(f"{datetime.now():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
         datenschutz_lauf(app)
         raten_lauf(app)
         time.sleep(3600)
@@ -91,13 +93,13 @@ def raten_lauf(app):
                     dbm.einstellungen_speichern({"raten_letzter_lauf": datetime.now().isoformat(timespec="seconds")},
                                                 con=con)
                 if e["gesendet"]:
-                    print(f"{datetime.now():%H:%M} Ratenzahlung: {e['gesendet']} Zahlungsaufforderung(en) gesendet")
+                    log.info(f"{datetime.now():%H:%M} Ratenzahlung: {e['gesendet']} Zahlungsaufforderung(en) gesendet")
                 for f in e["fehler"]:
-                    print(f"{datetime.now():%H:%M} Ratenzahlung: {f}")
+                    log.info(f"{datetime.now():%H:%M} Ratenzahlung: {f}")
         finally:
             con.close()
     except Exception as e:  # Hintergrund darf nie abstürzen
-        print(f"{datetime.now():%H:%M} Ratenzahlung fehlgeschlagen: {e}")
+        log.info(f"{datetime.now():%H:%M} Ratenzahlung fehlgeschlagen: {e}")
 
 
 def datenschutz_lauf(app):
@@ -111,11 +113,11 @@ def datenschutz_lauf(app):
                 with app.app_context(), dbm.Transaktion(con):
                     z = loeschlauf(con, app.config["DATEN"])
                 if any(z.values()):
-                    print(f"{datetime.now():%H:%M} Datenschutz-Löschlauf: {z}")
+                    log.info(f"{datetime.now():%H:%M} Datenschutz-Löschlauf: {z}")
         finally:
             con.close()
     except Exception as e:  # Hintergrund darf nie abstürzen
-        print(f"{datetime.now():%H:%M} Datenschutz-Löschlauf fehlgeschlagen: {e}")
+        log.info(f"{datetime.now():%H:%M} Datenschutz-Löschlauf fehlgeschlagen: {e}")
 
 
 def update_pruefen(app):
@@ -144,21 +146,21 @@ def update_beim_start(app):
         auto = dbm.einstellungen(con).get("update_auto")
     finally:
         con.close()
-    print("Suche nach Updates …")
+    log.info("Suche nach Updates …")
     info = update_pruefen(app)
     if not info or not update.ist_neuer(info["version"], VERSION_NUMMER):
-        print("Programm ist aktuell." if info else "Update-Prüfung nicht möglich (offline?) – es geht trotzdem los.")
+        log.info("Programm ist aktuell." if info else "Update-Prüfung nicht möglich (offline?) – es geht trotzdem los.")
         return
     if not auto:
-        print(f"Neue Version {info['version']} verfügbar (automatische Installation ist ausgeschaltet).")
+        log.info(f"Neue Version {info['version']} verfügbar (automatische Installation ist ausgeschaltet).")
         return
-    print(f"Neue Version {info['version']} gefunden – wird installiert …")
+    log.info(f"Neue Version {info['version']} gefunden – wird installiert …")
     try:
         update.installieren(info, vor_austausch=lambda: _backup_vor_update(app, info["version"]))
     except update.UpdateFehler as e:
-        print(f"Update fehlgeschlagen, es geht mit der bisherigen Version weiter: {e}")
+        log.info(f"Update fehlgeschlagen, es geht mit der bisherigen Version weiter: {e}")
         return
-    print("Update installiert – Programm startet neu …")
+    log.info("Update installiert – Programm startet neu …")
     update.neu_starten(verzoegerung=0.5)
     time.sleep(30)  # neu_starten beendet diesen Prozess
 
@@ -181,10 +183,10 @@ def update_hintergrund(app):
         try:
             info = update_pruefen(app)
             if info and update.ist_neuer(info["version"], VERSION_NUMMER):
-                print(f"{datetime.now():%H:%M} Neue Version {info['version']} verfügbar – "
+                log.info(f"{datetime.now():%H:%M} Neue Version {info['version']} verfügbar – "
                       "wird beim nächsten Start installiert (oder in der Oberfläche auf „Jetzt aktualisieren“).")
         except Exception as e:
-            print(f"{datetime.now():%H:%M} Update-Prüfung fehlgeschlagen: {e}")
+            log.info(f"{datetime.now():%H:%M} Update-Prüfung fehlgeschlagen: {e}")
 
 
 def _beenden(app):
@@ -221,14 +223,65 @@ def im_netz(db_pfad):
         return False
 
 
+def erstes_passwort(app):
+    """Server-Modus: Passwort aus RSB_ERSTES_PASSWORT setzen, solange noch keins eingerichtet ist."""
+    from werkzeug.security import generate_password_hash
+    pw = os.environ.get("RSB_ERSTES_PASSWORT") or ""
+    con = dbm.verbinden(app.config["DB_PFAD"])
+    try:
+        einst = dbm.einstellungen(con)
+        if einst.get("passwort_hash"):
+            if pw:
+                log.warning("RSB_ERSTES_PASSWORT ist noch gesetzt, wird aber nicht mehr gebraucht – bitte entfernen.")
+            if not einst.get("login_aktiv"):
+                with dbm.Transaktion(con):
+                    dbm.einstellungen_speichern({"login_aktiv": True}, con)
+            return
+        if len(pw) < 8:
+            log.warning("Noch kein Passwort eingerichtet. Bitte RSB_ERSTES_PASSWORT (mindestens 8 Zeichen) setzen "
+                        "und neu starten – bis dahin ist kein Zugriff aus dem Netzwerk möglich.")
+            return
+        with dbm.Transaktion(con):
+            dbm.einstellungen_speichern({"passwort_hash": generate_password_hash(pw), "login_aktiv": True}, con)
+            dbm.protokollieren("passwort_eingerichtet", "system", None, {"quelle": "RSB_ERSTES_PASSWORT"}, con=con)
+        log.info("Passwort aus RSB_ERSTES_PASSWORT eingerichtet. Bitte die Variable jetzt aus der .env entfernen.")
+    finally:
+        con.close()
+
+
+def hintergrund_starten(app):
+    """Hintergrundaufgaben nur in einem Prozess je Datenordner (siehe rsb/sperre.py)."""
+    from .sperre import Sperre
+    sperre = Sperre(app.config["DATEN"])
+    if not sperre.erwerben():
+        log.warning("Hintergrundaufgaben laufen bereits in einem anderen Prozess mit diesem Datenordner – "
+                    "hier nur die Oberfläche.")
+        return None
+    threading.Thread(target=anfragen_hintergrund, args=(app,), daemon=True).start()
+    threading.Thread(target=vertraege_hintergrund, args=(app,), daemon=True).start()
+    return sperre
+
+
 def main():
     from .datenort import ermitteln
+    env_datei = konfig.laden()
+    server = konfig.server_modus()
+    if server:  # kein Fenster, kein Symbol, kein EXE-Update
+        for k in ("RSB_KEIN_BROWSER", "RSB_KEIN_SYMBOL", "RSB_KEIN_UPDATE"):
+            os.environ.setdefault(k, "1")
     os.environ["RSB_DATEN"] = str(ermitteln())  # ein fester Datenordner – auch für Neustart nach Update
+    log_datei = log_einrichten(os.environ["RSB_DATEN"])
+    if env_datei:
+        log.info(f"Einstellungen aus {env_datei} übernommen.")
     daten_db = os.path.join(os.environ["RSB_DATEN"], "buchhaltung.db")
-    host = os.environ.get("RSB_HOST") or ("0.0.0.0" if os.path.exists(daten_db) and im_netz(daten_db) else "127.0.0.1")
+    host = os.environ.get("RSB_HOST") or ("0.0.0.0" if server or (os.path.exists(daten_db) and im_netz(daten_db))
+                                          else "127.0.0.1")
     port = int(os.environ.get("RSB_PORT", "5000"))
     adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
 
+    if server and port_belegt(host, port):
+        log.error(f"Port {port} ist bereits belegt – läuft das Programm schon? Abbruch.")
+        sys.exit(1)
     if os.environ.get("RSB_WARTE_AUF_PORT"):
         # Neustart nach Update: warten, bis die alte Version den Port freigegeben hat
         for _ in range(60):
@@ -236,34 +289,52 @@ def main():
                 break
             time.sleep(0.5)
     elif port_belegt(host, port):
-        print("Das Programm läuft bereits – öffne das Fenster.")
+        log.info("Das Programm läuft bereits – öffne das Fenster.")
         fenster.oeffnen(adresse, fenster_modus(daten_db))
         time.sleep(1)
         return
 
-    update.alte_versionen_aufraeumen()
+    if not server:
+        update.alte_versionen_aufraeumen()
     app = create_app()
-    update_beim_start(app)
+    if server:
+        erstes_passwort(app)
+    else:
+        update_beim_start(app)
     app.config["SERVER_HOST"], app.config["SERVER_PORT"] = host, port
     try:
         ziel = auto_backup(app.config["DATEN"], app.config["DB_PFAD"])
         if ziel:
-            print(f"Automatisches Backup erstellt: {ziel}")
+            log.info(f"Automatisches Backup erstellt: {ziel}")
     except Exception as e:  # ein fehlgeschlagenes Backup darf den Start nicht verhindern
-        print(f"WARNUNG: Automatisches Backup fehlgeschlagen: {e}")
-    print("=" * 60)
-    print(f" Reparatur Service Bredin – Buchhaltung, Version {VERSION}")
-    print(f" Läuft unter: {adresse}")
-    print(f" Daten-Ordner: {app.config['DATEN']}")
-    print("=" * 60)
-    threading.Thread(target=anfragen_hintergrund, args=(app,), daemon=True).start()
-    threading.Thread(target=vertraege_hintergrund, args=(app,), daemon=True).start()
+        log.info(f"WARNUNG: Automatisches Backup fehlgeschlagen: {e}")
+    log.info("=" * 60)
+    log.info(f" Reparatur Service Bredin – Buchhaltung, Version {VERSION}")
+    log.info(f" Läuft unter: {adresse}")
+    log.info(f" Daten-Ordner: {app.config['DATEN']}")
+    log.info(f" Protokolldatei: {log_datei}" + (" · Server-Modus" if server else ""))
+    log.info("=" * 60)
+    sperre = hintergrund_starten(app)
     if update.ist_exe() and not os.environ.get("RSB_KEIN_UPDATE"):
         threading.Thread(target=update_hintergrund, args=(app,), daemon=True).start()
 
-    server = threading.Thread(target=serve, args=(app,), kwargs={"host": host, "port": port, "threads": 4},
-                              daemon=True)
-    server.start()
+    if server:
+        import signal
+
+        def stopp(*_):
+            log.info("Beenden angefordert – Datenbank wird sauber geschlossen.")
+            if sperre:
+                sperre.freigeben()
+            _beenden(app)
+        signal.signal(signal.SIGTERM, stopp)
+        signal.signal(signal.SIGINT, stopp)
+        threads = int(os.environ.get("RSB_THREADS") or 8)
+        serve(app, host=host, port=port, threads=threads, ident="RSB")  # blockiert bis SIGTERM
+        return
+
+    server_thread = threading.Thread(target=serve, args=(app,), kwargs={"host": host, "port": port, "threads": 4},
+                                     daemon=True)
+    server_thread.start()
     if not os.environ.get("RSB_KEIN_BROWSER"):
         threading.Timer(1.5, lambda: fenster.oeffnen(adresse, fenster_modus(app.config["DB_PFAD"]))).start()
 
@@ -273,8 +344,8 @@ def main():
             lambda: fenster_modus(app.config["DB_PFAD"]), lambda: _beenden(app)):
         os._exit(0)
     try:
-        while server.is_alive():
-            server.join(1)
+        while server_thread.is_alive():
+            server_thread.join(1)
     except KeyboardInterrupt:
         pass
 

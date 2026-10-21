@@ -9,3 +9,7 @@ dist/
 build/
 version_info.txt
 release_notes.md
+
+# Server-Betrieb
+/.env
+/daten/
