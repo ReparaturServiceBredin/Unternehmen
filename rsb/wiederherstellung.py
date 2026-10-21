@@ -17,6 +17,8 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from .hilfen import jetzt_dt
+
 MARKE = "wiederherstellen.json"
 DATEI_ORDNER = ["dokumente", "belege", "bilder", "fotos", "exporte"]
 ZAEHLEN = [("kunden", "Kunden"), ("auftraege", "Aufträge"), ("artikel", "Artikel"), ("dokumente", "Belege"),
@@ -113,7 +115,7 @@ def vormerken(daten_dir, quelle):
     gueltig = {q["pfad"] for q in quellen(daten_dir)}
     if str(quelle) not in gueltig:
         raise ValueError("Diese Sicherung wurde nicht gefunden.")
-    (Path(daten_dir) / MARKE).write_text(json.dumps({"quelle": str(quelle), "vorgemerkt": datetime.now().isoformat(
+    (Path(daten_dir) / MARKE).write_text(json.dumps({"quelle": str(quelle), "vorgemerkt": jetzt_dt().isoformat(
         timespec="seconds")}, ensure_ascii=False), encoding="utf-8")
 
 
@@ -127,7 +129,7 @@ def vorgemerkt(daten_dir):
 
 def _sichern(daten):
     """Kompletten aktuellen Datenordner sichern (inkl. Schlüssel – bleibt lokal), ohne den Ordner backups."""
-    ziel = daten / "backups" / f"vor_wiederherstellung_{datetime.now():%Y-%m-%d_%H%M%S}.zip"
+    ziel = daten / "backups" / f"vor_wiederherstellung_{jetzt_dt():%Y-%m-%d_%H%M%S}.zip"
     ziel.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(ziel, "w", zipfile.ZIP_DEFLATED) as z:
         for f in daten.rglob("*"):

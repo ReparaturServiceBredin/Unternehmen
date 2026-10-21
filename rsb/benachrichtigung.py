@@ -9,7 +9,7 @@ import re
 from datetime import date, datetime
 
 from . import db as dbm
-from .hilfen import EingabeFehler, anrede_brief, euro, kunde_name
+from .hilfen import EingabeFehler, anrede_brief, euro, heute_datum, kunde_name
 
 ANLAESSE = {
     "angenommen": "Auftrag angenommen",
@@ -235,7 +235,7 @@ def erinnerungen_pruefen(con, heute=None):
     stufen = erinnerung_stufen(einst)
     if not stufen:
         return 0
-    heute = date.fromisoformat(heute) if isinstance(heute, str) else (heute or date.today())
+    heute = date.fromisoformat(heute) if isinstance(heute, str) else (heute or heute_datum())
     anzahl = 0
     for a in con.execute("SELECT id, erledigt_am FROM auftraege WHERE status='erledigt' AND abgeholt_am IS NULL "
                          "AND erledigt_am IS NOT NULL").fetchall():
@@ -254,7 +254,7 @@ def erinnerungen_pruefen(con, heute=None):
 
 
 def nicht_abgeholt(con, heute=None):
-    heute = heute or date.today().isoformat()
+    heute = heute or heute_datum().isoformat()
     return con.execute("SELECT a.*, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp, "
                        "CAST(julianday(?) - julianday(date(a.erledigt_am)) AS INTEGER) AS tage FROM auftraege a "
                        "JOIN kunden k ON k.id=a.kunde_id WHERE a.status='erledigt' AND a.abgeholt_am IS NULL "

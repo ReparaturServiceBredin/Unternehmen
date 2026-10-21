@@ -9,7 +9,7 @@ import re
 from datetime import date, datetime
 
 from . import db as dbm
-from .hilfen import datum_de
+from .hilfen import datum_de, heute_datum
 
 AUFTRAGSARTEN = {"reparatur": "Reparatur", "garantie": "Garantiefall"}
 
@@ -62,7 +62,7 @@ def ende_speichern(con, auftrag_id):
 
 def status(a, einst, heute=None):
     """Freiwillige Garantie eines Auftrags: Beginn = Abholung, Ende wie im Auftrag gespeichert."""
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     m = monate(a, einst)
     beginn = _datum(a["abgeholt_am"])
     if a["auftragsart"] == "garantie":
@@ -108,7 +108,7 @@ def text_fuer_auftrag(con, a, ab=None):
     if a["auftragsart"] == "garantie":
         return "Garantiefall – kostenlose Nachbesserung." + (f" Bezug: Auftrag {bezug_nr(con, a)}."
                                                               if a["garantie_bezug_id"] else "")
-    beginn = ab or _datum(a["abgeholt_am"]) or date.today()
+    beginn = ab or _datum(a["abgeholt_am"]) or heute_datum()
     return garantietext(einst, monate(a, einst), ende_berechnen(a, einst, beginn))
 
 

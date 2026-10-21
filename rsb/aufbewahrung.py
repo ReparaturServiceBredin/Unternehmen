@@ -8,7 +8,7 @@ Belegen selbst (unveränderter Inhalt). Alles, was nicht aufbewahrt werden muss,
 from datetime import date
 
 from . import db as dbm
-from .hilfen import datum_de
+from .hilfen import datum_de, heute_datum
 from .logik import aufbewahren_bis
 
 ANONYM_NAME = "Gelöschter Kunde"
@@ -49,7 +49,7 @@ def pruefen(con, kunde_id, einst=None):
                         "ON k.nachricht_id=n.id WHERE k.kunde_id=? AND n.dokument_id IS NOT NULL", (kunde_id,)).fetchone()
     if mails[0]:
         behalten.append({"was": f"{mails[0]} versandte(r) Beleg(e) per E-Mail (Geschäftsbriefe)",
-                         "bis": _bis((mails[1] or date.today().isoformat())[:4], briefe)})
+                         "bis": _bis((mails[1] or heute_datum().isoformat())[:4], briefe)})
     # Was gelöscht wird
     zaehlen = [
         ("Kontaktformular-Anfragen", "SELECT COUNT(*) FROM anfragen WHERE kunde_id=?"),

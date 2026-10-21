@@ -17,8 +17,9 @@ import os
 import shutil
 import sqlite3
 import sys
-from datetime import datetime
 from pathlib import Path
+
+from .hilfen import jetzt_dt
 
 ORDNER = ["dokumente", "belege", "bilder", "fotos", "exporte", "geheim", "backups"]
 NOTIZ = "UMGEZOGEN – bitte nicht mehr verwenden.txt"
@@ -112,14 +113,14 @@ def ermitteln(suchorte=None, ausgabe=print):
         shutil.rmtree(ziel, ignore_errors=True)
         ausgabe(f"WARNUNG: Übernahme nach {ziel} fehlgeschlagen ({e}) – es bleibt beim bisherigen Ordner {quelle}.")
         return quelle
-    bericht = {"zeitpunkt": datetime.now().isoformat(timespec="seconds"), "von": str(quelle), "nach": str(ziel),
+    bericht = {"zeitpunkt": jetzt_dt().isoformat(timespec="seconds"), "von": str(quelle), "nach": str(ziel),
                "datensaetze": nachher, "dateien": dateien_nachher,
                "weitere_ordner": [str(f.parent) for f in gefunden[1:]]}
     (ziel / "umzug.json").write_text(json.dumps(bericht, ensure_ascii=False, indent=1), encoding="utf-8")
     try:
         (quelle / NOTIZ).write_text(
             "Die Daten der Buchhaltung liegen seit "
-            f"{datetime.now():%d.%m.%Y %H:%M} fest an diesem Ort:\n\n    {ziel}\n\n"
+            f"{jetzt_dt():%d.%m.%Y %H:%M} fest an diesem Ort:\n\n    {ziel}\n\n"
             "Dieser Ordner ist nur noch eine alte Kopie und wird vom Programm nicht mehr benutzt.\n"
             "Er kann gelöscht werden, sobald im Programm alles stimmt.\n", encoding="utf-8")
     except OSError:

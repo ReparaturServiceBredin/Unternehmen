@@ -15,11 +15,11 @@ import hashlib
 import io
 import json
 import zipfile
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 
 from . import db as dbm
-from .hilfen import EingabeFehler
+from .hilfen import EingabeFehler, jetzt_dt
 
 KONTEN = {  # Name: (SKR03, SKR04, Bezeichnung)
     "kasse": ("1000", "1600", "Kasse"),
@@ -191,7 +191,7 @@ def _betrag(cent):
 
 def csv_erzeugen(einst, zeilen, von, bis, jetzt=None):
     """EXTF-Buchungsstapel als Bytes (Windows-1252, Semikolon, wie von DATEV erwartet)."""
-    jetzt = jetzt or datetime.now()
+    jetzt = jetzt or jetzt_dt()
     wj = (einst.get("datev_wj_beginn") or "01-01").split("-")
     wj_beginn = f"{von[:4]}{wj[0].zfill(2)}{wj[1].zfill(2)}" if len(wj) == 2 else f"{von[:4]}0101"
     kopf = ["EXTF", 700, 21, "Buchungsstapel", 13, jetzt.strftime("%Y%m%d%H%M%S") + f"{jetzt.microsecond // 1000:03d}",
@@ -238,7 +238,7 @@ def exportieren(con, von, bis, daten_dir, auch_exportierte=False):
     daten = puffer.getvalue()
     ordner = Path(daten_dir) / "exporte" / "datev"
     ordner.mkdir(parents=True, exist_ok=True)
-    datei = ordner / f"DATEV_{von}_{bis}_{datetime.now().strftime('%Y%m%d%H%M%S')}.zip"
+    datei = ordner / f"DATEV_{von}_{bis}_{jetzt_dt().strftime('%Y%m%d%H%M%S')}.zip"
     datei.write_bytes(daten)
     sha = hashlib.sha256(daten).hexdigest()
     cur = con.execute("INSERT INTO datev_exporte (von, bis, anzahl, summe, datei, sha256, erneut, erstellt_am, benutzer) "

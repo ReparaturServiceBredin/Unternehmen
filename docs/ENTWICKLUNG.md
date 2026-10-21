@@ -41,8 +41,9 @@ Regeln bei jedem Testlauf und vor jeder Veröffentlichung automatisch. Ein Verst
 
 - Zeiten immer ausdrücklich in **Europe/Berlin** (`zoneinfo`), nie in der Zeitzone des Rechners. In Docker wäre das
   UTC.
-  - **Übergang:** Bestehende Stellen mit `datetime.now()`/`date.today()` werden im Arbeitspaket „Zeitzone“ umgestellt.
-    Bis dahin darf ihre Zahl nicht steigen.
+  - Jetzt/heute nur über `hilfen.jetzt_dt()` bzw. `hilfen.heute_datum()`/`hilfen.heute()` (deutsche Zeit, ohne
+    Zeitzonen-Angabe gespeichert). In SQL das Datum als Parameter übergeben statt `date('now')`.
+    `datetime.now()`, `date.today()`, `'localtime'` und `'now'` prüft `tests/test_regeln.py`.
 - Textdateien immer mit `encoding="utf-8"` lesen und schreiben, Ausnahme: ausdrücklich verlangte Formate wie der
   DATEV-Export in cp1252.
 

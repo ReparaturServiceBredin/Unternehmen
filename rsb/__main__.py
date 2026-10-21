@@ -14,6 +14,7 @@ from . import fenster, konfig, update
 from .backup import auto_backup, backup_erstellen
 from .logbuch import einrichten as log_einrichten
 from .logbuch import log
+from .hilfen import jetzt_dt
 
 UPDATE_INTERVALL_STUNDEN = 6
 
@@ -33,25 +34,25 @@ def anfragen_hintergrund(app):
                     if faellig(einst):  # E-Mail-Historie: gleiches Intervall wie der Anfragen-Abruf
                         e, fehler = abgleich_mit_protokoll(con)
                         if e and e["neu"]:
-                            log.info(f"{datetime.now():%H:%M} E-Mail-Historie: {e['neu']} neue Mail(s) bei Kunden")
+                            log.info(f"{jetzt_dt():%H:%M} E-Mail-Historie: {e['neu']} neue Mail(s) bei Kunden")
                         if fehler:
-                            log.info(f"{datetime.now():%H:%M} E-Mail-Historie: {fehler}")
+                            log.info(f"{jetzt_dt():%H:%M} E-Mail-Historie: {fehler}")
                     if not einst.get("anfragen_aktiv"):
                         continue
                     letzter = einst.get("anfragen_letzter_abruf")
                     intervall = max(int(einst.get("anfragen_intervall_min") or 5), 1)
-                    if letzter and datetime.fromisoformat(letzter) > datetime.now() - timedelta(minutes=intervall):
+                    if letzter and datetime.fromisoformat(letzter) > jetzt_dt() - timedelta(minutes=intervall):
                         continue
                     ergebnis = abruf_mit_protokoll(con)
                     if ergebnis and ergebnis["neu"]:
-                        log.info(f"{datetime.now():%H:%M} Neue Anfragen: {ergebnis['neu']} "
+                        log.info(f"{jetzt_dt():%H:%M} Neue Anfragen: {ergebnis['neu']} "
                               f"(echt {ergebnis['echt']}, unsicher {ergebnis['unsicher']}, Spam {ergebnis['spam']})")
                 finally:
                     con.close()
         except AbrufFehler as e:
-            log.info(f"{datetime.now():%H:%M} Anfragen-Abruf: {e}")
+            log.info(f"{jetzt_dt():%H:%M} Anfragen-Abruf: {e}")
         except Exception as e:  # Hintergrund darf nie abstürzen
-            log.info(f"{datetime.now():%H:%M} Anfragen-Abruf unerwarteter Fehler: {e}")
+            log.info(f"{jetzt_dt():%H:%M} Anfragen-Abruf unerwarteter Fehler: {e}")
 
 
 def vertraege_hintergrund(app):
@@ -63,18 +64,18 @@ def vertraege_hintergrund(app):
             con = dbm.verbinden(app.config["DB_PFAD"])
             try:
                 letzter = dbm.einstellungen(con).get("abo_letzter_lauf") or ""
-                if letzter[:10] != datetime.now().date().isoformat():
+                if letzter[:10] != jetzt_dt().date().isoformat():
                     with app.app_context():
                         e = abrechnungslauf(con, app.config["DATEN"])
                     if e["rechnungen"]:
-                        log.info(f"{datetime.now():%H:%M} Verträge abgerechnet: {e['rechnungen']} Rechnung(en), "
+                        log.info(f"{jetzt_dt():%H:%M} Verträge abgerechnet: {e['rechnungen']} Rechnung(en), "
                               f"{e['versendet']} versendet")
                     for f in e["fehler"]:
-                        log.info(f"{datetime.now():%H:%M} Vertragsabrechnung: {f}")
+                        log.info(f"{jetzt_dt():%H:%M} Vertragsabrechnung: {f}")
             finally:
                 con.close()
         except Exception as e:  # Hintergrund darf nie abstürzen
-            log.info(f"{datetime.now():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
+            log.info(f"{jetzt_dt():%H:%M} Vertragsabrechnung fehlgeschlagen: {e}")
         datenschutz_lauf(app)
         raten_lauf(app)
         time.sleep(3600)
@@ -86,20 +87,20 @@ def raten_lauf(app):
     try:
         con = dbm.verbinden(app.config["DB_PFAD"])
         try:
-            if (dbm.einstellungen(con).get("raten_letzter_lauf") or "")[:10] != datetime.now().date().isoformat():
+            if (dbm.einstellungen(con).get("raten_letzter_lauf") or "")[:10] != jetzt_dt().date().isoformat():
                 with app.app_context():
                     e = lauf(con, app.config["DATEN"])
                 with dbm.Transaktion(con):
-                    dbm.einstellungen_speichern({"raten_letzter_lauf": datetime.now().isoformat(timespec="seconds")},
+                    dbm.einstellungen_speichern({"raten_letzter_lauf": jetzt_dt().isoformat(timespec="seconds")},
                                                 con=con)
                 if e["gesendet"]:
-                    log.info(f"{datetime.now():%H:%M} Ratenzahlung: {e['gesendet']} Zahlungsaufforderung(en) gesendet")
+                    log.info(f"{jetzt_dt():%H:%M} Ratenzahlung: {e['gesendet']} Zahlungsaufforderung(en) gesendet")
                 for f in e["fehler"]:
-                    log.info(f"{datetime.now():%H:%M} Ratenzahlung: {f}")
+                    log.info(f"{jetzt_dt():%H:%M} Ratenzahlung: {f}")
         finally:
             con.close()
     except Exception as e:  # Hintergrund darf nie abstürzen
-        log.info(f"{datetime.now():%H:%M} Ratenzahlung fehlgeschlagen: {e}")
+        log.info(f"{jetzt_dt():%H:%M} Ratenzahlung fehlgeschlagen: {e}")
 
 
 def datenschutz_lauf(app):
@@ -109,15 +110,15 @@ def datenschutz_lauf(app):
         con = dbm.verbinden(app.config["DB_PFAD"])
         try:
             einst = dbm.einstellungen(con)
-            if einst.get("ds_auto") and (einst.get("ds_letzter_lauf") or "")[:10] != datetime.now().date().isoformat():
+            if einst.get("ds_auto") and (einst.get("ds_letzter_lauf") or "")[:10] != jetzt_dt().date().isoformat():
                 with app.app_context(), dbm.Transaktion(con):
                     z = loeschlauf(con, app.config["DATEN"])
                 if any(z.values()):
-                    log.info(f"{datetime.now():%H:%M} Datenschutz-Löschlauf: {z}")
+                    log.info(f"{jetzt_dt():%H:%M} Datenschutz-Löschlauf: {z}")
         finally:
             con.close()
     except Exception as e:  # Hintergrund darf nie abstürzen
-        log.info(f"{datetime.now():%H:%M} Datenschutz-Löschlauf fehlgeschlagen: {e}")
+        log.info(f"{jetzt_dt():%H:%M} Datenschutz-Löschlauf fehlgeschlagen: {e}")
 
 
 def update_pruefen(app):
@@ -183,10 +184,10 @@ def update_hintergrund(app):
         try:
             info = update_pruefen(app)
             if info and update.ist_neuer(info["version"], VERSION_NUMMER):
-                log.info(f"{datetime.now():%H:%M} Neue Version {info['version']} verfügbar – "
+                log.info(f"{jetzt_dt():%H:%M} Neue Version {info['version']} verfügbar – "
                       "wird beim nächsten Start installiert (oder in der Oberfläche auf „Jetzt aktualisieren“).")
         except Exception as e:
-            log.info(f"{datetime.now():%H:%M} Update-Prüfung fehlgeschlagen: {e}")
+            log.info(f"{jetzt_dt():%H:%M} Update-Prüfung fehlgeschlagen: {e}")
 
 
 def _beenden(app):

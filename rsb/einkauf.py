@@ -12,7 +12,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from . import db as dbm
-from .hilfen import EingabeFehler, euro, menge_text
+from .hilfen import EingabeFehler, euro, heute_datum, menge_text
 
 BESTELL_STATUS = {"entwurf": "Entwurf", "bestellt": "bestellt", "teilweise": "teilweise geliefert",
                   "geliefert": "geliefert", "storniert": "storniert"}
@@ -125,7 +125,7 @@ def guenstigste_quelle(con, artikel_id):
 
 def _nummer(con, einst, praefix_schluessel, standard):
     from .logik import naechste_nummer
-    return naechste_nummer(con, einst.get(praefix_schluessel) or standard, date.today().year, einst["nummern_format"])
+    return naechste_nummer(con, einst.get(praefix_schluessel) or standard, heute_datum().year, einst["nummern_format"])
 
 
 def bestellung_anlegen(con, lieferant_id, positionen, notiz="", auftrag_id=None):
@@ -137,7 +137,7 @@ def bestellung_anlegen(con, lieferant_id, positionen, notiz="", auftrag_id=None)
         raise EingabeFehler("Die Bestellung hat keine Positionen.")
     einst = dbm.einstellungen(con)
     nummer = _nummer(con, einst, "praefix_bestellung", "BE")
-    erwartet = (date.today() + timedelta(days=l["lieferzeit_tage"])).isoformat() if l["lieferzeit_tage"] else None
+    erwartet = (heute_datum() + timedelta(days=l["lieferzeit_tage"])).isoformat() if l["lieferzeit_tage"] else None
     cur = con.execute("INSERT INTO bestellungen (nummer, lieferant_id, status, erwartet_am, notiz, erstellt_am, benutzer) "
                       "VALUES (?,?,'entwurf',?,?,?,?)", (nummer, lieferant_id, erwartet, notiz or None,
                                                          dbm.jetzt_berlin(), dbm.aktueller_benutzer()))
@@ -260,7 +260,7 @@ def wareneingang(con, bid, mengen, eks=None, lieferschein="", auftrag_fortsetzen
                 warnungen.append(w)
         q = con.execute("SELECT garantie_monate FROM artikel_lieferanten WHERE artikel_id=? AND lieferant_id=?",
                         (p["artikel_id"], b["lieferant_id"])).fetchone() if p["artikel_id"] else None
-        garantie_bis = plus_monate(date.today(), q["garantie_monate"]).isoformat() \
+        garantie_bis = plus_monate(heute_datum(), q["garantie_monate"]).isoformat() \
             if q and q["garantie_monate"] else None
         con.execute("INSERT INTO wareneingaenge (bestellung_id, position_id, artikel_id, lieferant_id, menge, ek, "
                     "lieferschein, garantie_bis, bewegung_id, zeitpunkt, benutzer) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -335,7 +335,7 @@ def bestellung_pdf(con, bid, daten_dir):
                                   " ".join(x for x in [l["plz"], l["ort"]] if x)] if x)
     inhalt = [Paragraph(absender, ParagraphStyle("k", parent=st, fontSize=7.5)), Spacer(1, 3 * mm), Paragraph(an, st),
               Spacer(1, 10 * mm), Paragraph(f"Bestellung {b['nummer']}", st_t),
-              Paragraph(f"Datum: {date.today().strftime('%d.%m.%Y')}"
+              Paragraph(f"Datum: {heute_datum().strftime('%d.%m.%Y')}"
                         + (f" · Unsere Kundennummer bei Ihnen: {l['kundennr_bei']}" if l["kundennr_bei"] else ""), st),
               Spacer(1, 6 * mm), Paragraph("Wir bestellen hiermit:", st), Spacer(1, 3 * mm)]
     zeilen = [[Paragraph(x, st_f) for x in ["Pos.", "Ihre Art.-Nr.", "Bezeichnung", "Menge", "EK netto", "Summe"]]]
@@ -607,7 +607,7 @@ def bank_zuordnen(con, umsatz_id, eid):
     u = con.execute("SELECT * FROM bank_umsaetze WHERE id=?", (umsatz_id,)).fetchone()
     if not u or u["status"] != "offen" or u["betrag"] >= 0:
         raise EingabeFehler("Der Umsatz ist bereits bearbeitet oder kein Ausgang.")
-    zid = er_zahlung(con, eid, min(u["buchungstag"], date.today().isoformat()), -u["betrag"], "ueberweisung",
+    zid = er_zahlung(con, eid, min(u["buchungstag"], heute_datum().isoformat()), -u["betrag"], "ueberweisung",
                      f"Bank: {u['name'] or ''} – {(u['verwendungszweck'] or '')[:120]}".strip(), bank_umsatz_id=umsatz_id)
     con.execute("UPDATE bank_umsaetze SET status='zugeordnet', er_zahlung_id=?, bearbeitet_am=?, bearbeitet_von=? "
                 "WHERE id=?", (zid, dbm.jetzt_berlin(), dbm.aktueller_benutzer(), umsatz_id))

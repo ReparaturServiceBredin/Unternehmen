@@ -20,6 +20,7 @@ from datetime import datetime, timedelta
 from email.utils import getaddresses, parsedate_to_datetime
 
 from . import db as dbm
+from .hilfen import jetzt_dt
 
 KOPF_FELDER = "FROM TO CC REPLY-TO DATE MESSAGE-ID SUBJECT"
 STAPEL = 200            # UIDs je FETCH der Kopfzeilen
@@ -224,7 +225,7 @@ def imap_datum(d):
 
 def _seit(einst):
     tage = int(einst.get("historie_zeitraum_tage") or 0)
-    return imap_datum(datetime.now() - timedelta(days=tage)) if tage > 0 else None
+    return imap_datum(jetzt_dt() - timedelta(days=tage)) if tage > 0 else None
 
 
 def _verarbeiten(con, imap, ordner, uids, gesendet_ordner, adressbuch, eigen, ergebnis):
@@ -420,7 +421,7 @@ def faellig(einst):
         return False
     letzter = einst.get("historie_letzter_abruf")
     intervall = max(int(einst.get("anfragen_intervall_min") or 5), 1)
-    return not letzter or datetime.fromisoformat(letzter) <= datetime.now() - timedelta(minutes=intervall)
+    return not letzter or datetime.fromisoformat(letzter) <= jetzt_dt() - timedelta(minutes=intervall)
 
 
 def zuruecksetzen(con):

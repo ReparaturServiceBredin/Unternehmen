@@ -7,8 +7,8 @@ from pathlib import Path
 WURZEL = Path(__file__).resolve().parent.parent
 QUELLEN = sorted((WURZEL / "rsb").glob("*.py")) + [WURZEL / "start_exe.py"]
 WINDOWS_ERLAUBT = {"fenster.py", "update.py"}
-# Übergang bis zum Arbeitspaket „Zeitzone“: diese Zahl darf nur sinken, nie steigen.
-ZEITZONE_HOECHSTENS = 97
+# Zeit immer über hilfen.jetzt_dt()/heute_datum() (Europe/Berlin), nie über die Zeitzone des Rechners.
+ZEITZONE_HOECHSTENS = 0
 
 
 def _baum(datei):
@@ -85,8 +85,8 @@ def test_kein_debug_server():
 
 
 def test_zeitzone_nicht_mehr_stellen_als_bisher():
-    anzahl = sum(len(re.findall(r"datetime\.now\(\)|date\.today\(\)|'localtime'", f.read_text(encoding="utf-8")))
-                 for f in QUELLEN)
+    anzahl = sum(len(re.findall(r"datetime\.now\(\)|date\.today\(\)|'localtime'|'now'", f.read_text(encoding="utf-8")))
+                 for f in QUELLEN if f.name != "hilfen.py")  # dort nur der Rückfall ohne Zeitzonendaten
     assert anzahl <= ZEITZONE_HOECHSTENS, (
         f"{anzahl} Stellen mit Rechner-Zeitzone (höchstens {ZEITZONE_HOECHSTENS}) – bitte Europe/Berlin verwenden")
 

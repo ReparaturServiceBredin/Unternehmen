@@ -4,10 +4,9 @@ Die Inhalte beschreiben, wie das Programm Belege erstellt, festschreibt, archivi
 Angaben, die nur der Inhaber kennt, sind als „[bitte ergänzen]“ markiert.
 """
 import io
-from datetime import datetime
 
 from . import db as dbm
-from .hilfen import datum_de
+from .hilfen import datum_de, jetzt_dt
 
 ERGAENZEN = "[bitte ergänzen]"
 
@@ -45,7 +44,7 @@ def inhalt(con, daten_dir, version):
                 or [["noch keine Nummer vergeben", "", e.get("nummern_format") or "", ""]])),
             f"Festgeschriebene Belege bisher: Rechnungen {anzahl.get('rechnung', 0)}, Stornorechnungen "
             f"{anzahl.get('storno', 0)}, Gutschriften {anzahl.get('gutschrift', 0)}, Kostenvoranschläge "
-            f"{anzahl.get('kva', 0)} (Stand {datetime.now():%d.%m.%Y}).",
+            f"{anzahl.get('kva', 0)} (Stand {jetzt_dt():%d.%m.%Y}).",
         ]),
         ("3. Belegfluss: Erstellen, Festschreiben, Versenden", [
             ("liste", [
@@ -126,7 +125,7 @@ def inhalt(con, daten_dir, version):
                 "Sicherungen regelmäßig auf Vollständigkeit prüfen. " + ERGAENZEN,
                 "Wöchentlich Kontoauszug einlesen und Zahlungen zuordnen, Mahnvorschläge prüfen. " + ERGAENZEN,
             ]),
-            f"Stand dieser Dokumentation: {datum_de(datetime.now().date().isoformat())}, erzeugt vom Programm. Bitte "
+            f"Stand dieser Dokumentation: {datum_de(jetzt_dt().date().isoformat())}, erzeugt vom Programm. Bitte "
             "ausdrucken, ergänzen, unterschreiben und bei jeder wesentlichen Änderung neu erzeugen.",
         ]),
     ]

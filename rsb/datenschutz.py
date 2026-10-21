@@ -12,7 +12,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import db as dbm
-from .hilfen import EingabeFehler, datum_de, kunde_name
+from .hilfen import EingabeFehler, datum_de, heute_datum, kunde_name
 
 FRISTEN = {  # Einstellung: (Standard, Text)
     "interessent_loeschen_monate": (6, "Interessenten ohne Auftrag: Monate nach Anlage bzw. letztem Kontakt"),
@@ -122,7 +122,7 @@ def kandidaten(con, heute=None, tage=None):
     """
     from .garantie import plus_monate
     from .leihgeraete import ist_intern
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     einst = dbm.einstellungen(con)
     tage = int(einst.get("ds_vorschau_tage") or 30) if tage is None else tage
     grenze = heute + timedelta(days=tage)
@@ -329,7 +329,7 @@ def loeschlauf(con, daten_dir, heute=None):
     Muss in einer Transaktion laufen. Gibt eine Zusammenfassung zurück.
     """
     from .annahme import zugang_loeschen
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     erg = kandidaten(con, heute, tage=0)
     z = {"interessenten": 0, "kunden_geloescht": 0, "kunden_anonymisiert": 0, "auftraege": 0, "leihen": 0,
          "zugaenge": 0, "emails": 0}
@@ -436,7 +436,7 @@ def auskunft_pdf(con, d):
                                              "belege", "fotos", "emails", "benachrichtigungen")}
     abschnitte = [
         ("Ihre Anfrage nach Art. 15 DSGVO", [
-            f"Auskunft für {kunde_name(k)} (Kunden-Nr. {k['kundennr']}), erstellt am {date.today().strftime('%d.%m.%Y')}.",
+            f"Auskunft für {kunde_name(k)} (Kunden-Nr. {k['kundennr']}), erstellt am {heute_datum().strftime('%d.%m.%Y')}.",
             f"Verantwortlicher: {einst.get('firma_name') or ''}, {einst.get('inhaber') or ''}, "
             f"{einst.get('strasse') or ''}, {einst.get('plz') or ''} {einst.get('ort') or ''}, "
             f"{einst.get('email') or ''}.",
@@ -535,7 +535,7 @@ def verzeichnis(con):
     abschnitte = [
         ("1. Verantwortlicher", [verantwortlich, f"Datenschutzbeauftragter: nicht benannt (unter 20 Personen ständig mit "
                                                  f"Datenverarbeitung beschäftigt, § 38 BDSG) – {ERGAENZEN} prüfen.",
-                                 f"Stand: {date.today().strftime('%d.%m.%Y')}. Dieses Verzeichnis wurde aus den "
+                                 f"Stand: {heute_datum().strftime('%d.%m.%Y')}. Dieses Verzeichnis wurde aus den "
                                  "tatsächlich im Programm gespeicherten Daten erzeugt und ist eine Vorlage."]),
         taetigkeit("2. Kunden- und Auftragsverwaltung (Reparaturen)", "Annahme, Durchführung und Abrechnung von Reparaturen",
                    "Art. 6 Abs. 1 lit. b DSGVO", "Kunden (Privat- und Firmenkunden)",

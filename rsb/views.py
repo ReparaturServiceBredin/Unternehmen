@@ -120,7 +120,7 @@ def _umzug_hinweis(con):
 @bp.route("/")
 def start():
     con = dbm.get_db()
-    jahr = date.today().year
+    jahr = heute_datum().year
     _umzug_hinweis(con)
 
     def umsatz(j):
@@ -137,8 +137,8 @@ def start():
         "ueberfaellig": len(_zlg().offene_posten(con, nur_ueberfaellig=True)),
     }
     zahlen["auftraege"] = {r[0]: r[1] for r in con.execute(
-        "SELECT status, COUNT(*) FROM auftraege WHERE status<>'erledigt' OR erledigt_am >= date('now','-30 day') "
-        "GROUP BY status")}
+        "SELECT status, COUNT(*) FROM auftraege WHERE status<>'erledigt' OR erledigt_am >= date(?, '-30 day') "
+        "GROUP BY status", (heute_datum().isoformat(),))}
     from . import vertraege as _v
     _vs = con.execute("SELECT * FROM vertraege").fetchall()
     _einst = dbm.einstellungen(con)
@@ -268,7 +268,7 @@ def kunde(kid=None):
     return render_template("kunde.html", k=k, dokumente=dokumente, anfragen=kunden_anfragen,
                            aenderungen=dbm.aenderungen_liste(con, "kunde", kid) if kid else [],
                            auftraege=kunden_auftraege, vertraege=kunden_vertraege, abrechnung=vtr.ABRECHNUNG,
-                           leihen=kunden_leihen, heute=date.today().isoformat(),
+                           leihen=kunden_leihen, heute=heute_datum().isoformat(),
                            emails=_kunden_emails(con, kid, request.args.get("mails") == "alle"),
                            offene=_zlg().offene_posten(con, kunde_id=kid) if kid else [],
                            zahlungen=con.execute(
@@ -355,7 +355,7 @@ def kunde_auskunft(kid):
         dbm.protokollieren("datenschutz_auskunft", "kunde", kid, {"kundennr": k["kundennr"]}, con=con)
         dbm.ereignis_erfassen(con, "kunde", kid, "Auskunft nach Art. 15 DSGVO erstellt", None)
     return send_file(io.BytesIO(daten), mimetype="application/zip", as_attachment=True,
-                     download_name=f"Auskunft_{k['kundennr']}_{date.today().isoformat()}.zip")
+                     download_name=f"Auskunft_{k['kundennr']}_{heute_datum().isoformat()}.zip")
 
 
 @bp.route("/datenschutz", methods=["GET", "POST"])
@@ -369,7 +369,7 @@ def datenschutz():
               if any(z.values()) else "Löschlauf ausgeführt – nichts war fällig.", "ok")
         return redirect(url_for("main.datenschutz") + "#protokolle")
     return render_template("datenschutz.html", k=ds.kandidaten(con), protokolle=ds.protokolle(con),
-                           zurueck=ds.zurueckstellungen(con), arten=ds.ARTEN, heute=date.today(),
+                           zurueck=ds.zurueckstellungen(con), arten=ds.ARTEN, heute=heute_datum(),
                            fristen=ds.FRISTEN, gewaehlt=request.args.get("protokoll", type=int), json=json)
 
 
@@ -411,7 +411,7 @@ def datenschutz_verzeichnis():
     if request.args.get("pdf"):
         return send_file(io.BytesIO(vd.pdf(abschnitte, dbm.einstellung("firma_name") or "",
                                            titel="Verzeichnis der Verarbeitungstätigkeiten (Art. 30 DSGVO)")),
-                         mimetype="application/pdf", download_name=f"VVT_{date.today().isoformat()}.pdf")
+                         mimetype="application/pdf", download_name=f"VVT_{heute_datum().isoformat()}.pdf")
     return render_template("vvt.html", abschnitte=abschnitte, ergaenzen=vd.ERGAENZEN, markiert=vd.markiert)
 
 
@@ -530,7 +530,7 @@ def lager():
     con = dbm.get_db()
     ansicht = request.args.get("ansicht", "bestand")
     q = request.args.get("q", "").strip()
-    stichtag = request.args.get("stichtag") or date.today().isoformat()
+    stichtag = request.args.get("stichtag") or heute_datum().isoformat()
     daten = {}
     if ansicht == "wert":
         try:
@@ -545,7 +545,7 @@ def lager():
     else:
         daten["zeilen"] = lgr.uebersicht(con, q, nur_unter_min=ansicht == "mindest")
     return render_template("lager.html", ansicht=ansicht, q=q, stichtag=stichtag, arten=lgr.ARTEN,
-                           unter_min=lgr.unter_mindestbestand_anzahl(con), heute=date.today().isoformat(), **daten)
+                           unter_min=lgr.unter_mindestbestand_anzahl(con), heute=heute_datum().isoformat(), **daten)
 
 
 @bp.route("/lager/<int:artikel_id>/buchen", methods=["POST"])
@@ -576,16 +576,16 @@ def lager_bestellvorschlag():
                         menge_text(z["verfuegbar"]), menge_text(a["mindestbestand"]), z["menge"], a["einheit"] or "",
                         euro(a["teilekosten"] or 0, False), euro(z["summe"], False)])
         return send_file(io.BytesIO(puffer.getvalue().encode("utf-8-sig")), mimetype="text/csv",
-                         download_name=f"Bestellvorschlag_{date.today().isoformat()}.csv", as_attachment=True)
+                         download_name=f"Bestellvorschlag_{heute_datum().isoformat()}.csv", as_attachment=True)
     return render_template("lager_bestellvorschlag.html", vorschlag=vorschlag,
-                           summe=sum(z["summe"] for z in vorschlag), heute=date.today().isoformat())
+                           summe=sum(z["summe"] for z in vorschlag), heute=heute_datum().isoformat())
 
 
 @bp.route("/lager/inventur/neu", methods=["POST"])
 def inventur_neu():
     con = dbm.get_db()
     with dbm.Transaktion(con):
-        iid = lgr.inventur_anlegen(con, _f("stichtag") or date.today().isoformat(), _f("bezeichnung"))
+        iid = lgr.inventur_anlegen(con, _f("stichtag") or heute_datum().isoformat(), _f("bezeichnung"))
     flash("Inventur angelegt. Jetzt zählen – am PC, ausgedruckt oder per Handy.", "ok")
     return redirect(url_for("main.inventur", iid=iid))
 
@@ -914,7 +914,7 @@ def eingangsrechnungen():
     status = request.args.get("status", "offen")
     q = request.args.get("q", "").strip()
     return render_template("eingangsrechnungen.html", liste=ek.eingangsrechnungen(con, status, q), status=status, q=q,
-                           summe_offen=ek.summe_offen(con), status_namen=ek.ER_STATUS, heute=date.today().isoformat())
+                           summe_offen=ek.summe_offen(con), status_namen=ek.ER_STATUS, heute=heute_datum().isoformat())
 
 
 @bp.route("/eingangsrechnungen/neu", methods=["GET", "POST"])
@@ -948,7 +948,7 @@ def eingangsrechnung_neu():
         werte.update(lieferant_id=b["lieferant_id"], bestellung_id=b["id"], kostenart=(_kostenarten() or [""])[0])
     return render_template("eingangsrechnung.html", e=None, vorlage=vorlage, werte=werte,
                            lieferanten=ek.lieferanten(con), kostenarten=_kostenarten(),
-                           bestellungen=ek.bestellungen(con), heute=date.today().isoformat())
+                           bestellungen=ek.bestellungen(con), heute=heute_datum().isoformat())
 
 
 def _er_vorlage(con, daten, name, quelle, message_id=None, werte=None):
@@ -1022,7 +1022,7 @@ def eingangsrechnung(eid):
                            kostenarten=_kostenarten(), bestellungen=ek.bestellungen(con),
                            zahlungen=con.execute("SELECT * FROM er_zahlungen WHERE eingangsrechnung_id=? ORDER BY datum, id",
                                                  (eid,)).fetchall(), zahlarten=ek.ZAHLARTEN,
-                           aenderungen=dbm.aenderungen_liste(con, "eingangsrechnung", eid), heute=date.today().isoformat())
+                           aenderungen=dbm.aenderungen_liste(con, "eingangsrechnung", eid), heute=heute_datum().isoformat())
 
 
 @bp.route("/eingangsrechnungen/datei/<sha>")
@@ -1089,7 +1089,7 @@ from . import kasse as kas  # noqa: E402
 @bp.route("/kasse")
 def kassenbuch():
     con = dbm.get_db()
-    heute_iso = date.today().isoformat()
+    heute_iso = heute_datum().isoformat()
     von = request.args.get("von") or heute_iso[:8] + "01"
     bis = request.args.get("bis") or heute_iso
     zeilen = kas.buchungen(con, von, bis)
@@ -1136,7 +1136,7 @@ def kasse_buchen():
         else:
             session["kasse_offen"] = {**session["kasse_offen"], "tag": e.tag, "fehlbetrag": e.fehlbetrag}
         flash(str(e), "fehler")
-        return redirect(url_for("main.kassenbuch", von=min(e.tag, date.today().isoformat()[:8] + "01")) + "#fehlbetrag")
+        return redirect(url_for("main.kassenbuch", von=min(e.tag, heute_datum().isoformat()[:8] + "01")) + "#fehlbetrag")
     if not nachholen:
         session.pop("kasse_offen", None)
         flash("Kassenbuchung gespeichert.", "ok")
@@ -1148,14 +1148,14 @@ def kasse_buchen():
     except kas.KassenFehlbetrag as e:
         session["kasse_offen"] = {"buchung": offen, "tag": e.tag, "fehlbetrag": e.fehlbetrag}
         flash("Die ursprüngliche Buchung ist noch nicht möglich: " + str(e), "fehler")
-        return redirect(url_for("main.kassenbuch", von=min(e.tag, date.today().isoformat()[:8] + "01")) + "#fehlbetrag")
+        return redirect(url_for("main.kassenbuch", von=min(e.tag, heute_datum().isoformat()[:8] + "01")) + "#fehlbetrag")
     except EingabeFehler as e:
         session.pop("kasse_offen", None)
         flash(f"Die ursprüngliche Buchung konnte nicht nachgeholt werden: {e}", "fehler")
         return redirect(url_for("main.kassenbuch"))
     session.pop("kasse_offen", None)
     flash(f"Ursprüngliche Buchung „{offen['text']}“ ({euro(offen['betrag'])}) wurde automatisch nachgeholt.", "ok")
-    return redirect(url_for("main.kassenbuch", von=min(offen["datum"], date.today().isoformat()[:8] + "01")))
+    return redirect(url_for("main.kassenbuch", von=min(offen["datum"], heute_datum().isoformat()[:8] + "01")))
 
 
 @bp.route("/kasse/vormerkung-verwerfen", methods=["POST"])
@@ -1207,7 +1207,7 @@ def kasse_beleg(bid):
 @bp.route("/datev", methods=["GET", "POST"])
 def datev():
     con = dbm.get_db()
-    heute_d = date.today()
+    heute_d = heute_datum()
     erster = heute_d.replace(day=1)
     vormonat_ende = erster.fromordinal(erster.toordinal() - 1)
     von = request.values.get("von") or vormonat_ende.replace(day=1).isoformat()
@@ -1891,7 +1891,7 @@ def logo_hochladen():
         bild.load()
     except Exception:
         raise EingabeFehler("Die Datei konnte nicht als Bild gelesen werden (erlaubt: PNG, JPG).")
-    rel = Path("bilder") / f"logo_{date.today():%Y%m%d}_{abs(hash(datei.filename)) % 10000}.png"
+    rel = Path("bilder") / f"logo_{heute_datum():%Y%m%d}_{abs(hash(datei.filename)) % 10000}.png"
     bild.convert("RGBA").save(Path(daten_dir()) / rel)
     with dbm.Transaktion(con):
         dbm.einstellungen_speichern({"logo_datei": rel.as_posix()}, con)
@@ -2103,7 +2103,7 @@ def verfahrensdokumentation():
     if request.args.get("pdf"):
         from io import BytesIO
         return send_file(BytesIO(vd.pdf(abschnitte, dbm.einstellung("firma_name") or "")), mimetype="application/pdf",
-                         download_name=f"Verfahrensdokumentation_{date.today().isoformat()}.pdf",
+                         download_name=f"Verfahrensdokumentation_{heute_datum().isoformat()}.pdf",
                          as_attachment=request.args.get("download") == "1")
     return render_template("verfahrensdoku.html", abschnitte=abschnitte, ergaenzen=vd.ERGAENZEN, markiert=vd.markiert)
 
@@ -2321,13 +2321,14 @@ def auftraege():
         if status == "wartet_teil":
             sql += "AND a.wartet_teil_seit IS NOT NULL "
         if status == "erledigt" and not alle_erledigten:
-            sql += "AND a.erledigt_am >= date('now', '-30 day') "
+            sql += "AND a.erledigt_am >= date(?, '-30 day') "
+            args.append(heute_datum().isoformat())
         sql += "ORDER BY a.reihenfolge, a.id"
         spalten[status] = con.execute(sql, args).fetchall()
     with dbm.Transaktion(con):
         ben.erinnerungen_pruefen(con)
     return render_template("auftraege.html", spalten=spalten, status_namen=auf.TAFEL, leihe_offen_text=LEIHE_OFFEN_TEXT,
-                           alle_erledigten=alle_erledigten, heute=date.today().isoformat(),
+                           alle_erledigten=alle_erledigten, heute=heute_datum().isoformat(),
                            benachrichtigungen=ben.offene(con), anlaesse=ben.ANLAESSE)
 
 
@@ -2579,7 +2580,7 @@ def auftrag(aid):
                            verlauf=auf.verlauf_liste(con, aid), kva_status_namen=auf.KVA_STATUS,
                            kein_kva_text=KEIN_KVA_TEXT, leihe_offen_text=LEIHE_OFFEN_TEXT,
                            leihen=_leihen_zum_auftrag(con, aid), alle_kategorien=fot.ALLE_KATEGORIEN,
-                           heute=date.today().isoformat(), belege=ann.belege(con, aid), belegarten=ann.ARTEN,
+                           heute=heute_datum().isoformat(), belege=ann.belege(con, aid), belegarten=ann.ARTEN,
                            geaendert_seit_unterschrift=ann.geaendert_seit_unterschrift(con, aid),
                            zugang_text=ann.zugang_text(a))
 
@@ -3470,7 +3471,7 @@ def leihgeraete():
     geraete = con.execute(sql + "ORDER BY g.bezeichnung", args).fetchall()
     zahlen = {r[0]: r[1] for r in con.execute("SELECT status, COUNT(*) FROM leihgeraete GROUP BY status")}
     return render_template("leihgeraete.html", geraete=geraete, status=status, suche=suche, status_namen=lg.STATUS,
-                           zahlen=zahlen, heute=date.today().isoformat(), gebuehr=lg.gebuehr_beschreibung)
+                           zahlen=zahlen, heute=heute_datum().isoformat(), gebuehr=lg.gebuehr_beschreibung)
 
 
 @bp.route("/leihgeraete/neu", methods=["GET", "POST"])
@@ -3495,7 +3496,7 @@ def leihgeraet(gid=None):
     return render_template("leihgeraet.html", g=g, status_namen=lg.STATUS, gebuehr_arten=lg.GEBUEHR_ARTEN,
                            zubehoer=lg.liste_aus_json(g["zubehoer"]) if g else [], leihen=leihen_liste, aktiv=aktiv,
                            verlauf=verlauf, schaeden=alle_schaeden, kostenarten=lg.KOSTENARTEN,
-                           fotos=fot.liste(con, leihgeraet_id=gid) if g else [], heute=date.today().isoformat(),
+                           fotos=fot.liste(con, leihgeraet_id=gid) if g else [], heute=heute_datum().isoformat(),
                            gebuehr=lg.gebuehr_beschreibung)
 
 

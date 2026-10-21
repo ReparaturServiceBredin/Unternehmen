@@ -16,7 +16,7 @@ from datetime import date, timedelta
 
 from . import db as dbm
 from . import logik
-from .hilfen import EingabeFehler, datum_de
+from .hilfen import EingabeFehler, datum_de, heute_datum
 
 ABRECHNUNG = {
     "keine": ("nur Dokumentation (keine Rechnung)", 0),
@@ -51,7 +51,7 @@ def laufzeit_ende(beginn: date, monate):
 
 def fruehestes_kuendigungsdatum(v, heute=None):
     """Vorschlag: Ende der laufenden Abrechnungsperiode, frühestens Ende der Mindestlaufzeit."""
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     beginn = _d(v["beginn"])
     kandidaten = [heute]
     if v["mindestlaufzeit_monate"]:
@@ -69,7 +69,7 @@ def fruehestes_kuendigungsdatum(v, heute=None):
 
 def zustand(v, heute=None, erinnerung_tage=60):
     """Lesbarer Zustand: aktiv / gekündigt / beendet / läuft bald ab."""
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     ende = _d(v["ende"])
     if v["status"] == "gekuendigt":
         zum = _d(v["kuendigung_zum"])
@@ -94,7 +94,7 @@ def monatswert(v):
 
 def faellige_zeitraeume(con, v, heute=None):
     """Alle bis heute fälligen, noch nicht abgerechneten Zeiträume eines Vertrags."""
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     n = intervall_monate(v)
     if v["abrechnung"] == "keine" or not n:
         return []
@@ -126,7 +126,7 @@ def abrechnen(con, heute=None):
 
     Gibt eine Liste der erstellten Dokument-IDs zurück. Muss außerhalb einer Transaktion aufgerufen werden.
     """
-    heute = heute or date.today()
+    heute = heute or heute_datum()
     einst = dbm.einstellungen(con)
     vertraege = con.execute("SELECT v.* FROM vertraege v JOIN kunden k ON k.id=v.kunde_id "
                             "WHERE v.abrechnung<>'keine' ORDER BY v.kunde_id, v.id").fetchall()

@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.32.0 | 21.10.2026 | Deutsche Uhrzeit unabhängig vom Rechner, Anleitung IONOS |
 | 0.31.0 | 21.10.2026 | Vorbereitung Server/Cloud: Server-Modus, Docker, Logging, .env |
 | 0.30.0 | 20.10.2026 | Angebote und Auftragsbestätigungen |
 | 0.29.1 | 19.10.2026 | Ratenzahlung auch für bereits ausgestellte Rechnungen |
@@ -57,6 +58,21 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.32.0 – 21.10.2026
+### Geändert
+- **Uhrzeit und Datum immer in deutscher Zeit** – unabhängig davon, auf welche Zeitzone der Rechner eingestellt ist.
+  Ein Server bei IONOS läuft z. B. auf Weltzeit (UTC); trotzdem stimmen Fälligkeiten, „heute“, Rechnungsdatum,
+  Zeitstempel im Protokoll und Dateinamen der Sicherungen. Bestehende Einträge bleiben unverändert.
+- Überfällige Leihgeräte und Rechnungen sowie „erledigt in den letzten 30 Tagen“ zählen ebenfalls nach deutschem
+  Datum (vorher teils nach Weltzeit).
+
+### Neu
+- Anleitung für einen Server bei **IONOS** in `docs/BETRIEB_SERVER.md` (VPS, Auftragsverarbeitungsvertrag,
+  Firewall, Domain, HTTPS).
+- Entscheidungen zu Uhrzeiten, Schlüssel in der Sicherung und Hosting in `docs/LINUX_PLAN.md` festgehalten.
 
 ---
 

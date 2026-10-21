@@ -9,7 +9,7 @@ import json
 from datetime import date, datetime
 
 from . import db as dbm
-from .hilfen import EingabeFehler, euro
+from .hilfen import EingabeFehler, euro, heute_datum
 
 STATUS = {"verfuegbar": "Verfügbar", "verliehen": "Verliehen", "defekt": "Defekt / in Reparatur",
           "ausgemustert": "Ausgemustert"}
@@ -67,7 +67,7 @@ def _datum(iso):
 def ist_ueberfaellig(leihe, heute=None):
     if leihe["rueckgabe_am"] or leihe["storniert_am"] or not leihe["rueckgabe_geplant"]:
         return False
-    return leihe["rueckgabe_geplant"] < (heute or date.today().isoformat())
+    return leihe["rueckgabe_geplant"] < (heute or heute_datum().isoformat())
 
 
 def verlauf(con, geraet_id, ereignis, details=None):
@@ -154,7 +154,7 @@ def status_setzen(con, geraet_id, status, grund=""):
 # ---------------------------------------------------------------- Ausgabe
 
 def naechste_leihnr(con):
-    praefix = f"LV-{date.today().year}-"
+    praefix = f"LV-{heute_datum().year}-"
     nr = 0
     for r in con.execute("SELECT leihnr FROM leihen WHERE leihnr LIKE ?", (praefix + "%",)):
         try:

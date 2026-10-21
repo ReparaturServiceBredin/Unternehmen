@@ -1,16 +1,16 @@
 """Reparatur Service Bredin – Buchhaltung & Rechnungen."""
 import sys
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import abort, Flask, flash, redirect, request, session, url_for
 
 from . import db as dbm
 from . import navigation
-from .hilfen import EingabeFehler, datum_de, euro, kunde_name, menge_text, zeit_de
+from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.31.0"
+VERSION_NUMMER = "0.32.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -47,7 +47,7 @@ def create_app(daten_dir=None, testing=False):
     from . import wiederherstellung
     bericht = wiederherstellung.ausfuehren(daten)  # vorgemerkte Wiederherstellung – bevor die Datenbank offen ist
     dbm.initialisieren(app.config["DB_PFAD"])
-    app.config["GESTARTET"] = datetime.now().isoformat(timespec="seconds")
+    app.config["GESTARTET"] = jetzt_dt().isoformat(timespec="seconds")
     if bericht:
         con = dbm.verbinden(app.config["DB_PFAD"])
         try:
@@ -59,7 +59,7 @@ def create_app(daten_dir=None, testing=False):
 
     def tage_seit(iso):
         try:
-            return (date.today() - datetime.fromisoformat(iso).date()).days
+            return (heute_datum() - datetime.fromisoformat(iso).date()).days
         except (TypeError, ValueError):
             return ""
 
@@ -144,9 +144,9 @@ def create_app(daten_dir=None, testing=False):
         einst = dbm.einstellungen()
         con = dbm.get_db()
 
-        def zahl(sql, standard=0):
+        def zahl(sql, standard=0, werte=()):
             try:
-                return con.execute(sql).fetchone()[0]
+                return con.execute(sql, werte).fetchone()[0]
             except Exception as e:  # z. B. Spalte fehlt – Seite trotzdem anzeigen
                 print(f"Hinweis: Zähler nicht verfügbar ({e})")
                 return standard
@@ -154,12 +154,12 @@ def create_app(daten_dir=None, testing=False):
         offene_anfragen = zahl("SELECT COUNT(*) FROM anfragen WHERE status='neu' AND einstufung<>'spam'")
         leihen_ueberfaellig = zahl(
             "SELECT COUNT(*) FROM leihen WHERE rueckgabe_am IS NULL AND storniert_am IS NULL "
-            "AND rueckgabe_geplant < date('now', 'localtime')")
+            "AND rueckgabe_geplant < ?", werte=(heute(),))
         posten_ueberfaellig = zahl(
             "SELECT COUNT(*) FROM dokumente d WHERE typ='rechnung' AND status='festgeschrieben' "
-            "AND faellig_am < date('now', 'localtime') AND summe_brutto + COALESCE((SELECT SUM(g.summe_brutto) "
+            "AND faellig_am < ? AND summe_brutto + COALESCE((SELECT SUM(g.summe_brutto) "
             "FROM dokumente g WHERE g.bezug_id=d.id AND g.typ='gutschrift' AND g.status<>'entwurf'), 0) "
-            "> bezahlt_betrag")
+            "> bezahlt_betrag", werte=(heute(),))
         try:
             from .lager import unter_mindestbestand_anzahl
             lager_unter_min = unter_mindestbestand_anzahl(con)

@@ -10,8 +10,8 @@ from pathlib import Path
 
 from . import db as dbm
 from . import zahlungen as zlg
-from .hilfen import (EingabeFehler, anrede_brief, anschrift_zeilen, datum_de, euro, kunde_name, platzhalter_ersetzen,
-                     sicherer_dateiname)
+from .hilfen import (EingabeFehler, anrede_brief, anschrift_zeilen, datum_de, euro, heute_datum, kunde_name,
+                     platzhalter_ersetzen, sicherer_dateiname)
 
 TITEL = {0: "Zahlungserinnerung", 1: "1. Mahnung", 2: "2. Mahnung"}
 
@@ -46,7 +46,7 @@ def naechste_stufe(con, dok, einst=None, heute=None):
 
 def vorschlaege(con, heute=None):
     """Rechnungen, bei denen die nächste Mahnstufe fällig ist."""
-    heute_d = _d(heute or date.today().isoformat())
+    heute_d = _d(heute or heute_datum().isoformat())
     einst = dbm.einstellungen(con)
     ergebnis = []
     for p in zlg.offene_posten(con, nur_ueberfaellig=True, heute=heute):
@@ -58,7 +58,7 @@ def vorschlaege(con, heute=None):
 
 def ausgeschoepft(con, heute=None):
     """Rechnungen nach der 2. Mahnung, deren Frist abgelaufen ist (Inkasso / Mahnbescheid prüfen)."""
-    heute = heute or date.today().isoformat()
+    heute = heute or heute_datum().isoformat()
     return [p for p in zlg.offene_posten(con, nur_ueberfaellig=True, heute=heute)
             if p["s"]["mahnstufe"] == 2 and p["s"]["letzte_mahnung"]["frist_bis"] < heute]
 
@@ -99,7 +99,7 @@ def erstellen(con, dok_id, stufe, daten_dir, heute=None):
     from .logik import naechste_nummer
     from .pdf import pdf_erzeugen
     einst = dbm.einstellungen(con)
-    heute = heute or date.today().isoformat()
+    heute = heute or heute_datum().isoformat()
     with dbm.Transaktion(con):
         dok = con.execute("SELECT * FROM dokumente WHERE id=?", (dok_id,)).fetchone()
         if not dok or dok["typ"] != "rechnung" or dok["status"] != "festgeschrieben":

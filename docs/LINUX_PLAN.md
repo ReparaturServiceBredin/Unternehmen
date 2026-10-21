@@ -18,14 +18,12 @@ Arbeitssitzungen: Stand, offene Punkte, Entscheidungen.
 | Sperre Hintergrundjobs | 0.31.0 | `rsb/sperre.py`: nur ein Prozess führt Anfragen-Abruf, Vertragsläufe, Raten, Löschläufe aus |
 | Server-Modus | 0.31.0 | `RSB_MODUS=server`: kein Fenster/Symbol/EXE-Update, lauscht im Netz, sauberes Beenden bei SIGTERM |
 | Absicherung | 0.31.0 | Anmeldung immer Pflicht im Server-Modus, erstes Passwort per `RSB_ERSTES_PASSWORT`, Sicherheits-Header, `RSB_HINTER_PROXY` (echte Client-IP), sichere Cookies bei HTTPS |
+| Zeitzone | 0.32.0 | Alle Zeitpunkte über `hilfen.jetzt_dt()`/`heute_datum()` in Europe/Berlin, auch auf UTC-Servern; Regeltest erlaubt 0 Ausnahmen |
 | Docker | 0.31.0 | `Dockerfile`, `docker-compose.yml`, `.env.beispiel`, Anleitung `docs/BETRIEB_SERVER.md` |
 
 ## Offen
 
-1. **Zeitzone vollständig auf Europe/Berlin** – ca. 97 Stellen mit `date.today()`/`datetime.now()` auf
-   `hilfen.heute_datum()` bzw. eine Berlin-Zeit-Funktion umstellen; `ZEITZONE_HOECHSTENS` in `tests/test_regeln.py`
-   schrittweise auf 0 senken. Im Docker-Container ist zusätzlich `TZ=Europe/Berlin` gesetzt (Übergangslösung).
-2. **SharePoint (Microsoft 365) anbinden** – über Microsoft Graph, App-Registrierung in Entra ID durch den Inhaber:
+1. **SharePoint (Microsoft 365) anbinden** – über Microsoft Graph, App-Registrierung in Entra ID durch den Inhaber:
    - a) tägliche Sicherung (ZIP) zusätzlich in eine SharePoint-Dokumentbibliothek hochladen (Sicherung außer Haus),
    - b) festgeschriebene Belege (Rechnungen, KVA, Angebote, AB, Annahmescheine) als PDF in `Belege/<Jahr>/<Art>/`
      ablegen (nur Kopie, Original bleibt im Programm),
@@ -33,20 +31,21 @@ Arbeitssitzungen: Stand, offene Punkte, Entscheidungen.
    - d) optional Anmeldung mit Microsoft-365-Konto (OIDC).
    Die Datenbank selbst bleibt lokal auf dem Server – nie in SharePoint/OneDrive (Beschädigungsgefahr).
    Zugangsdaten (Client-Secret) verschlüsselt in der Datenbank, Eingabe nur durch den Inhaber in den Einstellungen.
-3. **Mehrbenutzer** – eigene Benutzer statt nur „inhaber“ (Protokoll nennt dann die Person), Rechte optional.
-4. **Umzug der bestehenden Daten** – Ablauf: in der Windows-Version Sicherung (ZIP inkl. Schlüssel) erstellen,
+2. **Mehrbenutzer** – eigene Benutzer statt nur „inhaber“ (Protokoll nennt dann die Person), Rechte optional.
+3. **Umzug der bestehenden Daten** – Ablauf: in der Windows-Version Sicherung (ZIP inkl. Schlüssel) erstellen,
    auf dem Server in `/daten` entpacken bzw. über „Sicherung wiederherstellen“ einspielen, Prüfung mit
    *Einstellungen → Datenprüfung*. Danach Windows-Version nur noch als Notfall.
-5. **Offene Fragen an den Inhaber**
-   - Zeitstempel: sollen alte, in Rechnerzeit gespeicherte Zeitpunkte umgerechnet oder nur neue in Berlin-Zeit
-     gespeichert werden? (Vorschlag: nur neue; alte stammen von einem Rechner in Deutschland und stimmen schon.)
-   - Schlüssel im Backup: Sicherungen enthalten `geheim/` (zum Entschlüsseln gespeicherter Zugangsdaten). Für
-     Sicherungen außer Haus (SharePoint) Schlüssel weglassen oder die ZIP mit Passwort verschlüsseln?
-   - Hosting: eigener Linux-Rechner im Haus, gemieteter Server (z. B. Hetzner, Standort Deutschland) oder Azure?
-     Für die Cloud zwingend HTTPS (Caddy/Traefik davor) und Auftragsverarbeitungsvertrag mit dem Anbieter.
+4. **IONOS-Server einrichten** – Schritte in `docs/BETRIEB_SERVER.md`, Abschnitt „IONOS“.
 
 ## Entscheidungen
 
+- **Uhrzeiten (21.10.2026):** Alle Zeitpunkte sind deutsche Zeit. Bestehende Einträge bleiben unverändert (stammen
+  von einem Rechner in Deutschland), neue werden unabhängig vom Server in Europe/Berlin gespeichert.
+- **Schlüssel im Backup (21.10.2026):** Der Schlüssel (`geheim/`) bleibt in der Sicherung, damit eine
+  Wiederherstellung alle gespeicherten Zugangsdaten mitbringt. Folge: Sicherungen sind so schützenswert wie die
+  Zugangsdaten selbst – Ablage außer Haus nur an zugriffsgeschützten Orten (eigene SharePoint-Bibliothek, NAS).
+- **Hosting (21.10.2026):** IONOS (VPS, Rechenzentrum Deutschland, Auftragsverarbeitungsvertrag im IONOS-Kundenkonto
+  abschließen). Später ist ein eigener Rechner im Haus möglich – der Umzug ist derselbe Ablauf (Sicherung einspielen).
 - Eine Codebasis für Windows und Linux; Windows-Teile nur in `rsb/fenster.py` und `rsb/update.py`.
 - SQLite bleibt (ein Server, wenige Nutzer). Im Server-Modus läuft genau **ein** Prozess (Waitress mit Threads).
 - Updates im Server-Betrieb über ein neues Docker-Image (`docker compose pull && docker compose up -d`); vorher

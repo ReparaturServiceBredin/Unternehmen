@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import db as dbm
+from .hilfen import jetzt_dt
 
 ORDNER_IM_BACKUP = ["dokumente", "belege", "bilder", "fotos", "exporte"]
 
@@ -20,7 +21,7 @@ def backup_erstellen(daten_dir, db_pfad, einst=None):
     daten = Path(daten_dir)
     ziel_ordner = daten / "backups"
     ziel_ordner.mkdir(parents=True, exist_ok=True)
-    name = f"backup_{datetime.now():%Y-%m-%d_%H%M%S}.zip"
+    name = f"backup_{jetzt_dt():%Y-%m-%d_%H%M%S}.zip"
     ziel = ziel_ordner / name
     with tempfile.TemporaryDirectory() as tmp:
         kopie = Path(tmp) / "buchhaltung.db"
@@ -38,7 +39,7 @@ def backup_erstellen(daten_dir, db_pfad, einst=None):
                         z.write(datei, datei.relative_to(daten).as_posix())
             z.writestr("LIESMICH.txt",
                        "Backup Reparatur Service Bredin – Buchhaltung\n"
-                       f"Erstellt: {datetime.now():%d.%m.%Y %H:%M}\n\n"
+                       f"Erstellt: {jetzt_dt():%d.%m.%Y %H:%M}\n\n"
                        "Wiederherstellen: Programm beenden, Inhalt dieses ZIP in den Ordner 'Daten' entpacken\n"
                        "(vorhandene Dateien ersetzen), Programm starten, E-Mail-Passwort neu eingeben.\n")
     kopiert_nach = None
@@ -69,7 +70,7 @@ def auto_backup(daten_dir, db_pfad):
         if not einst.get("backup_auto"):
             return None
         letztes = einst.get("letztes_backup")
-        if letztes and datetime.fromisoformat(letztes) > datetime.now() - timedelta(hours=20):
+        if letztes and datetime.fromisoformat(letztes) > jetzt_dt() - timedelta(hours=20):
             return None
         ziel, extern = backup_erstellen(daten_dir, db_pfad, einst)
         dbm.einstellungen_speichern({"letztes_backup": dbm.jetzt()}, con)

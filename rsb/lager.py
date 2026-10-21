@@ -15,7 +15,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from . import db as dbm
-from .hilfen import EingabeFehler, euro, menge_text
+from .hilfen import EingabeFehler, euro, heute_datum, menge_text
 
 ARTEN = {"zugang": "Zugang", "abgang": "Abgang", "korrektur": "Korrektur", "inventur": "Inventur"}
 RES_STATUS = {"reserviert": "reserviert", "ausgebucht": "ausgebucht", "storniert": "storniert",
@@ -250,7 +250,7 @@ def auftrag_materialkosten(con, auftrag_id):
 
 def lagerwert(con, stichtag=None):
     """Lagerwert zum Stichtag (Bestand laut Bewegungen bis einschließlich Stichtag × aktueller Einkaufspreis)."""
-    stichtag = stichtag or date.today().isoformat()
+    stichtag = stichtag or heute_datum().isoformat()
     zeilen, summe = [], 0
     for a in con.execute("SELECT * FROM artikel WHERE lagerfuehrend=1 OR id IN (SELECT artikel_id FROM lagerbewegungen) "
                          "ORDER BY lagerort, name").fetchall():

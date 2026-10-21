@@ -86,3 +86,23 @@ def test_logbuch(tmp_path):
     for h in __import__("logging").getLogger().handlers:
         h.flush()
     assert "Testeintrag Umlaute äöü" in datei.read_text(encoding="utf-8")
+
+
+def test_zeit_immer_deutsch_auch_bei_utc_rechner(monkeypatch):
+    import time
+    from datetime import datetime, timezone
+    from zoneinfo import ZoneInfo
+
+    from rsb import hilfen
+    monkeypatch.setenv("TZ", "UTC")
+    if hasattr(time, "tzset"):
+        time.tzset()
+    try:
+        erwartet = datetime.now(timezone.utc).astimezone(ZoneInfo("Europe/Berlin")).replace(tzinfo=None)
+        assert abs((hilfen.jetzt_dt() - erwartet).total_seconds()) < 5
+        assert hilfen.jetzt_dt().tzinfo is None  # wie in der Datenbank: ohne Zeitzonen-Angabe
+        assert hilfen.heute() == erwartet.date().isoformat()
+    finally:
+        monkeypatch.undo()
+        if hasattr(time, "tzset"):
+            time.tzset()

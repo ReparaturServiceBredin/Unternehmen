@@ -18,7 +18,7 @@ from email.utils import parsedate_to_datetime
 from html.parser import HTMLParser
 
 from . import db as dbm
-from .hilfen import heute_datum, kunde_name
+from .hilfen import heute_datum, jetzt_dt, kunde_name
 from .namen import VORNAMEN
 from .sicherheit import entschluesseln
 
@@ -460,7 +460,7 @@ def bestaetigen(con, einst, anfrage_ids):
 
 def aufraeumen(con, einst):
     """Löscht Spam und verworfene Anfragen nach 30 Tagen (Datensparsamkeit)."""
-    grenze = (datetime.now() - timedelta(days=30)).isoformat(timespec="seconds")
+    grenze = (jetzt_dt() - timedelta(days=30)).isoformat(timespec="seconds")
     with dbm.Transaktion(con):
         n = con.execute("DELETE FROM anfragen WHERE (status='verworfen' OR (einstufung='spam' AND status='neu')) "
                         "AND eingang_am < ?", (grenze,)).rowcount
@@ -472,7 +472,7 @@ def aufraeumen(con, einst):
 def interessenten_zum_loeschen(con, einst):
     """Interessenten ohne Dokumente, die älter als die eingestellte Frist sind."""
     monate = int(einst.get("interessent_loeschen_monate") or 6)
-    grenze = (datetime.now() - timedelta(days=30 * monate)).isoformat(timespec="seconds")
+    grenze = (jetzt_dt() - timedelta(days=30 * monate)).isoformat(timespec="seconds")
     return con.execute(
         "SELECT * FROM kunden k WHERE interessent=1 AND geaendert_am < ? "
         "AND NOT EXISTS (SELECT 1 FROM dokumente d WHERE d.kunde_id=k.id) "
@@ -589,7 +589,7 @@ def abrufen(con, einst, imap_klasse=None, imap_plain=None):
         typ, _ = imap.select(_imap_ordnername(einst.get("imap_ordner") or "INBOX"))
         if typ != "OK":
             raise AbrufFehler(f"Ordner „{einst.get('imap_ordner')}“ nicht gefunden.")
-        seit = (datetime.now() - timedelta(days=60)).strftime("%d-%b-%Y")
+        seit = (jetzt_dt() - timedelta(days=60)).strftime("%d-%b-%Y")
         zum_verschieben = _ordner_lesen(con, imap, einst, f"SINCE {seit}", ergebnis, zugang["host"])
         if einst.get("imap_verschieben") and zum_verschieben:
             ziel = _imap_ordnername(einst.get("imap_zielordner") or "Anfragen erledigt")

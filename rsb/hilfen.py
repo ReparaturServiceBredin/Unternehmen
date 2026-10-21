@@ -71,11 +71,28 @@ def zeit_de(iso):
         return str(iso)
 
 
+def _berlin():
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo("Europe/Berlin")
+    except Exception:  # fehlende Zeitzonendaten: Rechnerzeit
+        return None
+
+
+BERLIN = _berlin()
+
+
+def jetzt_dt():
+    """Aktueller Zeitpunkt in deutscher Zeit (Europe/Berlin), ohne Zeitzonen-Angabe – so wie alle Zeitstempel in der
+    Datenbank gespeichert sind. Unabhängig von der Zeitzone des Rechners (z. B. UTC auf einem Linux-Server)."""
+    if BERLIN is None:
+        return datetime.now()  # noqa: zeitzone (Rückfall)
+    return datetime.now(BERLIN).replace(tzinfo=None)
+
+
 def heute_datum():
     """Heutiges Datum in Europe/Berlin – unabhängig von der Zeitzone des Rechners (z. B. UTC im Docker-Container)."""
-    from datetime import datetime
-    from zoneinfo import ZoneInfo
-    return datetime.now(ZoneInfo("Europe/Berlin")).date()
+    return jetzt_dt().date()
 
 
 def heute():

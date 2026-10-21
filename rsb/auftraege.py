@@ -3,11 +3,10 @@
 Wird ein Auftrag auf „erledigt“ gezogen, entsteht automatisch ein Rechnungsentwurf
 mit den Positionen aus dem Kostenvoranschlag (falls vorhanden).
 """
-from datetime import date
 
 from . import db as dbm
 from . import logik
-from .hilfen import EingabeFehler
+from .hilfen import EingabeFehler, heute_datum
 
 STATUS = {"offen": "Offen", "in_arbeit": "In Arbeit", "erledigt": "Erledigt"}
 # Spalten der Tafel: „Wartet auf Teil“ ist ein In-Arbeit-Auftrag mit gesetztem wartet_teil_seit
@@ -19,7 +18,7 @@ def tafel_status(a):
 
 
 def naechste_auftragsnr(con):
-    jahr = date.today().year
+    jahr = heute_datum().year
     praefix = f"RA-{jahr}-"
     nr = 0
     for r in con.execute("SELECT auftragsnr FROM auftraege WHERE auftragsnr LIKE ?", (praefix + "%",)):
@@ -304,7 +303,7 @@ def rechnung_erstellen(con, auftrag_id):
         positionen = con.execute("SELECT * FROM positionen WHERE dokument_id=? ORDER BY pos", (a["kva_id"],)).fetchall()
         art = "Entwurf mit Positionen aus dem KVA"
     did = logik.neuer_entwurf(con, einst, "rechnung", a["kunde_id"], betreff(a), positionen,
-                              leistungsdatum=date.today().isoformat())
+                              leistungsdatum=heute_datum().isoformat())
     con.execute("UPDATE auftraege SET rechnung_id=?, geaendert_am=? WHERE id=?", (did, dbm.jetzt(), auftrag_id))
     verlauf(con, auftrag_id, "Rechnung erstellt", art if positionen else "leerer Rechnungsentwurf")
     from .leihgeraete import fuer_auftragsrechnung

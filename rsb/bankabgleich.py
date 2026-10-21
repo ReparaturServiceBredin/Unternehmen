@@ -12,12 +12,12 @@ import io
 import re
 import unicodedata
 import zipfile
-from datetime import date, datetime
+from datetime import datetime
 from xml.etree import ElementTree
 
 from . import db as dbm
 from . import zahlungen as zlg
-from .hilfen import EingabeFehler, euro
+from .hilfen import EingabeFehler, euro, heute_datum
 
 
 class ImportFehler(EingabeFehler):
@@ -271,7 +271,7 @@ def zuordnen(con, umsatz_id, dokument_id, betrag=None):
         raise EingabeFehler("Der Umsatz ist bereits bearbeitet.")
     if u["betrag"] <= 0:
         raise EingabeFehler("Ausgänge können erst mit den Eingangsrechnungen (Ausbaustufe 7) zugeordnet werden.")
-    zid = zlg.erfassen(con, dokument_id, min(u["buchungstag"], date.today().isoformat()), betrag or u["betrag"],
+    zid = zlg.erfassen(con, dokument_id, min(u["buchungstag"], heute_datum().isoformat()), betrag or u["betrag"],
                        "ueberweisung", f"Bank: {u['name'] or ''} – {(u['verwendungszweck'] or '')[:120]}".strip(),
                        bank_umsatz_id=umsatz_id)
     con.execute("UPDATE bank_umsaetze SET status='zugeordnet', zahlung_id=?, bearbeitet_am=?, bearbeitet_von=? "

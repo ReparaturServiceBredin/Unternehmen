@@ -7,6 +7,8 @@ from pathlib import Path
 
 from flask import current_app, g, has_request_context, session
 
+from .hilfen import jetzt_dt
+
 SCHEMA = Path(__file__).with_name("schema.sql")
 
 # Standardwerte für alle Einstellungen. Alles hier ist später in der Oberfläche änderbar.
@@ -254,7 +256,7 @@ STANDARD_VERTRAGSARTEN = [
 
 
 def jetzt():
-    return datetime.now().isoformat(timespec="seconds")
+    return jetzt_dt().isoformat(timespec="seconds")
 
 
 def jetzt_berlin():
@@ -263,7 +265,7 @@ def jetzt_berlin():
         from zoneinfo import ZoneInfo
         return datetime.now(ZoneInfo("Europe/Berlin")).isoformat(timespec="seconds")
     except Exception:  # z. B. fehlende Zeitzonendaten – dann lokale Zeit mit Abstand zu UTC
-        return datetime.now().astimezone().isoformat(timespec="seconds")
+        return jetzt_dt().astimezone().isoformat(timespec="seconds")
 
 
 def aktueller_benutzer():
@@ -507,9 +509,9 @@ def _verlauf_nachtragen(con):
 def _sicherung_vor_migration(con, pfad):
     ziel_ordner = Path(pfad).parent / "backups"
     ziel_ordner.mkdir(parents=True, exist_ok=True)
-    ziel = ziel_ordner / f"vor_update_{datetime.now():%Y-%m-%d_%H%M%S}.db"
+    ziel = ziel_ordner / f"vor_update_{jetzt_dt():%Y-%m-%d_%H%M%S}.db"
     if ziel.exists():  # nie eine ältere Sicherung überschreiben
-        ziel = ziel.with_name(f"{ziel.stem}_{datetime.now():%f}.db")
+        ziel = ziel.with_name(f"{ziel.stem}_{jetzt_dt():%f}.db")
     kopie = sqlite3.connect(ziel)
     with kopie:
         con.backup(kopie)
