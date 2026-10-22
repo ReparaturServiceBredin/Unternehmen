@@ -11,6 +11,7 @@
     <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id, typ='kva') }}">+ KVA</a>
     <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id, typ='angebot') }}">+ Angebot</a>
     <a class="knopf zweit" href="{{ url_for('main.dokument_neu', kunde_id=k.id) }}">+ Rechnung</a>
+    <a class="knopf zweit" href="{{ url_for('main.kunde_email', kid=k.id) }}">E-Mail schreiben</a>
   </div>{% endif %}
 </div>
 {% if k and k.archiviert %}<div class="meldung info">Dieser Kunde ist archiviert.</div>{% endif %}

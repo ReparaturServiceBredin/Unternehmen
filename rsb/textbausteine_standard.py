@@ -161,6 +161,41 @@ STANDARD_TEXTBAUSTEINE = [
     },
 ]
 
+# Freie E-Mail an einen Kunden (Kunde → „E-Mail schreiben“). Erste Zeile „Betreff: …“ wird zum Betreff.
+KUNDE_EMAIL = "kunde_email"
+STANDARD_TEXTBAUSTEINE += [
+    {
+        "kategorie": "email_betreff", "dokumenttyp": KUNDE_EMAIL, "standard": 1,
+        "name": "Freie E-Mail – Betreff", "text": "Ihre Reparatur {auftragsnr} – {firma_name}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": KUNDE_EMAIL, "standard": 1,
+        "name": "Leer (nur Anrede und Gruß)",
+        "text": "{anrede_brief}\n\n" + "\n\nMit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}".lstrip("\n"),
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": KUNDE_EMAIL, "standard": 0,
+        "name": "Warten auf Ersatzteil",
+        "text": "Betreff: Ihre Reparatur {auftragsnr} – wir warten noch auf ein Ersatzteil\n{anrede_brief}\n\n"
+                "kurzer Zwischenstand zu Ihrem {geraet}: Wir warten noch auf ein Ersatzteil. Sobald es da ist, "
+                "erledigen wir die Reparatur umgehend und melden uns bei Ihnen." + "\n\nMit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": KUNDE_EMAIL, "standard": 0,
+        "name": "Gerät fertig – Abholung",
+        "text": "Betreff: Ihr {geraet} ist fertig\n{anrede_brief}\n\n"
+                "Ihr {geraet} ist fertig und kann abgeholt werden. Bitte bringen Sie den Abholschein oder die "
+                "Auftragsnummer {auftragsnr} mit." + "\n\nMit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}",
+    },
+    {
+        "kategorie": "email_text", "dokumenttyp": KUNDE_EMAIL, "standard": 0,
+        "name": "Rückfrage",
+        "text": "Betreff: Rückfrage zu Ihrer Reparatur {auftragsnr}\n{anrede_brief}\n\n"
+                "zu Ihrem {geraet} haben wir noch eine kurze Frage: \n\n"
+                "Am einfachsten antworten Sie auf diese E-Mail oder rufen uns kurz an." + "\n\nMit freundlichen Grüßen\n{inhaber}\n{firma_name}\n{firma_telefon}",
+    },
+]
+
 PLATZHALTER_HILFE = [
     ("{anrede_brief}", "Briefanrede, z. B. „Sehr geehrte Frau Müller,“"),
     ("{kunde_name}", "Name bzw. Firma des Kunden"),
@@ -177,4 +212,6 @@ PLATZHALTER_HILFE = [
     ("{inhaber}", "Ihr Name"),
     ("{firma_telefon}", "Ihre Telefonnummer"),
     ("{firma_web}", "Ihre Internetseite"),
+    ("{auftragsnr}", "Auftragsnummer (freie E-Mail an Kunden, wenn ein Auftrag gewählt ist)"),
+    ("{geraet}", "Gerät des Auftrags (freie E-Mail an Kunden)"),
 ]

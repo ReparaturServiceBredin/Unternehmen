@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "_status.html" import csrf %}
+{% block titel %}E-Mail an {{ k|kname }}{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>E-Mail an {{ k|kname }}</h1>
+  <div class="leiste"><a class="knopf zweit" href="{{ url_for('main.kunde', kid=k.id) }}">Zurück zum Kunden</a></div>
+</div>
+{% if not smtp_ok %}<div class="meldung warnung">Es ist noch kein E-Mail-Server eingerichtet. Bitte zuerst unter <a href="{{ url_for('main.einstellungen', bereich='email') }}">Einstellungen → E-Mail</a> eintragen.</div>{% endif %}
+<form method="post" class="karte">
+  {{ csrf() }}
+  <div class="felder">
+    <div class="s6"><label>Vorlage</label><select id="vorlage">
+      {% for v in vorlagen %}<option value="{{ loop.index0 }}">{{ v.name }}</option>{% endfor %}</select>
+      <div class="hilfe">Vorlagen bearbeiten oder neue anlegen: <a href="{{ url_for('main.textbausteine') }}">Textbausteine</a> (Dokument „Freie E-Mail an Kunden“).</div></div>
+    <div class="s6"><label>Zu Auftrag</label><select name="auftrag_id" id="auftrag">
+      <option value="">– ohne Auftrag –</option>
+      {% for a in auftraege %}<option value="{{ a.id }}" {{ 'selected' if a.id == auftrag_id }}>{{ a.auftragsnr }} · {{ a.geraet or 'Gerät' }} · {{ status_namen.get(a.status, a.status) }}</option>{% endfor %}</select>
+      <div class="hilfe">Füllt Auftragsnummer und Gerät aus; die E-Mail erscheint im Verlauf des Auftrags.</div></div>
+    <div class="s12"><label>An</label><input type="email" name="an" value="{{ an }}" required>
+      {% if not k.email %}<div class="hilfe">Beim Kunden ist keine E-Mail-Adresse hinterlegt.</div>{% endif %}</div>
+    <div class="s12"><label>Betreff</label><input type="text" name="betreff" id="betreff" value="{{ betreff or '' }}" required></div>
+    <div class="s12"><label>Text</label><textarea name="text" id="text" style="min-height:280px" required>{{ text or '' }}</textarea></div>
+    {% if einst.bcc_an_mich %}<div class="s12 klein">Kopie (BCC) an {{ einst.absender_email }}</div>{% endif %}
+  </div>
+  <br>
+  <div class="leiste"><button>Jetzt senden</button><a class="knopf zweit" href="{{ url_for('main.kunde', kid=k.id) }}">Abbrechen</a></div>
+</form>
+<script>
+(() => {
+  const vorlagen = {{ vorlagen|tojson }}, werte = {{ werte|tojson }};
+  const vorlage = document.getElementById('vorlage'), auftrag = document.getElementById('auftrag');
+  const betreff = document.getElementById('betreff'), text = document.getElementById('text');
+  let bearbeitet = {{ 'true' if text else 'false' }};
+  const ersetzen = (s, w) => s.replace(/\{(\w+)\}/g, (m, n) => n in w ? w[n] : m)
+    .replace(/[ \t]{2,}/g, ' ').replace(/ – $/, '').replace(/^ – /, '');
+  function fuellen() {
+    const v = vorlagen[vorlage.value], w = werte[auftrag.value] || werte[''];
+    if (!v) return;
+    betreff.value = ersetzen(v.betreff, w);
+    text.value = ersetzen(v.text, w);
+    bearbeitet = false;
+  }
+  vorlage.addEventListener('change', () => {
+    if (!bearbeitet || confirm('Vorlage übernehmen? Ihr bisheriger Text wird ersetzt.')) fuellen();
+  });
+  auftrag.addEventListener('change', () => { if (!bearbeitet) fuellen(); });
+  [betreff, text].forEach(f => f.addEventListener('input', () => { bearbeitet = true; }));
+  if (!bearbeitet) fuellen();
+  if (!bearbeitet) {
+    // Cursor hinter die Anrede setzen, damit man direkt losschreiben kann
+    const pos = text.value.indexOf('\n\n');
+    text.focus();
+    if (pos >= 0) text.setSelectionRange(pos + 2, pos + 2);
+  }
+})();
+</script>
+{% endblock %}

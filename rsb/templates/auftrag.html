@@ -11,7 +11,7 @@
     <h1>Auftrag {{ a.auftragsnr }} <span class="marke-status s-{{ tafel_status }}">{{ status_namen[tafel_status] }}</span>{% if a.auftragsart == 'garantie' %} <span class="marke-status st-warnung">Garantiefall{% if garantie_bezug %} zu {{ garantie_bezug.auftragsnr }}{% endif %}</span>{% endif %}</h1>
     <div class="auftrag-kopf" style="margin-top:6px">
       <span>Eingang: <b>{{ a.eingang_am|zeit }}</b></span>
-      <span>Kunde: <a href="{{ url_for('main.kunde', kid=a.kunde_id) }}"><b>{{ a.kundennr }} · {{ a.firma if a.ktyp == 'firma' and a.firma else (a.vorname or '') ~ ' ' ~ (a.nachname or '') }}</b></a>{% if a.ktelefon %} · <a href="tel:{{ a.ktelefon }}">{{ a.ktelefon }}</a>{% endif %}</span>
+      <span>Kunde: <a href="{{ url_for('main.kunde', kid=a.kunde_id) }}"><b>{{ a.kundennr }} · {{ a.firma if a.ktyp == 'firma' and a.firma else (a.vorname or '') ~ ' ' ~ (a.nachname or '') }}</b></a>{% if a.ktelefon %} · <a href="tel:{{ a.ktelefon }}">{{ a.ktelefon }}</a>{% endif %} · <a href="{{ url_for('main.kunde_email', kid=a.kunde_id, auftrag=a.id, zurueck='auftrag') }}">E-Mail schreiben</a></span>
       {% if a.begonnen_am %}<span>begonnen {{ a.begonnen_am|zeit }}</span>{% endif %}
       {% if a.erledigt_am %}<span>erledigt {{ a.erledigt_am|zeit }}</span>{% endif %}
       {% if a.fertig_bis and not a.erledigt_am %}<span>fertig bis <b>{{ a.fertig_bis|datum }}</b></span>{% endif %}

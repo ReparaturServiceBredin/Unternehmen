@@ -329,6 +329,74 @@ KUNDE_FELDNAMEN = {"kundennr": "Kundennummer", "typ": "Typ", "firma": "Firma", "
                    "interessent": "Interessent", "e_rechnung": "Rechnungsformat", "leitweg_id": "Leitweg-ID"}
 
 
+def _betreff_trennen(text):
+    """Textbaustein mit erster Zeile „Betreff: …“ → (betreff, text)."""
+    zeilen = (text or "").split("\n", 1)
+    if zeilen[0].lower().startswith("betreff:"):
+        return zeilen[0].split(":", 1)[1].strip(), (zeilen[1] if len(zeilen) > 1 else "").lstrip("\n")
+    return None, text or ""
+
+
+@bp.route("/kunden/<int:kid>/email", methods=["GET", "POST"])
+def kunde_email(kid):
+    """Freie E-Mail an den Kunden, z. B. Zwischenstand „wir warten noch auf ein Ersatzteil“ – mit Textbausteinen."""
+    from .textbausteine_standard import KUNDE_EMAIL
+    con = dbm.get_db()
+    k = con.execute("SELECT * FROM kunden WHERE id=?", (kid,)).fetchone()
+    if not k:
+        abort(404)
+    einst = dbm.einstellungen(con)
+    auftraege = con.execute("SELECT * FROM auftraege WHERE kunde_id=? ORDER BY status='erledigt', eingang_am DESC, "
+                            "id DESC", (kid,)).fetchall()
+    if request.method == "POST":
+        an, betreff, text = _f("an"), _f("betreff"), request.form.get("text", "").strip()
+        if not an or not betreff or not text:
+            raise EingabeFehler("Bitte Empfänger, Betreff und Text angeben.")
+        aid = int(_f("auftrag_id")) if _f("auftrag_id").isdigit() else None
+        a = next((x for x in auftraege if x["id"] == aid), None)
+        try:
+            hinweis = senden(con, None, an, betreff, text)
+        except MailFehler as e:
+            flash(f"E-Mail wurde NICHT gesendet: {e}", "fehler")
+            return render_template("kunde_email.html", **_kunde_email_daten(con, k, einst, auftraege, KUNDE_EMAIL),
+                                   an=an, betreff=betreff, text=text, auftrag_id=aid)
+        with dbm.Transaktion(con):
+            dbm.protokollieren("kunde_email", "kunde", kid, {"an": an, "betreff": betreff,
+                                                            "auftrag": a["auftragsnr"] if a else None}, con=con)
+            if a:
+                auf.verlauf(con, a["id"], "E-Mail an Kunden", betreff)
+        flash(f"E-Mail an {an} wurde gesendet.", "ok")
+        if hinweis:
+            flash(hinweis, "warnung")
+        return redirect(url_for("main.auftrag", aid=a["id"]) if a and request.args.get("zurueck") == "auftrag"
+                        else url_for("main.kunde", kid=kid))
+    vorwahl = int(request.args["auftrag"]) if (request.args.get("auftrag") or "").isdigit() else \
+        next((x["id"] for x in auftraege if x["status"] != "erledigt"), None)
+    return render_template("kunde_email.html", **_kunde_email_daten(con, k, einst, auftraege, KUNDE_EMAIL),
+                           an=k["email"] or "", betreff=None, text=None, auftrag_id=vorwahl)
+
+
+def _kunde_email_daten(con, k, einst, auftraege, typ):
+    basis = {"anrede_brief": anrede_brief(k), "kunde_name": kunde_name(k), "kundennr": k["kundennr"] or "",
+             "vorname": k["vorname"] or "", "nachname": k["nachname"] or "", "firma_name": einst.get("firma_name", ""),
+             "inhaber": einst.get("inhaber", ""), "firma_telefon": einst.get("telefon", ""),
+             "firma_web": einst.get("web", ""), "auftragsnr": "", "geraet": "Gerät"}
+    werte = {"": basis}
+    for a in auftraege:
+        werte[str(a["id"])] = {**basis, "auftragsnr": a["auftragsnr"], "geraet": a["geraet"] or "Gerät"}
+    standard_betreff = con.execute("SELECT text FROM textbausteine WHERE dokumenttyp=? AND kategorie='email_betreff' "
+                                   "ORDER BY standard DESC, id LIMIT 1", (typ,)).fetchone()
+    vorlagen = []
+    for t in con.execute("SELECT * FROM textbausteine WHERE dokumenttyp IN (?, 'alle') AND kategorie='email_text' "
+                         "ORDER BY standard DESC, name", (typ,)):
+        b, txt = _betreff_trennen(t["text"])
+        vorlagen.append({"id": t["id"], "name": t["name"], "betreff": b or (standard_betreff[0] if standard_betreff
+                                                                           else "Nachricht von {firma_name}"),
+                         "text": txt})
+    return {"k": k, "auftraege": auftraege, "werte": werte, "vorlagen": vorlagen, "status_namen": auf.TAFEL,
+            "smtp_ok": bool(einst.get("smtp_host"))}
+
+
 @bp.route("/kunden/<int:kid>/archivieren", methods=["POST"])
 def kunde_archivieren(kid):
     con = dbm.get_db()
@@ -2067,13 +2135,14 @@ def backup_herunterladen(name):
 @bp.route("/textbausteine")
 def textbausteine():
     liste = dbm.get_db().execute("SELECT * FROM textbausteine ORDER BY dokumenttyp, kategorie, name").fetchall()
-    return render_template("textbausteine.html", liste=liste)
+    return render_template("textbausteine.html", liste=liste, typen=TB_TYPEN)
 
 
 TB_KATEGORIEN = {"einleitung": "Einleitung", "schluss": "Schlusstext", "hinweis": "Hinweis",
                  "email_betreff": "E-Mail-Betreff", "email_text": "E-Mail-Text"}
 TB_TYPEN = {"alle": "Alle Dokumente", "rechnung": "Rechnung", "storno": "Stornorechnung", "kva": "Kostenvoranschlag",
-            "angebot": "Angebot", "auftragsbestaetigung": "Auftragsbestätigung"}
+            "angebot": "Angebot", "auftragsbestaetigung": "Auftragsbestätigung",
+            "kunde_email": "Freie E-Mail an Kunden"}
 
 
 @bp.route("/textbausteine/neu", methods=["GET", "POST"])

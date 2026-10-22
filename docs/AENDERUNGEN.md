@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.34.0 | 22.10.2026 | E-Mail an Kunden direkt schreiben, mit Vorlagen |
 | 0.33.0 | 21.10.2026 | Benutzer, Anmeldesperre, Umzug per Browser, Schlüssel in der Sicherung |
 | 0.32.0 | 21.10.2026 | Deutsche Uhrzeit unabhängig vom Rechner, Anleitung IONOS |
 | 0.31.0 | 21.10.2026 | Vorbereitung Server/Cloud: Server-Modus, Docker, Logging, .env |
@@ -59,6 +60,19 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.34.0 – 22.10.2026
+### Neu
+- **E-Mail schreiben** direkt beim Kunden (Knopf oben) und im Auftrag (neben der Telefonnummer): freie E-Mail,
+  z. B. für einen Zwischenstand. Vorlagen füllen Anrede, Gerät, Auftragsnummer und Gruß automatisch aus:
+  „Warten auf Ersatzteil“, „Gerät fertig – Abholung“, „Rückfrage“ und „Leer (nur Anrede und Gruß)“. Text danach
+  frei anpassen und senden.
+- Ist ein Auftrag gewählt, steht die E-Mail in dessen Verlauf; außerdem im Versandprotokoll, im Änderungsprotokoll
+  und in der E-Mail-Historie des Kunden.
+- Eigene Vorlagen unter *Textbausteine* mit Dokument „Freie E-Mail an Kunden“ und Kategorie „E-Mail-Text“. Beginnt
+  die erste Zeile mit „Betreff: …“, wird sie zum Betreff. Neue Platzhalter: `{auftragsnr}`, `{geraet}`.
 
 ---
 

@@ -9,7 +9,7 @@
   {% for t in liste %}
   <tr><td><a href="{{ url_for('main.textbaustein', tid=t.id) }}"><b>{{ t.name }}</b></a></td>
     <td>{{ {'einleitung':'Einleitung','schluss':'Schlusstext','hinweis':'Hinweis','email_betreff':'E-Mail-Betreff','email_text':'E-Mail-Text'}.get(t.kategorie, t.kategorie) }}</td>
-    <td>{{ 'Alle' if t.dokumenttyp == 'alle' else dok_titel(t.dokumenttyp) }}</td>
+    <td>{{ 'Alle' if t.dokumenttyp == 'alle' else (typen.get(t.dokumenttyp) or dok_titel(t.dokumenttyp)) }}</td>
     <td>{{ '✔' if t.standard }}</td>
     <td class="klein">{{ t.text|truncate(110) }}</td></tr>
   {% endfor %}
