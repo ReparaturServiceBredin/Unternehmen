@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.34.0"
+VERSION_NUMMER = "0.35.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -87,10 +87,14 @@ def create_app(daten_dir=None, testing=False):
         from .garantie import standard_monate
         return standard_monate(dbm.einstellungen())
 
+    def ben_bausteine():
+        return dbm.get_db().execute("SELECT id, name, text FROM textbausteine WHERE dokumenttyp='benachrichtigung' "
+                                    "ORDER BY name").fetchall()
+
     from .logik import KURZNAMEN, titel as dok_titel
     app.jinja_env.globals.update(dok_kurz=KURZNAMEN, dok_titel=dok_titel, csrf_token=csrf_token, version=VERSION, zubehoer_teilen=zubehoer_teilen,
                                  einst_garantie=einst_garantie, kva_gebuehren_liste=kva_gebuehren_liste,
-                                 zugang_arten=ZUGANG_ARTEN)
+                                 zugang_arten=ZUGANG_ARTEN, ben_bausteine=ben_bausteine)
 
     from .views import bp
     app.register_blueprint(bp)

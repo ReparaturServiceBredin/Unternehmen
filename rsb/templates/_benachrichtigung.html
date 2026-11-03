@@ -1,5 +1,17 @@
 {# Vorschau einer Kundenbenachrichtigung mit „Senden“ / „Diesmal nicht senden“ #}
 {% macro vorschau(b, anlaesse, weiter, offen=False) -%}
+<script>
+  // Textbaustein an der Cursorposition einfügen; ohne Cursor (Feld nicht angeklickt) vor dem Gruß
+  window.bausteinEinfuegen = window.bausteinEinfuegen || function (sel) {
+    const t = sel.form.elements.text, neu = sel.value;
+    if (!neu) return;
+    let p = t.dataset.cursor ? t.selectionStart : t.value.lastIndexOf('\n\nMit freundlichen Grüßen');
+    if (p < 0) p = t.value.length;
+    const vorher = t.value.slice(0, p).replace(/\s+$/, ''), nachher = t.value.slice(p).replace(/^\s+/, '');
+    t.value = (vorher ? vorher + '\n\n' : '') + neu + (nachher ? '\n\n' + nachher : '');
+    sel.value = '';
+  };
+</script>
 <div class="karte benachrichtigung">
   <details {{ 'open' if offen }}>
     <summary><b>✉ {{ anlaesse[b.anlass] }}{{ (' (nach ' ~ b.stufe ~ ' Tagen)') if b.stufe }}</b> – {{ b.auftragsnr }} · {{ b|kname }} · {{ 'SMS an ' if b.kanal == 'sms' else '' }}{{ b.an or 'keine Adresse hinterlegt' }}
@@ -10,7 +22,9 @@
       <div class="felder">
         <div class="s4"><label>An</label><input type="text" name="an" value="{{ b.an or '' }}" required></div>
         <div class="s8"><label>Betreff</label><input type="text" name="betreff" value="{{ b.betreff }}"></div>
-        <div class="s12"><label>Text</label><textarea name="text" style="min-height:170px">{{ b.text }}</textarea></div>
+        <div class="s12"><label>Text</label><textarea name="text" style="min-height:170px" onclick="this.dataset.cursor = 1" onkeyup="this.dataset.cursor = 1">{{ b.text }}</textarea></div>
+        {% set bs = ben_bausteine() %}{% if bs %}<div class="s12"><select class="baustein-einfuegen" style="width:auto" onchange="bausteinEinfuegen(this)">
+          <option value="">Textbaustein einfügen …</option>{% for t in bs %}<option value="{{ t.text }}">{{ t.name }}</option>{% endfor %}</select></div>{% endif %}
       </div>
       <div class="leiste" style="margin-top:8px">
         <button>Jetzt senden</button>

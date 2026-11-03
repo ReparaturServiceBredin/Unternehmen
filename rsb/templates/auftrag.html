@@ -70,11 +70,28 @@
         {% if garantiefaelle %}<p class="klein">Garantiefälle zu diesem Auftrag: {% for g in garantiefaelle %}<a href="{{ url_for('main.auftrag', aid=g.id) }}">{{ g.auftragsnr }}</a>{{ ', ' if not loop.last }}{% endfor %}</p>{% endif %}
         <p class="klein">Freiwillige Garantie der Werkstatt; die gesetzlichen Mängelrechte bleiben unberührt.</p>
       </div>
-      <div class="karte">
+      <div class="karte" id="benachrichtigung">
         <h2>Kunde benachrichtigen</h2>
-        <form method="post" action="{{ url_for('main.auftrag_benachrichtigen', aid=a.id) }}" class="leiste">{{ csrf() }}
-          <select name="anlass" style="width:auto">{% for k, n in anlaesse.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select>
-          <button class="zweit">Vorschau erstellen</button></form>
+        <p class="klein">Jederzeit von Hand – auch wenn eine Nachricht schon gesendet oder automatisch ausgeschaltet ist. Danach erscheint oben die Vorschau zum Prüfen und Senden.</p>
+        <form method="post" action="{{ url_for('main.auftrag_benachrichtigen', aid=a.id) }}" id="ben-form">{{ csrf() }}
+          <div class="felder">
+            <div class="s12"><label>Anlass</label><select name="anlass" id="ben-anlass">{% for k, n in anlaesse.items() %}<option value="{{ k }}" {{ 'selected' if k == ben_vorwahl }}>{{ n }}</option>{% endfor %}</select></div>
+            <div class="s5 nur-versand"><label>Versanddienst</label><select name="versanddienst"><option value="">–</option>{% for d in versanddienste %}<option>{{ d }}</option>{% endfor %}</select></div>
+            <div class="s7 nur-versand"><label>Sendungsnummer</label><input type="text" name="sendungsnummer" autocomplete="off"></div>
+            {% if not a.abgeholt_am %}<div class="s12 nur-versand"><label class="check"><input type="checkbox" name="als_versendet" value="1" checked> Gerät als versendet vermerken (statt Abholung; keine Abhol-Erinnerungen mehr)</label></div>{% endif %}
+            {% set bs = ben_bausteine() %}{% if bs %}<div class="s12"><label>Textbausteine dazu</label>
+              <div style="display:flex;flex-wrap:wrap;gap:4px 18px">{% for t in bs %}<label class="check" style="font-weight:400" title="{{ t.text }}"><input type="checkbox" name="baustein" value="{{ t.id }}"> {{ t.name }}</label>{% endfor %}</div>
+              <div class="hilfe">Eigene unter <a href="{{ url_for('main.textbausteine') }}">Textbausteine</a> (Dokument „Kundenbenachrichtigung (Zusatztext)“).</div></div>{% endif %}
+            <div class="s12"><label>Eigener Zusatztext (optional)</label><textarea name="zusatz" style="min-height:60px"></textarea></div>
+          </div>
+          <button class="zweit" style="margin-top:8px">Vorschau erstellen</button></form>
+        <script>
+          (() => {
+            const s = document.getElementById('ben-anlass');
+            const zeigen = () => document.querySelectorAll('#ben-form .nur-versand').forEach(e => { e.hidden = s.value !== 'versendet'; });
+            s.addEventListener('change', zeigen); zeigen();
+          })();
+        </script>
         {% if a.status == 'erledigt' and not a.abgeholt_am %}
         <form method="post" action="{{ url_for('main.auftrag_abgeholt', aid=a.id) }}" style="margin-top:8px" onsubmit="return confirm('Abholung ohne digitalen Abholschein vermerken?')">{{ csrf() }}<button class="zweit klein">Als abgeholt vermerken (ohne Abholschein)</button></form>{% endif %}
         {% if ben_liste %}<table class="liste" style="margin-top:8px">{% for b in ben_liste %}<tr><td class="klein">{{ b.erstellt_am|zeit_sek }}</td><td>{{ anlaesse[b.anlass] }}</td><td class="klein">{{ {'offen':'wartet auf Freigabe','gesendet':'gesendet','verworfen':'nicht gesendet','fehler':'Fehler'}[b.status] }}</td></tr>{% endfor %}</table>{% endif %}

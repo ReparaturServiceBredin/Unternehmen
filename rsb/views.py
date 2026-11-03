@@ -2142,7 +2142,7 @@ TB_KATEGORIEN = {"einleitung": "Einleitung", "schluss": "Schlusstext", "hinweis"
                  "email_betreff": "E-Mail-Betreff", "email_text": "E-Mail-Text"}
 TB_TYPEN = {"alle": "Alle Dokumente", "rechnung": "Rechnung", "storno": "Stornorechnung", "kva": "Kostenvoranschlag",
             "angebot": "Angebot", "auftragsbestaetigung": "Auftragsbestätigung",
-            "kunde_email": "Freie E-Mail an Kunden"}
+            "kunde_email": "Freie E-Mail an Kunden", "benachrichtigung": "Kundenbenachrichtigung (Zusatztext)"}
 
 
 @bp.route("/textbausteine/neu", methods=["GET", "POST"])
@@ -2696,6 +2696,9 @@ def auftrag(aid):
                            lager_artikel=con.execute("SELECT id, name, einheit, bestand, lagerort, kompatibilitaet "
                                                      "FROM artikel WHERE lagerfuehrend=1 AND aktiv=1 ORDER BY name").fetchall(),
                            anlaesse=ben.ANLAESSE, leistungsarten=_leistungsarten(),
+                           versanddienste=list(ben.VERSANDDIENSTE),
+                           ben_vorwahl="fertig" if a["status"] == "erledigt" and not a["abgeholt_am"] else
+                           ("versendet" if a["status"] == "erledigt" else ""),
                            anfrage=anfrage_row, kunden=_kunden_liste(con, a["kunde_id"]), kva_kunde=kva_kunde,
                            fotos=fot.liste(con, aid), kategorien=fot.KATEGORIEN,
                            verlauf=auf.verlauf_liste(con, aid), kva_status_namen=auf.KVA_STATUS,
@@ -2964,12 +2967,35 @@ def benachrichtigung_verwerfen(bid):
 
 @bp.route("/auftraege/<int:aid>/benachrichtigen", methods=["POST"])
 def auftrag_benachrichtigen(aid):
+    """Benachrichtigung von Hand anstoßen – jederzeit, mit Sendungsnummer und Zusatztexten (Textbausteine)."""
     con = dbm.get_db()
-    _auftrag_laden(aid)
+    a = _auftrag_laden(aid)
+    anlass = _f("anlass")
+    teile = [ben.versand_zeile(_f("versanddienst"), _f("sendungsnummer"))] if anlass == "versendet" else []
+    ids = [int(x) for x in request.form.getlist("baustein") if x.isdigit()]
+    if ids:
+        texte = {r["id"]: r["text"] for r in con.execute(
+            f"SELECT id, text FROM textbausteine WHERE id IN ({','.join('?' * len(ids))})", ids)}
+        teile += [texte[i] for i in ids if i in texte]
+    teile.append(request.form.get("zusatz", ""))
+    zusatz = "\n\n".join(t.strip() for t in teile if t and t.strip())
     with dbm.Transaktion(con):
-        bid = ben.vorschlagen(con, aid, _f("anlass"), manuell=True)
+        bid = ben.vorschlagen(con, aid, anlass, manuell=True, zusatz=zusatz)
+        if anlass == "versendet" and request.form.get("als_versendet") and not a["abgeholt_am"]:
+            con.execute("UPDATE auftraege SET abgeholt_am=? WHERE id=?", (dbm.jetzt_berlin(), aid))
+            auf.verlauf(con, aid, "Gerät versendet", ben.versand_zeile(_f("versanddienst"), _f("sendungsnummer"))
+                        .split("\n")[0] or None)
+            gar.ende_speichern(con, aid)
+            ann.zugang_loeschen(con, aid, "Gerät versendet")
+            for b in con.execute("SELECT id FROM benachrichtigungen WHERE auftrag_id=? AND anlass='erinnerung' "
+                                 "AND status='offen'", (aid,)).fetchall():
+                ben.verwerfen(con, b["id"], "Gerät wurde versendet")
     if not bid:
         flash("Für interne Aufträge werden keine Benachrichtigungen erstellt.", "warnung")
+        return redirect(url_for("main.auftrag", aid=aid))
+    for ok, text in ben.offene_automatisch_senden(con):
+        flash(("Kunde benachrichtigt – " if ok else "Benachrichtigung fehlgeschlagen – ") + text,
+              "ok" if ok else "warnung")
     return redirect(url_for("main.auftrag", aid=aid))
 
 

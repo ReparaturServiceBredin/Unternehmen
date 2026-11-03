@@ -196,6 +196,20 @@ STANDARD_TEXTBAUSTEINE += [
     },
 ]
 
+# Zusatztexte für Kundenbenachrichtigungen (Auftrag → „Kunde benachrichtigen“ bzw. in der Vorschau einfügen)
+BENACHRICHTIGUNG = "benachrichtigung"
+STANDARD_TEXTBAUSTEINE += [
+    {"kategorie": "hinweis", "dokumenttyp": BENACHRICHTIGUNG, "standard": 0, "name": "Rechnung liegt bei",
+     "text": "Die Rechnung liegt dem Paket bei."},
+    {"kategorie": "hinweis", "dokumenttyp": BENACHRICHTIGUNG, "standard": 0, "name": "Rechnung per E-Mail",
+     "text": "Die Rechnung erhalten Sie separat per E-Mail."},
+    {"kategorie": "hinweis", "dokumenttyp": BENACHRICHTIGUNG, "standard": 0, "name": "Bitte kurz prüfen",
+     "text": "Bitte prüfen Sie das Gerät nach Erhalt kurz. Falls etwas nicht stimmt, melden Sie sich gern direkt "
+             "bei uns."},
+    {"kategorie": "hinweis", "dokumenttyp": BENACHRICHTIGUNG, "standard": 0, "name": "Bewertung",
+     "text": "Wenn Sie zufrieden waren, freuen wir uns sehr über eine kurze Bewertung."},
+]
+
 PLATZHALTER_HILFE = [
     ("{anrede_brief}", "Briefanrede, z. B. „Sehr geehrte Frau Müller,“"),
     ("{kunde_name}", "Name bzw. Firma des Kunden"),

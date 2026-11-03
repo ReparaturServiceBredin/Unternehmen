@@ -343,7 +343,7 @@
 {% elif bereich == 'benachrichtigung' %}
 <form method="post" class="karte">{{ csrf() }}
   <h2>Kundenbenachrichtigung</h2>
-  <p class="klein">Bei diesen Ereignissen schlägt das Programm eine Nachricht an den Kunden vor. Platzhalter: <code>{Anrede}</code> <code>{Kundenname}</code> <code>{Auftragsnummer}</code> <code>{Gerät}</code> <code>{Betrag}</code> <code>{Öffnungszeiten}</code> <code>{Fertig bis}</code> <code>{Firma}</code>. Gesendete Nachrichten landen in der E-Mail-Historie des Kunden.</p>
+  <p class="klein">Bei diesen Ereignissen schlägt das Programm eine Nachricht an den Kunden vor. Platzhalter: <code>{Anrede}</code> <code>{Kundenname}</code> <code>{Auftragsnummer}</code> <code>{Gerät}</code> <code>{Betrag}</code> <code>{Öffnungszeiten}</code> <code>{Fertig bis}</code> <code>{Firma}</code> <code>{Zusatz}</code> (von Hand ergänzter Text, sonst vor dem Gruß). Jede Nachricht lässt sich im Auftrag unter „Kunde benachrichtigen“ jederzeit von Hand anstoßen. Gesendete Nachrichten landen in der E-Mail-Historie des Kunden.</p>
   <div class="felder">
     <div class="s12">{{ haken('benachrichtigung_vorschau', 'Vor jedem Versand Vorschau anzeigen (empfohlen) – sonst wird sofort gesendet') }}</div>
     <div class="s3"><label>Versandweg</label><select name="benachrichtigung_kanal">
@@ -353,10 +353,10 @@
       <div class="hilfe">z. B. 7, 14, 30 – Tage nach „Erledigt“</div></div>
     <div class="s6"><label>Öffnungszeiten (für {Öffnungszeiten})</label><textarea name="oeffnungszeiten" style="min-height:60px">{{ einst.oeffnungszeiten or '' }}</textarea></div>
   </div>
-  {% for a, titel in [('angenommen','Auftrag angenommen'),('kva','Kostenvoranschlag versendet (nach dem Festschreiben; entfällt, wenn der KVA direkt per E-Mail geht)'),('wartet_teil','Warten auf Ersatzteil'),('fertig','Gerät fertig zur Abholung'),('erinnerung','Erinnerung: Gerät noch nicht abgeholt')] %}
+  {% for a, titel in [('angenommen','Auftrag angenommen'),('kva','Kostenvoranschlag versendet (nach dem Festschreiben; entfällt, wenn der KVA direkt per E-Mail geht)'),('wartet_teil','Warten auf Ersatzteil'),('fertig','Gerät fertig zur Abholung'),('erinnerung','Erinnerung: Gerät noch nicht abgeholt'),('versendet','Gerät versendet (nur von Hand im Auftrag; {Zusatz} = Sendungsnummer und Zusatztexte)')] %}
   <h2 style="margin-top:18px">{{ titel }}</h2>
   <div class="felder">
-    <div class="s12">{{ haken('ben_' ~ a ~ '_aktiv', 'automatisch vorschlagen') }}</div>
+    {% if a != 'versendet' %}<div class="s12">{{ haken('ben_' ~ a ~ '_aktiv', 'automatisch vorschlagen') }}</div>{% endif %}
     <div class="s12"><label>Betreff</label><input type="text" name="ben_{{ a }}_betreff" value="{{ einst['ben_' ~ a ~ '_betreff'] or '' }}"></div>
     <div class="s12"><label>Text</label><textarea name="ben_{{ a }}_text" style="min-height:150px">{{ einst['ben_' ~ a ~ '_text'] or '' }}</textarea></div>
   </div>

@@ -17,11 +17,24 @@ ANLAESSE = {
     "wartet_teil": "Warten auf Ersatzteil",
     "fertig": "Gerät fertig zur Abholung",
     "erinnerung": "Erinnerung: Gerät noch nicht abgeholt",
+    "versendet": "Gerät versendet",
+}
+# Anlässe ohne automatischen Auslöser – nur von Hand im Auftrag („Kunde benachrichtigen“)
+NUR_MANUELL = {"versendet"}
+
+# Sendungsverfolgung: Versanddienst → Link ({nr} = Sendungsnummer)
+VERSANDDIENSTE = {
+    "DHL": "https://www.dhl.de/de/privatkunden/pakete-empfangen/verfolgen.html?piececode={nr}",
+    "DPD": "https://tracking.dpd.de/status/de_DE/parcel/{nr}",
+    "Hermes": "https://www.myhermes.de/empfangen/sendungsverfolgung/sendungsinformation#{nr}",
+    "GLS": "https://gls-group.com/DE/de/paketverfolgung?match={nr}",
+    "UPS": "https://www.ups.com/track?loc=de_DE&tracknum={nr}",
+    "Deutsche Post": "",
 }
 KANAELE = {"email": "E-Mail", "sms": "SMS"}
 STATUS = {"offen": "wartet auf Freigabe", "gesendet": "gesendet", "verworfen": "nicht gesendet", "fehler": "Fehler"}
 PLATZHALTER = ["{Anrede}", "{Kundenname}", "{Auftragsnummer}", "{Gerät}", "{Betrag}", "{Öffnungszeiten}",
-               "{Fertig bis}", "{Firma}"]
+               "{Fertig bis}", "{Firma}", "{Zusatz}"]
 
 _GRUSS = "\n\nMit freundlichen Grüßen\n{Firma}"
 STANDARD = {
@@ -41,6 +54,8 @@ STANDARD = {
     "erinnerung": ("Erinnerung: Ihr Gerät wartet auf Sie (Auftrag {Auftragsnummer})",
                    "{Anrede}\n\nIhr Gerät ({Gerät}) liegt seit einigen Tagen abholbereit bei uns. Bitte holen Sie es "
                    "zu unseren Öffnungszeiten ab:\n{Öffnungszeiten}" + _GRUSS),
+    "versendet": ("Ihr Gerät ist unterwegs (Auftrag {Auftragsnummer})",
+                  "{Anrede}\n\nIhr Gerät ({Gerät}) ist fertig und wurde heute an Sie versendet.\n\n{Zusatz}" + _GRUSS),
 }
 
 
@@ -87,24 +102,50 @@ def werte(con, a, anlass, einst=None):
             "{Firma}": "\n".join(x for x in [einst.get("inhaber"), einst.get("firma_name")] if x)}
 
 
+def versand_zeile(dienst, nummer):
+    """„Versand mit DHL, Sendungsnummer 123: <Link>“ – leer, wenn nichts angegeben."""
+    dienst, nummer = (dienst or "").strip(), (nummer or "").strip().replace(" ", "")
+    if not dienst and not nummer:
+        return ""
+    zeile = "Versand" + (f" mit {dienst}" if dienst else "") + (f", Sendungsnummer {nummer}" if nummer else "")
+    link = VERSANDDIENSTE.get(dienst, "")
+    if link and nummer:
+        zeile += f"\nSendungsverfolgung: {link.format(nr=nummer)}"
+    return zeile
+
+
+def zusatz_einfuegen(text, zusatz):
+    """Zusatztext an {Zusatz} einsetzen, sonst vor den Gruß („Mit freundlichen Grüßen“) bzw. ans Ende."""
+    zusatz = (zusatz or "").strip()
+    if "{Zusatz}" in text:
+        text = text.replace("{Zusatz}", zusatz)
+    elif zusatz:
+        pos = text.rfind("\n\nMit freundlichen Grüßen")
+        text = (text[:pos] + "\n\n" + zusatz + text[pos:]) if pos >= 0 else (text.rstrip() + "\n\n" + zusatz)
+    return re.sub(r"\n{3,}", "\n\n", text)
+
+
 def ersetzen(text, w):
     for k, v in sorted(w.items(), key=lambda kv: -len(kv[0])):
         text = text.replace(k, v)
     return text
 
 
-def texte(con, a, anlass, einst=None):
+def texte(con, a, anlass, einst=None, zusatz=None):
     einst = einst or dbm.einstellungen(con)
     w = werte(con, a, anlass, einst)
     betreff = einst.get(f"ben_{anlass}_betreff") or STANDARD[anlass][0]
-    text = einst.get(f"ben_{anlass}_text") or STANDARD[anlass][1]
+    text = zusatz_einfuegen(einst.get(f"ben_{anlass}_text") or STANDARD[anlass][1], zusatz)
     return ersetzen(betreff, w), ersetzen(text, w)
 
 
 # ---------------------------------------------------------------------- Vorschläge
 
-def vorschlagen(con, auftrag_id, anlass, stufe=None, manuell=False):
+def vorschlagen(con, auftrag_id, anlass, stufe=None, manuell=False, zusatz=None):
     """Legt einen Vorschlag an (falls der Anlass eingeschaltet ist und es keinen gleichen gibt). Gibt die ID oder None.
+
+    manuell: von Hand angestoßen – jederzeit, auch wenn der Anlass ausgeschaltet ist oder schon gesendet wurde.
+    zusatz: zusätzlicher Text (Sendungsnummer, Textbausteine), bleibt beim Neu-Erzeugen der Vorschau erhalten.
 
     Muss in einer Transaktion laufen. Versendet wird erst nach Freigabe (oder sofort, wenn die Vorschau aus ist –
     das erledigt offene_automatisch_senden() nach der Transaktion).
@@ -112,7 +153,7 @@ def vorschlagen(con, auftrag_id, anlass, stufe=None, manuell=False):
     if anlass not in ANLAESSE:
         raise EingabeFehler("Unbekannter Anlass.")
     einst = dbm.einstellungen(con)
-    if not manuell and not einst.get(f"ben_{anlass}_aktiv"):
+    if not manuell and (anlass in NUR_MANUELL or not einst.get(f"ben_{anlass}_aktiv")):
         return None
     a = con.execute("SELECT * FROM auftraege WHERE id=?", (auftrag_id,)).fetchone()
     if not a:
@@ -127,22 +168,26 @@ def vorschlagen(con, auftrag_id, anlass, stufe=None, manuell=False):
     k = con.execute("SELECT * FROM kunden WHERE id=?", (a["kunde_id"],)).fetchone()
     kanal = einst.get("benachrichtigung_kanal") or "email"
     an = k["telefon"] if kanal == "sms" else k["email"]
-    betreff, text = texte(con, a, anlass, einst)
+    if manuell:  # ein älterer, noch offener Vorschlag zum selben Anlass wird ersetzt
+        for alt in con.execute("SELECT id FROM benachrichtigungen WHERE auftrag_id=? AND anlass=? AND "
+                               "status='offen'", (auftrag_id, anlass)).fetchall():
+            verwerfen(con, alt["id"], "ersetzt durch neue Vorschau")
+    betreff, text = texte(con, a, anlass, einst, zusatz)
     cur = con.execute(
         "INSERT INTO benachrichtigungen (auftrag_id, kunde_id, anlass, stufe, kanal, an, betreff, text, status, "
-        "erstellt_am, benutzer) VALUES (?,?,?,?,?,?,?,?,'offen',?,?)",
+        "erstellt_am, benutzer, zusatz) VALUES (?,?,?,?,?,?,?,?,'offen',?,?,?)",
         (auftrag_id, a["kunde_id"], anlass, stufe, kanal, an or "", betreff, text, dbm.jetzt_berlin(),
-         dbm.aktueller_benutzer()))
+         dbm.aktueller_benutzer(), (zusatz or "").strip() or None))
     return cur.lastrowid
 
 
 def offene(con, auftrag_id=None):
     """Offene Vorschläge; Texte werden mit den aktuellen Auftragsdaten neu erzeugt (z. B. Rechnungsbetrag)."""
     einst = dbm.einstellungen(con)
-    for b in con.execute("SELECT b.id, b.anlass, b.auftrag_id FROM benachrichtigungen b WHERE b.status='offen'"
+    for b in con.execute("SELECT b.id, b.anlass, b.auftrag_id, b.zusatz FROM benachrichtigungen b WHERE b.status='offen'"
                          + (" AND b.auftrag_id=?" if auftrag_id else ""), (auftrag_id,) if auftrag_id else ()):
         a = con.execute("SELECT * FROM auftraege WHERE id=?", (b["auftrag_id"],)).fetchone()
-        betreff, text = texte(con, a, b["anlass"], einst)
+        betreff, text = texte(con, a, b["anlass"], einst, b["zusatz"])
         con.execute("UPDATE benachrichtigungen SET betreff=?, text=? WHERE id=?", (betreff, text, b["id"]))
     sql = ("SELECT b.*, a.auftragsnr, a.geraet, k.kundennr, k.firma, k.vorname, k.nachname, k.typ AS ktyp "
            "FROM benachrichtigungen b JOIN auftraege a ON a.id=b.auftrag_id JOIN kunden k ON k.id=b.kunde_id "

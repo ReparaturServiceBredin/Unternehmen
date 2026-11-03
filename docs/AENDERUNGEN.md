@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.35.0 | 03.11.2026 | Benachrichtigungen jederzeit von Hand, „Gerät versendet“ mit Sendungsnummer, Textbausteine |
 | 0.34.0 | 22.10.2026 | E-Mail an Kunden direkt schreiben, mit Vorlagen |
 | 0.33.0 | 21.10.2026 | Benutzer, Anmeldesperre, Umzug per Browser, Schlüssel in der Sicherung |
 | 0.32.0 | 21.10.2026 | Deutsche Uhrzeit unabhängig vom Rechner, Anleitung IONOS |
@@ -60,6 +61,22 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.35.0 – 03.11.2026
+### Neu
+- **Kunde benachrichtigen – jederzeit von Hand** (im Auftrag): jede Nachricht (angenommen, Warten auf Teil, fertig
+  zur Abholung, Erinnerung …) lässt sich beliebig oft anstoßen – auch wenn sie schon gesendet wurde oder der
+  automatische Vorschlag ausgeschaltet ist. Eine ältere, noch offene Vorschau zum selben Anlass wird ersetzt.
+- **Neuer Anlass „Gerät versendet“** mit Versanddienst (DHL, DPD, Hermes, GLS, UPS, Deutsche Post) und
+  Sendungsnummer – der Link zur Sendungsverfolgung kommt automatisch in die E-Mail. Auf Wunsch wird das Gerät
+  gleichzeitig als versendet vermerkt (statt Abholung; keine Abhol-Erinnerungen mehr, Garantie läuft ab heute).
+- **Textbausteine dazu:** beim Anstoßen per Häkchen (z. B. „Rechnung liegt bei“, „Bitte kurz prüfen“, „Bewertung“)
+  plus eigener Zusatztext; in jeder Vorschau zusätzlich „Textbaustein einfügen …“. Eigene Bausteine unter
+  *Textbausteine* → Dokument „Kundenbenachrichtigung (Zusatztext)“.
+- Vorlagen: neuer Platzhalter `{Zusatz}`; ohne ihn steht der Zusatztext vor dem Gruß. Der Text für „Gerät versendet“
+  ist unter *Einstellungen → Benachrichtigungen* änderbar.
 
 ---
 
