@@ -1,64 +1,204 @@
 {% extends "base.html" %}
+{% set seiten_kunde = a.kunde_id if a else none %}
 {% from "_ak.html" import reiter %}
 {% from "_status.html" import csrf %}
 {% block titel %}{{ a.titel if a else 'Neue Arbeit' }}{% endblock %}
 {% block inhalt %}
 {% set v = vorlage %}
 <div class="kopf">
-  <h1>{% if a %}<span class="ak-typ {{ a.typ }}" style="vertical-align:middle">{{ 'KVA' if a.typ == 'kva' else 'Reparatur' }}</span> {{ a.titel }}{% else %}Neue Arbeit{% endif %}</h1>
+  <h1>{% if a %}<span class="ak-typ {{ a.typ }}" style="vertical-align:middle">{{ ak.TYP_KURZ[a.typ] }}</span> {{ 'belegt' if sichtschutz and a.privat else a.titel }}{% else %}Neue Arbeit{% endif %}</h1>
   {% if a %}<div class="leiste">
     {% if auftrag %}<a class="knopf zweit" href="{{ url_for('main.auftrag', aid=auftrag.id) }}">Auftrag {{ auftrag.auftragsnr }}</a>{% endif %}
     {% if kva %}<a class="knopf zweit" href="{{ url_for('main.dokument', did=kva.id) }}">KVA {{ kva.nummer or 'Entwurf' }}</a>{% endif %}
     {% if a.kunde_id %}<a class="knopf zweit" href="{{ url_for('main.kunde', kid=a.kunde_id) }}">Kunde</a>{% endif %}
-    <a class="knopf" href="{{ url_for('kalender.vorschlag', aid=a.id) }}">Terminvorschlag senden</a>
   </div>{% endif %}
 </div>
 {{ reiter('neu' if not a else '') }}
 <style>
   .ak-termin { border: 1px solid var(--rand); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; background: var(--flaeche); }
-  .ak-termin.st-abgesagt { opacity: .65; }
-  .ak-termin summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+  .ak-termin.st-erledigt { background: var(--flaeche-2); }
+  .ak-termin-kopf { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; margin-bottom: 10px; }
+  .ak-schnellzeile { display: grid; grid-template-columns: auto 1fr 1fr auto; gap: 8px; align-items: end; }
   .ak-timer { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--gruen); }
   .ak-pos td { font-size: 13px; }
+  details.ak-mehr > summary { cursor: pointer; color: var(--blau); font-weight: 600; font-size: 13px; margin-top: 10px; }
+  details.ak-klapp { border: 1px solid var(--rand); border-radius: var(--radius); background: var(--flaeche); margin-bottom: 16px; }
+  details.ak-klapp > summary { cursor: pointer; padding: 14px 18px; font-weight: 700; display: flex; justify-content: space-between; gap: 10px; }
+  details.ak-klapp > .inhalt { padding: 0 18px 16px; }
+  @media (max-width: 560px) { .ak-schnellzeile { grid-template-columns: 1fr 1fr; } .ak-schnellzeile .timer { grid-column: 1 / -1; } .ak-schnellzeile .timer button { width: 100%; } }
 </style>
 
 {% if a %}
 <div class="zweispaltig">
 <div>
+<div class="karte" id="termine">
+  <h2>Termine</h2>
+  {% for t in termine %}{% set offen_t = t.status not in ('erledigt', 'abgesagt') %}
+  <div class="ak-termin st-{{ t.status }}" id="termin-{{ t.id }}">
+    <div class="ak-termin-kopf">
+      <b>{{ ak.wochentag(t.datum) }}, {{ t.datum|datum }}, {{ t.beginn }}–{{ ak.ende(t) }}</b>{% if t.art %}<span>{{ t.art }}</span>{% endif %}
+      <span class="ak-st {{ t.status }}">{{ ak.TERMIN_STATUS[t.status] }}</span>
+      {% if t.timer_start %}<span class="ak-timer" data-start="{{ t.timer_start }}" data-bisher="{{ t.ist_minuten or 0 }}">⏱ läuft</span>{% endif %}
+    </div>
+    <form method="post" action="{{ url_for('kalender.termin_speichern', tid=t.id) }}">{{ csrf() }}
+      <div class="ak-schnellzeile">
+        <div class="timer">{% if t.timer_start %}<button formaction="{{ url_for('kalender.termin_timer', tid=t.id) }}" name="aktion" value="stopp" class="gefahr" formnovalidate>■ Stopp</button>
+          {% else %}<button formaction="{{ url_for('kalender.termin_timer', tid=t.id) }}" name="aktion" value="start" formnovalidate class="{{ '' if offen_t else 'zweit' }}">▶ Timer</button>{% endif %}</div>
+        <div><label>Zeit vor Ort</label><input type="text" name="ist_dauer" inputmode="numeric" value="{{ ('%d:%02d' % (t.ist_minuten // 60, t.ist_minuten % 60)) if t.ist_minuten is not none else '' }}" placeholder="1:30"></div>
+        <div><label>km</label><input type="text" name="km" inputmode="decimal" value="{{ '%g' % t.km if t.km is not none else '' }}" placeholder="{{ 'Pauschale' if (t.anfahrt or standard_anfahrt) == 'pauschale' else '0' }}"></div>
+        <div><button class="zweit">Speichern</button></div>
+      </div>
+      {% if termin_pos[t.id] %}<table class="liste ak-pos" style="margin-top:8px">{% for kat, text, cent, weiter in termin_pos[t.id] %}<tr><td>{{ text }}{% if not weiter %} <span class="klein">(intern)</span>{% endif %}</td><td class="zahl">{{ cent|euro }}</td></tr>{% endfor %}</table>{% endif %}
+      <details class="ak-mehr">
+        <summary>Mehr: Termin ändern, Start/Ende, Anfahrt</summary>
+        <div class="felder" style="margin-top:8px">
+          <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
+          <div class="s4"><label>Beginn</label><input type="time" name="beginn" value="{{ t.beginn }}" required></div>
+          <div class="s4"><label>Dauer geplant</label><input type="text" name="dauer" value="{{ '%d:%02d' % (t.dauer_min // 60, t.dauer_min % 60) }}"></div>
+          <div class="s6"><label>Art</label><input type="text" name="art" value="{{ t.art or '' }}" list="ak-arten"></div>
+          <div class="s6"><label>Notiz</label><input type="text" name="notiz" value="{{ t.notiz or '' }}"></div>
+          <div class="s4"><label>Start (tatsächlich)</label><input type="time" name="ist_beginn" value="{{ t.ist_beginn or '' }}"></div>
+          <div class="s4"><label>Ende</label><input type="time" name="ist_ende" value="{{ t.ist_ende or '' }}"></div>
+          <div class="s4"><label>Anfahrt</label><select name="anfahrt">{% for k, n in ak.ANFAHRT.items() %}<option value="{{ k }}" {{ 'selected' if (t.anfahrt or standard_anfahrt) == k }}>{{ n }}</option>{% endfor %}</select></div>
+          <div class="s4"><label>Fahrzeit</label><input type="text" name="fahrzeit" value="{{ ('%d:%02d' % (t.fahrzeit_min // 60, t.fahrzeit_min % 60)) if t.fahrzeit_min else '' }}" placeholder="0:30"></div>
+          <div class="s8"><label class="check" style="font-weight:400"><input type="checkbox" name="fahrzeit_berechnen" value="1" {{ 'checked' if t.fahrzeit_berechnen }}> Fahrzeit berechnen</label>
+            <label class="check" style="font-weight:400"><input type="checkbox" name="anfahrt_weiter" value="1" {{ 'checked' if t.anfahrt_weiter }}> Anfahrt an Kunden weiterberechnen</label></div>
+          <div class="s12 hilfe">„Zeit vor Ort“ hat Vorrang; leer lassen, um sie aus Start/Ende zu berechnen. Ist Zeit erfasst, gilt der Termin als erledigt.</div>
+        </div>
+        <div class="leiste" style="margin-top:8px">
+          <a class="knopf zweit klein" href="{{ url_for('kalender.termin_ics', tid=t.id) }}">Kalenderdatei (.ics)</a>
+          <button class="gefahr klein" formaction="{{ url_for('kalender.termin_loeschen', tid=t.id) }}" formnovalidate onclick="return confirm('Termin löschen?')">Termin löschen</button>
+        </div>
+      </details>
+    </form>
+    {% if offen_t %}<div class="leiste" style="margin-top:8px">
+      <a class="knopf zweit klein" href="{{ url_for('kalender.vorschlag', aid=a.id, termin=t.id) }}">An Kunden senden</a>
+      <form method="post" action="{{ url_for('kalender.termin_bestaetigt', tid=t.id) }}">{{ csrf() }}
+        {% if t.status == 'bestaetigt' %}<button class="zweit klein" name="zuruecknehmen" value="1">✓ bestätigt – zurücknehmen</button>
+        {% else %}<input type="hidden" name="andere_absagen" value="1"><button class="zweit klein" title="Übrige Vorschläge aus derselben Nachricht werden abgesagt">Kunde hat bestätigt</button>{% endif %}</form>
+      {% if t.vorgeschlagen_am %}<span class="klein">vorgeschlagen {{ t.vorgeschlagen_am|zeit }} ({{ t.vorgeschlagen_per }})</span>{% endif %}
+    </div>{% endif %}
+  </div>
+  {% else %}<p class="klein">Noch keine Termine.</p>{% endfor %}
+  <datalist id="ak-arten">{% for x in ak.TERMIN_ARTEN %}<option value="{{ x }}">{% endfor %}</datalist>
+
+  <details class="ak-mehr" {{ 'open' if not termine }}>
+    <summary>+ Termin eintragen</summary>
+    <form method="post" action="{{ url_for('kalender.termin_neu', aid=a.id) }}" style="margin-top:8px">{{ csrf() }}
+      <div class="felder">
+        <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ heute }}" required></div>
+        <div class="s4"><label>Beginn</label><input type="time" name="beginn" value="09:00" required></div>
+        <div class="s4"><label>Dauer</label><input type="text" name="dauer" value="{{ '%d:%02d' % (standard_dauer // 60, standard_dauer % 60) }}"></div>
+        <div class="s12"><label>Art</label><input type="text" name="art" list="ak-arten" placeholder="Besichtigung, Reparatur …"></div>
+      </div>
+      <button style="margin-top:8px">Termin eintragen</button>
+      <span class="klein">Mehrere Termine eintragen = mehrere Vorschläge in einer Nachricht.</span>
+    </form>
+  </details>
+</div>
+</div>
+
+<div>
 {% endif %}
 <form method="post" action="{{ url_for('kalender.arbeit', aid=a.id) if a else url_for('kalender.neu') }}" class="karte">{{ csrf() }}
-  <h2>{{ 'Arbeit' if a else 'Arbeit anlegen' }}</h2>
   <div class="felder">
-    <div class="s4"><label>Typ</label><select name="typ">{% for k, n in ak.TYPEN.items() %}<option value="{{ k }}" {{ 'selected' if v.typ == k }}>{{ n }}</option>{% endfor %}</select></div>
-    <div class="s4"><label>Status</label><select name="status">{% for k, n in ak.STATUS.items() %}<option value="{{ k }}" {{ 'selected' if v.status == k }}>{{ n }}</option>{% endfor %}</select></div>
-    <div class="s4"><label>Priorität</label><select name="prioritaet">{% for k, n in ak.PRIORITAETEN.items() %}<option value="{{ k }}" {{ 'selected' if (v.prioritaet or '') == k }}>{{ n }}</option>{% endfor %}</select></div>
-    <div class="s12"><label>Kunde aus der Kundenliste</label><select name="kunde_id" id="ak-kunde"><option value="">– ohne / neuer Kunde (unten eintragen) –</option>
-      {% for k in kunden %}{% set kf = ak.kunde_felder(k) %}<option value="{{ k.id }}" {{ 'selected' if v.kunde_id == k.id }} data-name="{{ kf.name }}" data-adresse="{{ kf.adresse }}" data-telefon="{{ kf.telefon }}" data-email="{{ kf.email }}">{{ k.kundennr }} · {{ kf.name }}{{ ' · ' ~ k.ort if k.ort }}</option>{% endfor %}</select></div>
-    <div class="s6"><label>Name</label><input type="text" name="name" value="{{ v.name or '' }}"></div>
-    <div class="s6"><label>Adresse (Einsatzort)</label><input type="text" name="adresse" value="{{ v.adresse or '' }}"></div>
-    <div class="s6"><label>Telefon</label><input type="text" name="telefon" value="{{ v.telefon or '' }}"></div>
-    <div class="s6"><label>E-Mail</label><input type="email" name="email" value="{{ v.email or '' }}"></div>
-    <div class="s12"><label>Titel der Arbeit</label><input type="text" name="titel" value="{{ v.titel or '' }}" required placeholder="z. B. Heizungssteuerung prüfen, Display tauschen vor Ort"></div>
-    <div class="s12"><label>Beschreibung</label><textarea name="beschreibung" style="min-height:80px">{{ v.beschreibung or '' }}</textarea></div>
-    <div class="s6"><label>Stundensatz (€/Std. netto)</label><input type="text" name="stundensatz" value="{{ v.stundensatz|euro(false) if v.stundensatz is not none else '' }}" placeholder="Standard: {{ einst_satz|euro }}"></div>
+    <div class="s12"><label>Titel</label><input type="text" name="titel" value="{{ v.titel or '' }}" required placeholder="z. B. Display tauschen, Material holen, Büroarbeit" {{ 'autofocus' if not a }}></div>
+    <div class="s6"><label>Typ</label><select name="typ">{% for k, n in ak.TYPEN.items() %}<option value="{{ k }}" {{ 'selected' if v.typ == k }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="s6"><label>Status</label><select name="status">{% for k, n in ak.STATUS.items() %}<option value="{{ k }}" {{ 'selected' if v.status == k }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="s12"><label>Kunde</label><select name="kunde_id" id="ak-kunde"><option value="">– kein Kunde –</option>
+      {% for k in kunden %}{% set kf = ak.kunde_felder(k) %}<option value="{{ k.id }}" {{ 'selected' if v.kunde_id == k.id }} data-name="{{ kf.name }}" data-adresse="{{ kf.adresse }}" data-telefon="{{ kf.telefon }}" data-email="{{ kf.email }}">{{ kf.name }}{{ ' · ' ~ k.ort if k.ort }}</option>{% endfor %}</select></div>
   </div>
-  <div class="leiste" style="margin-top:10px"><button>{{ 'Speichern' if a else 'Anlegen' }}</button>
-    {% if a %}<button class="gefahr" formaction="{{ url_for('kalender.arbeit_loeschen', aid=a.id) }}" formnovalidate onclick="return confirm('Arbeit mit allen Terminen und Kosten löschen? Verknüpfte Aufträge/KVAs bleiben unverändert.')">Löschen</button>{% endif %}</div>
+  <details class="ak-mehr" id="ak-kontakt" {{ 'open' if v.name or v.adresse }}>
+    <summary>Name, Adresse, Telefon, E-Mail</summary>
+    <div class="felder" style="margin-top:8px">
+      <div class="s6"><label>Name</label><input type="text" name="name" value="{{ v.name or '' }}"></div>
+      <div class="s6"><label>Adresse (Einsatzort)</label><input type="text" name="adresse" value="{{ v.adresse or '' }}"></div>
+      <div class="s6"><label>Telefon</label><input type="tel" name="telefon" value="{{ v.telefon or '' }}"></div>
+      <div class="s6"><label>E-Mail</label><input type="email" name="email" value="{{ v.email or '' }}"></div>
+    </div>
+  </details>
+  <details class="ak-mehr" {{ 'open' if v.beschreibung }}>
+    <summary>Beschreibung, Priorität, Stundensatz</summary>
+    <div class="felder" style="margin-top:8px">
+      <div class="s12"><label>Beschreibung</label><textarea name="beschreibung" style="min-height:70px">{{ v.beschreibung or '' }}</textarea></div>
+      <div class="s6"><label>Priorität</label><select name="prioritaet">{% for k, n in ak.PRIORITAETEN.items() %}<option value="{{ k }}" {{ 'selected' if (v.prioritaet or '') == k }}>{{ n }}</option>{% endfor %}</select></div>
+      <div class="s6"><label>Stundensatz (€/Std. netto)</label><input type="text" name="stundensatz" value="{{ v.stundensatz|euro(false) if v.stundensatz is not none else '' }}" placeholder="{{ 'keiner (freier Eintrag)' if v.typ == 'frei' else 'Standard: ' ~ (einst_satz|euro) }}"></div>
+    </div>
+  </details>
+  <div id="ak-privat" style="margin-top:8px"><label class="check" style="font-weight:400"><input type="checkbox" name="privat" value="1" {{ 'checked' if v.privat }}> privat (im Sichtschutz nur „belegt“)</label></div>
+  <div class="leiste" style="margin-top:12px"><button>{{ 'Speichern' if a else 'Anlegen' }}</button>
+    {% if a %}<button class="gefahr klein" formaction="{{ url_for('kalender.arbeit_loeschen', aid=a.id) }}" formnovalidate onclick="return confirm('Arbeit mit allen Terminen und Kosten löschen? Verknüpfte Aufträge/KVAs bleiben unverändert.')">Löschen</button>{% endif %}</div>
 </form>
 <script>
-  document.getElementById('ak-kunde').addEventListener('change', e => {
-    const o = e.target.selectedOptions[0];
-    if (!o || !o.value) return;
-    for (const f of ['name', 'adresse', 'telefon', 'email']) e.target.form.elements[f].value = o.dataset[f] || '';
-  });
+  (() => {
+    const kunde = document.getElementById('ak-kunde'), f = kunde.form;
+    kunde.addEventListener('change', () => {
+      const o = kunde.selectedOptions[0];
+      if (!o || !o.value) return;
+      for (const n of ['name', 'adresse', 'telefon', 'email']) f.elements[n].value = o.dataset[n] || '';
+      document.getElementById('ak-kontakt').open = true;
+    });
+    const privat = () => { document.getElementById('ak-privat').hidden = f.typ.value !== 'frei'; };
+    f.typ.addEventListener('change', privat); privat();
+  })();
 </script>
 
 {% if a %}
-<div class="karte" id="abrechnung">
-  <h2>Übersicht</h2>
+<details class="ak-klapp" id="kosten">
+  <summary><span>Nebenkosten</span><span class="klein">{{ kosten|length }} Position{{ 'en' if kosten|length != 1 }}{% if kosten %} · {{ kosten|sum(attribute='betrag')|euro }}{% endif %}</span></summary>
+  <div class="inhalt">
+  {% if kosten %}<table class="liste"><tbody>
+  {% for k in kosten %}<tr><td>{{ ak.kosten_text(k) }}{% if not k.weiterberechnen %} <span class="klein">(intern)</span>{% endif %}{% if k.notiz %}<div class="klein">{{ k.notiz }}</div>{% endif %}</td>
+    <td class="klein">{% if k.foto %}<a href="{{ url_for('kalender.kosten_foto', kid=k.id) }}" target="_blank">Beleg</a>{% endif %}</td>
+    <td class="zahl">{{ k.betrag|euro }}</td>
+    <td class="zahl"><form method="post" action="{{ url_for('kalender.kosten_loeschen', kid=k.id) }}" onsubmit="return confirm('Position löschen?')">{{ csrf() }}<button class="zweit klein">×</button></form></td></tr>{% endfor %}
+  </tbody></table>{% endif %}
+  <form method="post" action="{{ url_for('kalender.kosten_neu', aid=a.id) }}" enctype="multipart/form-data" id="ak-kosten" style="margin-top:10px">{{ csrf() }}
+    <div class="felder">
+      <div class="s6"><label>Kategorie</label><select name="kategorie" id="ak-kat">{% for k, n in ak.KATEGORIEN.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
+      <div class="s6 nur-betrag"><label>Betrag netto (€)</label><input type="text" name="betrag" inputmode="decimal"></div>
+      <div class="s6 ak-nur nur-verpflegung nur-uebernachtung"><label>Berechnung</label><select name="modus" id="ak-modus">
+        <option value="beleg">Betrag laut Beleg/Rechnung</option>
+        <option value="pauschale" class="nur-verpflegung">Pauschale nach Abwesenheit</option>
+        <option value="naechte" class="nur-uebernachtung">Nächte × Preis</option></select></div>
+      <div class="s3 ak-nur nur-pauschale"><label>Abwesenheit (Std.)</label><input type="text" name="abwesenheit" inputmode="decimal"></div>
+      <div class="s3 ak-nur nur-pauschale"><label class="check" style="margin-top:22px;font-weight:400"><input type="checkbox" name="anreisetag" value="1"> An-/Abreisetag</label></div>
+      <div class="s3 ak-nur nur-naechte"><label>Nächte</label><input type="text" name="naechte" inputmode="numeric"></div>
+      <div class="s3 ak-nur nur-naechte"><label>Preis je Nacht (€)</label><input type="text" name="preis_nacht" inputmode="decimal"></div>
+      <div class="s6"><label>Bezeichnung</label><input type="text" name="bezeichnung" placeholder="bei „Sonstiges“ Pflicht"></div>
+      <div class="s6"><label>Belegfoto</label><input type="file" name="foto" accept="image/*,.pdf" capture="environment"></div>
+      <div class="s12"><label class="check" style="font-weight:400"><input type="checkbox" name="weiterberechnen" value="1" checked> an Kunden weiterberechnen</label></div>
+    </div>
+    <details class="ak-mehr"><summary>Datum, Termin, Notiz</summary>
+      <div class="felder" style="margin-top:8px">
+        <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ heute }}"></div>
+        <div class="s4"><label>Termin</label><select name="termin_id"><option value="">–</option>{% for t in termine %}<option value="{{ t.id }}">{{ t.datum|datum }} {{ t.beginn }}</option>{% endfor %}</select></div>
+        <div class="s4"><label>Notiz</label><input type="text" name="notiz"></div>
+      </div></details>
+    <button class="zweit" style="margin-top:8px">+ Kosten erfassen</button>
+  </form>
+  <script>
+    (() => {
+      const f = document.getElementById('ak-kosten'), kat = document.getElementById('ak-kat'), modus = document.getElementById('ak-modus');
+      function zeigen() {
+        [...modus.options].forEach(o => { o.hidden = !!o.className && o.className !== 'nur-' + kat.value; });
+        if (modus.selectedOptions[0]?.hidden) modus.value = 'beleg';
+        const m = (kat.value === 'verpflegung' || kat.value === 'uebernachtung') ? modus.value : 'beleg';
+        f.querySelectorAll('.ak-nur').forEach(e => { e.style.display = e.classList.contains('nur-' + kat.value) || e.classList.contains('nur-' + m) ? '' : 'none'; });
+        f.querySelectorAll('.nur-betrag').forEach(e => { e.style.display = m === 'beleg' ? '' : 'none'; });
+      }
+      kat.addEventListener('change', zeigen); modus.addEventListener('change', zeigen); zeigen();
+    })();
+  </script>
+  </div>
+</details>
+
+<details class="ak-klapp" id="abrechnung">
+  <summary><span>Abrechnung</span><span>{{ r.brutto|euro }}{{ ' brutto' if not r.kleinunternehmer }}</span></summary>
+  <div class="inhalt">
   <table class="liste">
     <tr><td>Zeit geplant / tatsächlich</td><td class="zahl">{{ ak.dauer_text(r.geplant_min) }} / <b>{{ ak.dauer_text(r.ist_min) }}</b></td></tr>
-    <tr><td>Stundensatz</td><td class="zahl">{{ r.stundensatz|euro }}/Std.{{ ' (Standard)' if a.stundensatz is none }}</td></tr>
+    <tr><td>Stundensatz</td><td class="zahl">{{ r.stundensatz|euro }}/Std.{{ ' (Standard)' if a.stundensatz is none and a.typ != 'frei' }}</td></tr>
   </table>
   <table class="liste" style="margin-top:10px"><thead><tr><th>Kategorie</th><th class="zahl">an Kunden</th><th class="zahl">nur intern</th></tr></thead><tbody>
   {% for k, e in r.kategorien.items() %}<tr><td>{{ e.name }}</td><td class="zahl">{{ e.weiter|euro if e.weiter else '–' }}</td><td class="zahl klein">{{ e.intern|euro if e.intern else '–' }}</td></tr>
@@ -68,131 +208,15 @@
     <div><span>Summe netto</span><span>{{ r.netto|euro }}</span></div>
     {% if r.kleinunternehmer %}<div class="klein"><span>Kleinunternehmer – keine MwSt.</span><span></span></div>
     {% else %}<div><span>MwSt. {{ r.steuersatz|round(1)|replace('.0', '') }} %</span><span>{{ r.mwst|euro }}</span></div>{% endif %}
-    <div class="gesamt"><span>Gesamt brutto</span><span>{{ r.brutto|euro }}</span></div>
+    <div class="gesamt"><span>Gesamt{{ ' brutto' if not r.kleinunternehmer }}</span><span>{{ r.brutto|euro }}</span></div>
     {% if r.intern %}<div class="klein"><span>zusätzlich intern erfasst</span><span>{{ r.intern|euro }}</span></div>{% endif %}
   </div>
-  {% if r.zeilen %}<details style="margin-top:10px"><summary class="klein">Einzelpositionen anzeigen</summary>
+  {% if r.zeilen %}<details class="ak-mehr"><summary>Einzelpositionen</summary>
     <table class="liste ak-pos">{% for z in r.zeilen %}<tr><td>{{ z.text }}{% if not z.weiter %} <span class="klein">(intern)</span>{% endif %}</td><td class="zahl">{{ z.cent|euro }}</td></tr>{% endfor %}</table></details>{% endif %}
-</div>
-</div>
-
-<div>
-<div class="karte" id="termine">
-  <h2>Termine</h2>
-  {% set erster = (termine|rejectattr('status', 'in', ['erledigt', 'abgesagt'])|first) %}
-  {% for t in termine %}{% set offen_t = t.status not in ('erledigt', 'abgesagt') %}
-  <details class="ak-termin st-{{ t.status }}" id="termin-{{ t.id }}" {{ 'open' if t.timer_start or (erster and t.id == erster.id) }}>
-    <summary><b>{{ ak.wochentag(t.datum) }}, {{ t.datum|datum }}, {{ t.beginn }}–{{ ak.ende(t) }}</b>
-      {% if t.art %}<span>{{ t.art }}</span>{% endif %}<span class="ak-st {{ t.status }}">{{ ak.TERMIN_STATUS[t.status] }}</span>
-      {% if t.vorgeschlagen_am %}<span class="klein">vorgeschlagen {{ t.vorgeschlagen_am|zeit }} ({{ t.vorgeschlagen_per }})</span>{% endif %}
-      {% if t.bestaetigt_am %}<span class="klein">bestätigt {{ t.bestaetigt_am|zeit }}</span>{% endif %}
-      {% if t.timer_start %}<span class="ak-timer" data-start="{{ t.timer_start }}" data-bisher="{{ t.ist_minuten or 0 }}">⏱ läuft</span>{% endif %}</summary>
-
-    <div class="leiste" style="margin:10px 0">
-      <form method="post" action="{{ url_for('kalender.termin_timer', tid=t.id) }}">{{ csrf() }}
-        {% if t.timer_start %}<button name="aktion" value="stopp" class="gefahr">■ Timer stoppen</button>
-        {% else %}<button name="aktion" value="start">▶ Timer starten (vor Ort)</button>{% endif %}</form>
-      <form method="post" action="{{ url_for('kalender.termin_bestaetigt', tid=t.id) }}">{{ csrf() }}
-        {% if t.status == 'bestaetigt' %}<button class="zweit" name="zuruecknehmen" value="1">Bestätigung zurücknehmen</button>
-        {% elif offen_t %}<input type="hidden" name="andere_absagen" value="1"><button class="zweit" title="Übrige Vorschläge aus derselben Nachricht werden abgesagt">✓ Kunde hat bestätigt</button>{% endif %}</form>
-      <a class="knopf zweit" href="{{ url_for('kalender.termin_ics', tid=t.id) }}">.ics</a>
-      {% if offen_t %}<a class="knopf zweit" href="{{ url_for('kalender.vorschlag', aid=a.id, termin=t.id) }}">An Kunden senden</a>{% endif %}
-    </div>
-
-    <form method="post" action="{{ url_for('kalender.termin_speichern', tid=t.id) }}">{{ csrf() }}
-      <div class="felder">
-        <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ t.datum }}" required></div>
-        <div class="s4"><label>Beginn</label><input type="time" name="beginn" value="{{ t.beginn }}" required></div>
-        <div class="s4"><label>Dauer geplant (Std:Min)</label><input type="text" name="dauer" value="{{ '%d:%02d' % (t.dauer_min // 60, t.dauer_min % 60) }}"></div>
-        <div class="s6"><label>Art</label><input type="text" name="art" value="{{ t.art or '' }}" list="ak-arten"></div>
-        <div class="s6"><label>Status</label><select name="status">{% for k, n in ak.TERMIN_STATUS.items() %}<option value="{{ k }}" {{ 'selected' if t.status == k }}>{{ n }}</option>{% endfor %}</select></div>
-        <div class="s12"><label>Notiz</label><input type="text" name="notiz" value="{{ t.notiz or '' }}"></div>
-      </div>
-      <h3 style="margin:12px 0 4px">Tatsächliche Zeit</h3>
-      <div class="felder">
-        <div class="s4"><label>Start</label><input type="time" name="ist_beginn" value="{{ t.ist_beginn or '' }}"></div>
-        <div class="s4"><label>Ende</label><input type="time" name="ist_ende" value="{{ t.ist_ende or '' }}"></div>
-        <div class="s4"><label>oder Dauer</label><input type="text" name="ist_dauer" value="{{ ('%d:%02d' % (t.ist_minuten // 60, t.ist_minuten % 60)) if t.ist_minuten is not none else '' }}" placeholder="z. B. 1:45"></div>
-        <div class="s12 hilfe">Dauer hat Vorrang; leer lassen, um sie aus Start/Ende zu berechnen. Der Timer zählt zur Dauer dazu.</div>
-      </div>
-      <h3 style="margin:12px 0 4px">Anfahrt</h3>
-      <div class="felder">
-        <div class="s6"><label>Berechnung</label><select name="anfahrt">{% for k, n in ak.ANFAHRT.items() %}<option value="{{ k }}" {{ 'selected' if (t.anfahrt or standard_anfahrt) == k }}>{{ n }}</option>{% endfor %}</select></div>
-        <div class="s3"><label>Kilometer</label><input type="text" name="km" value="{{ '%g' % t.km if t.km is not none else '' }}"></div>
-        <div class="s3"><label>Fahrzeit</label><input type="text" name="fahrzeit" value="{{ ('%d:%02d' % (t.fahrzeit_min // 60, t.fahrzeit_min % 60)) if t.fahrzeit_min else '' }}" placeholder="0:30"></div>
-        <div class="s6"><label class="check"><input type="checkbox" name="fahrzeit_berechnen" value="1" {{ 'checked' if t.fahrzeit_berechnen }}> Fahrzeit berechnen</label></div>
-        <div class="s6"><label class="check"><input type="checkbox" name="anfahrt_weiter" value="1" {{ 'checked' if t.anfahrt_weiter }}> Anfahrt an Kunden weiterberechnen</label></div>
-      </div>
-      {% if termin_pos[t.id] %}<table class="liste ak-pos" style="margin-top:8px">{% for kat, text, cent, weiter in termin_pos[t.id] %}<tr><td>{{ text }}{% if not weiter %} <span class="klein">(intern)</span>{% endif %}</td><td class="zahl">{{ cent|euro }}</td></tr>{% endfor %}</table>{% endif %}
-      <div class="leiste" style="margin-top:10px"><button class="zweit">Termin speichern</button>
-        <button class="gefahr klein" formaction="{{ url_for('kalender.termin_loeschen', tid=t.id) }}" formnovalidate onclick="return confirm('Termin löschen?')">Löschen</button></div>
-    </form>
-  </details>
-  {% else %}<p class="klein">Noch keine Termine.</p>{% endfor %}
-  <datalist id="ak-arten">{% for x in ak.TERMIN_ARTEN %}<option value="{{ x }}">{% endfor %}</datalist>
-
-  <h3 style="margin-top:14px">Termin planen</h3>
-  <form method="post" action="{{ url_for('kalender.termin_neu', aid=a.id) }}">{{ csrf() }}
-    <div class="felder">
-      <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ heute }}" required></div>
-      <div class="s4"><label>Beginn</label><input type="time" name="beginn" value="09:00" required></div>
-      <div class="s4"><label>Dauer (Std:Min oder Minuten)</label><input type="text" name="dauer" value="{{ '%d:%02d' % (standard_dauer // 60, standard_dauer % 60) }}"></div>
-      <div class="s6"><label>Art</label><input type="text" name="art" list="ak-arten" placeholder="Besichtigung, Reparatur …"></div>
-      <div class="s6"><label>Notiz</label><input type="text" name="notiz"></div>
-    </div>
-    <button style="margin-top:8px">+ Termin eintragen</button>
-    <span class="klein">Für mehrere Vorschläge einfach mehrere Termine eintragen und gemeinsam senden.</span>
-  </form>
-</div>
-
-<div class="karte" id="kosten">
-  <h2>Nebenkosten</h2>
-  {% if kosten %}<table class="liste"><thead><tr><th>Position</th><th>Notiz</th><th class="zahl">Betrag</th><th></th></tr></thead><tbody>
-  {% for k in kosten %}<tr><td>{{ ak.kosten_text(k) }}{% if not k.weiterberechnen %} <span class="klein">(intern)</span>{% endif %}</td>
-    <td class="klein">{{ k.notiz or '' }}{% if k.foto %} <a href="{{ url_for('kalender.kosten_foto', kid=k.id) }}" target="_blank">Beleg</a>{% endif %}</td>
-    <td class="zahl">{{ k.betrag|euro }}</td>
-    <td class="zahl"><form method="post" action="{{ url_for('kalender.kosten_loeschen', kid=k.id) }}" onsubmit="return confirm('Position löschen?')">{{ csrf() }}<button class="zweit klein">×</button></form></td></tr>{% endfor %}
-  </tbody></table>{% endif %}
-  <form method="post" action="{{ url_for('kalender.kosten_neu', aid=a.id) }}" enctype="multipart/form-data" id="ak-kosten" style="margin-top:10px">{{ csrf() }}
-    <div class="felder">
-      <div class="s4"><label>Kategorie</label><select name="kategorie" id="ak-kat">{% for k, n in ak.KATEGORIEN.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
-      <div class="s4"><label>Datum</label><input type="date" name="datum" value="{{ heute }}"></div>
-      <div class="s4"><label>Termin (optional)</label><select name="termin_id"><option value="">–</option>{% for t in termine %}<option value="{{ t.id }}">{{ t.datum|datum }} {{ t.beginn }}</option>{% endfor %}</select></div>
-      <div class="s6"><label>Bezeichnung</label><input type="text" name="bezeichnung" placeholder="bei „Sonstiges“ Pflicht"></div>
-      <div class="s6 ak-nur nur-verpflegung nur-uebernachtung"><label>Berechnung</label><select name="modus" id="ak-modus">
-        <option value="beleg">Betrag laut Beleg/Rechnung</option>
-        <option value="pauschale" class="nur-verpflegung">Pauschale nach Abwesenheit</option>
-        <option value="naechte" class="nur-uebernachtung">Nächte × Preis</option></select></div>
-      <div class="s3 ak-nur nur-pauschale"><label>Abwesenheit (Std.)</label><input type="text" name="abwesenheit"></div>
-      <div class="s3 ak-nur nur-pauschale"><label class="check" style="margin-top:22px"><input type="checkbox" name="anreisetag" value="1"> An-/Abreisetag</label></div>
-      <div class="s3 ak-nur nur-naechte"><label>Nächte</label><input type="text" name="naechte"></div>
-      <div class="s3 ak-nur nur-naechte"><label>Preis je Nacht (€)</label><input type="text" name="preis_nacht"></div>
-      <div class="s3 nur-betrag"><label>Betrag netto (€)</label><input type="text" name="betrag"></div>
-      <div class="s6"><label>Notiz</label><input type="text" name="notiz"></div>
-      <div class="s6"><label>Belegfoto (optional)</label><input type="file" name="foto" accept="image/*,.pdf" capture="environment"></div>
-      <div class="s6"><label class="check"><input type="checkbox" name="weiterberechnen" value="1" checked> an Kunden weiterberechnen</label></div>
-    </div>
-    <button class="zweit" style="margin-top:8px">+ Kosten erfassen</button>
-  </form>
-  <script>
-    (() => {
-      const f = document.getElementById('ak-kosten'), kat = document.getElementById('ak-kat'), modus = document.getElementById('ak-modus');
-      function zeigen() {
-        if (![...modus.options].some(o => o.value === modus.value && (!o.className || o.className === 'nur-' + kat.value))) modus.value = 'beleg';
-        [...modus.options].forEach(o => { o.hidden = !!o.className && o.className !== 'nur-' + kat.value; });
-        const m = (kat.value === 'verpflegung' || kat.value === 'uebernachtung') ? modus.value : 'beleg';
-        f.querySelectorAll('.ak-nur').forEach(e => { e.style.display = e.classList.contains('nur-' + kat.value) || e.classList.contains('nur-' + m) ? '' : 'none'; });
-        f.querySelectorAll('.nur-betrag').forEach(e => { e.style.display = m === 'beleg' ? '' : 'none'; });
-      }
-      kat.addEventListener('change', zeigen); modus.addEventListener('change', zeigen); zeigen();
-    })();
-  </script>
-</div>
-
-{% if nachrichten %}<div class="karte">
-  <h2>Gesendete Terminvorschläge</h2>
-  <table class="liste">{% for n in nachrichten %}<tr><td class="klein">{{ n.zeitpunkt|zeit }}</td><td>{{ ak.KANAELE.get(n.kanal, n.kanal) }}{{ ' an ' ~ n.an if n.an }}</td><td class="klein">{{ nachrichten_termine[n.id]|length }} Termin(e)</td></tr>{% endfor %}</table>
-</div>{% endif %}
+  {% if nachrichten %}<h3 style="margin-top:14px">Gesendete Terminvorschläge</h3>
+  <table class="liste">{% for n in nachrichten %}<tr><td class="klein">{{ n.zeitpunkt|zeit }}</td><td>{{ ak.KANAELE.get(n.kanal, n.kanal) }}{{ ' an ' ~ n.an if n.an }}</td><td class="klein">{{ nachrichten_termine[n.id]|length }} Termin(e)</td></tr>{% endfor %}</table>{% endif %}
+  </div>
+</details>
 </div>
 </div>
 <script>
@@ -200,7 +224,7 @@
   document.querySelectorAll('.ak-timer[data-start]').forEach(el => {
     const start = new Date(el.dataset.start), bisher = +el.dataset.bisher;
     const tick = () => { const m = bisher + Math.max(0, Math.floor((Date.now() - start) / 60000));
-      el.textContent = '⏱ ' + Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') + ' Std. (läuft)'; };
+      el.textContent = '⏱ ' + Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0') + ' Std. läuft'; };
     tick(); setInterval(tick, 15000);
   });
 </script>

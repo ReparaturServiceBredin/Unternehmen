@@ -1330,7 +1330,7 @@ CREATE TABLE IF NOT EXISTS benutzer (
 -- Eigenständiges Modul – verweist optional auf Kunde, Reparaturauftrag oder KVA, ändert diese aber nie.
 CREATE TABLE IF NOT EXISTS arbeiten (
     id              INTEGER PRIMARY KEY,
-    typ             TEXT NOT NULL DEFAULT 'reparatur',  -- kva / reparatur
+    typ             TEXT NOT NULL DEFAULT 'frei',       -- frei / kva / reparatur
     kunde_id        INTEGER REFERENCES kunden(id),
     name            TEXT,                               -- Kundenname/Anschrift: aus dem Kunden übernommen, änderbar
     adresse         TEXT,
@@ -1344,7 +1344,8 @@ CREATE TABLE IF NOT EXISTS arbeiten (
     auftrag_id      INTEGER REFERENCES auftraege(id),
     dokument_id     INTEGER REFERENCES dokumente(id),
     erstellt_am     TEXT NOT NULL,
-    geaendert_am    TEXT NOT NULL
+    geaendert_am    TEXT NOT NULL,
+    privat          INTEGER NOT NULL DEFAULT 0          -- privater Termin: im Sichtschutz nur „belegt“ (0.37.0)
 );
 
 CREATE TABLE IF NOT EXISTS arbeit_termine (

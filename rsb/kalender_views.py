@@ -114,14 +114,30 @@ def uebersicht():
 def offen():
     con = dbm.get_db()
     einst = dbm.einstellungen(con)
-    f = {k: (request.args.get(k) or "").strip() for k in ("status", "kunde", "von", "bis", "typ")}
-    arbeiten = ak.liste(con, f["status"] or None, f["kunde"] or None, f["von"] or None, f["bis"] or None,
-                        f["typ"] or None)
+    f, arbeiten = _gefiltert(con)
     zeilen = [{"a": a, "r": ak.abrechnung(con, a, einst)} for a in arbeiten]
     summe = {k: sum(z["r"][k] for z in zeilen) for k in ("geplant_min", "ist_min", "netto", "mwst", "brutto",
                                                          "intern")}
+    gruppe = "woche" if request.args.get("gruppe") == "woche" else "monat"
+    auswertung = ak.auswertung(con, arbeiten, gruppe, f["von"] or None, f["bis"] or None, einst)
     auftraege, kvas = ak.kandidaten(con)
-    return render_template("ak_offen.html", zeilen=zeilen, summe=summe, f=f, ak=ak, auftraege=auftraege, kvas=kvas)
+    return render_template("ak_offen.html", zeilen=zeilen, summe=summe, f=f, ak=ak, auftraege=auftraege, kvas=kvas,
+                           auswertung=auswertung, gruppe=gruppe)
+
+
+def _gefiltert(con):
+    f = {k: (request.args.get(k) or "").strip() for k in ("status", "kunde", "von", "bis", "typ")}
+    return f, ak.liste(con, f["status"] or None, f["kunde"] or None, f["von"] or None, f["bis"] or None,
+                       f["typ"] or None)
+
+
+@bp.route("/export.csv")
+def export_csv():
+    con = dbm.get_db()
+    _, arbeiten = _gefiltert(con)
+    from flask import Response
+    return Response(ak.csv_export(con, arbeiten), mimetype="text/csv",
+                    headers={"Content-Disposition": f"attachment; filename=Arbeiten_{heute_datum().isoformat()}.csv"})
 
 
 @bp.route("/uebernehmen", methods=["POST"])
@@ -151,7 +167,8 @@ def _arbeit_werte(con):
     return {"typ": typ, "kunde_id": kid, "name": _f("name"), "adresse": _f("adresse"), "telefon": _f("telefon"),
             "email": _f("email"), "titel": _f("titel"), "beschreibung": request.form.get("beschreibung", "").strip(),
             "status": status, "prioritaet": prio or None,
-            "stundensatz": cent_aus_text(satz) if satz else None}
+            "stundensatz": cent_aus_text(satz) if satz else None,
+            "privat": 1 if typ == "frei" and request.form.get("privat") else 0}
 
 
 def _kunden(con):
@@ -167,7 +184,7 @@ def neu():
             aid = ak.anlegen(con, _arbeit_werte(con))
         flash("Arbeit angelegt – jetzt Termine planen.", "ok")
         return _zurueck(aid, "#termine")
-    vorlage = {"typ": request.args.get("typ") or "reparatur", "status": "offen"}
+    vorlage = {"typ": request.args.get("typ") or "frei", "status": "offen"}
     if (request.args.get("kunde_id") or "").isdigit():
         k = con.execute("SELECT * FROM kunden WHERE id=?", (int(request.args["kunde_id"]),)).fetchone()
         if k:
@@ -216,6 +233,32 @@ def arbeit_loeschen(aid):
         dbm.protokollieren("arbeit_geloescht", "arbeit", aid, {"titel": a["titel"]}, con=con)
     flash("Arbeit gelöscht (verknüpfte Aufträge und KVAs bleiben unverändert).", "ok")
     return redirect(url_for("kalender.offen"))
+
+
+# ---------------------------------------------------------------------- Schnell anlegen / verschieben
+
+@bp.route("/schnell", methods=["POST"])
+def schnell():
+    """Schnellformular im Kalender (Doppelklick / langes Drücken): nur Titel und Typ, Rest vorbelegt."""
+    con = dbm.get_db()
+    dauer = ak.minuten_aus(_f("dauer")) or int(dbm.einstellung("ak_standard_dauer") or 60)
+    with dbm.Transaktion(con):
+        aid, tid = ak.schnell_anlegen(con, _f("titel"), _f("typ"), _datum(_f("datum")), ak.uhrzeit(_f("beginn")),
+                                      dauer, privat=bool(request.form.get("privat")))
+    if request.form.get("mehr"):
+        return _zurueck(aid)
+    flash("Eingetragen.", "ok")
+    ziel = request.form.get("weiter") or ""
+    return redirect(ziel if ziel.startswith("/kalender") else url_for("kalender.uebersicht"))
+
+
+@bp.route("/termin/<int:tid>/verschieben", methods=["POST"])
+def termin_verschieben(tid):
+    """Drag & Drop: neues Datum/Uhrzeit/Dauer (JSON-Antwort für den Kalender)."""
+    con = dbm.get_db()
+    with dbm.Transaktion(con):
+        ak.verschieben(con, tid, _datum(_f("datum")), ak.uhrzeit(_f("beginn")), int(_f("dauer") or 60))
+    return jsonify(ok=True)
 
 
 # ---------------------------------------------------------------------- Termine
@@ -277,6 +320,8 @@ def termin_speichern(tid):
              anfahrt, _zahl(_f("km")), ak.minuten_aus(_f("fahrzeit")), 1 if request.form.get("fahrzeit_berechnen")
              else 0, 1 if request.form.get("anfahrt_weiter") else 0, status, dbm.jetzt_berlin(), tid))
         ak.status_nachziehen(con, t["arbeit_id"])
+        if ist_min and status in ("geplant", "vorschlag", "bestaetigt") and not request.form.get("status"):
+            ak.termin_erledigt(con, tid)  # Zeit erfasst → erledigt (wenn der Status nicht von Hand gewählt wurde)
         dbm.protokollieren("arbeit_termin_geaendert", "arbeit", t["arbeit_id"], {"termin": tid}, con=con)
     flash("Termin gespeichert.", "ok")
     return _zurueck(t["arbeit_id"], f"#termin-{tid}")
@@ -485,6 +530,8 @@ def einstellungen():
                 werte[k] = max(lo, min(hi, int(_f(k))))
             except ValueError:
                 raise EingabeFehler("Bitte ganze Zahlen für Dauer und Kalenderzeiten angeben.")
+        if _f("steuer_modus") in ("regel", "kleinunternehmer"):  # gilt fürs ganze Programm (Rechnung & Steuer)
+            werte["steuer_modus"] = _f("steuer_modus")
         werte["ak_vorschlag_betreff"] = _f("ak_vorschlag_betreff") or ak.STANDARD_BETREFF
         werte["ak_vorschlag_text"] = request.form.get("ak_vorschlag_text", "").strip() or ak.STANDARD_TEXT
         with dbm.Transaktion(con):

@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.37.0 | 04.11.2026 | Arbeitskalender: freie Einträge, Schnellanlegen, Drag & Drop, Auswertung/CSV, Sichtschutz |
 | 0.36.0 | 04.11.2026 | Arbeitskalender: Termine, Zeiterfassung, Anfahrt, Nebenkosten, Terminvorschläge |
 | 0.35.0 | 03.11.2026 | Benachrichtigungen jederzeit von Hand, „Gerät versendet“ mit Sendungsnummer, Textbausteine |
 | 0.34.0 | 22.10.2026 | E-Mail an Kunden direkt schreiben, mit Vorlagen |
@@ -62,6 +63,32 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.37.0 – 04.11.2026
+### Arbeitskalender – einfacher und schneller
+- **Freie Einträge** (Material holen, Büroarbeit, private Termine, Notizen): nur ein Titel ist Pflicht. Später per
+  Typ-Auswahl in einen KVA oder Reparaturauftrag umwandeln. Freie Einträge berechnen keine Arbeitszeit, solange kein
+  eigener Stundensatz eingetragen ist.
+- **Schnell anlegen:** Doppelklick (am Handy lange drücken) auf eine freie Stelle im Kalender – Datum, Uhrzeit und
+  Dauer sind vorausgefüllt, nur Titel und Typ wählen. „Mehr bearbeiten“ öffnet direkt die Details.
+- **Drag & Drop:** Termine in Tag/Woche verschieben (auch auf andere Tage), an der Unterkante die Dauer ziehen; in der
+  Monatsansicht auf einen anderen Tag ziehen. Am Handy: kurz gedrückt halten, dann ziehen.
+- **Aufgeräumte Detailseite:** je Termin nur Timer, „Zeit vor Ort“ und km; alles andere unter „Mehr“. Nebenkosten und
+  Abrechnung sind eingeklappt (Summe steht in der Überschrift). Status stellt sich selbst: geplant beim ersten Termin,
+  in Arbeit beim Timer-Start, erledigt, sobald für alle Termine Zeit erfasst ist.
+- **Auswertung je Woche/Monat:** Stunden und Beträge nach Kategorie (Arbeitszeit, Anfahrt, Nebenkosten), an Kunden
+  bzw. intern. **CSV-Export** aller Positionen (für Excel / als Grundlage für die Rechnung).
+- **MwSt. per Klick umstellen** in *Arbeitskalender → Sätze & Vorlagen* (Kleinunternehmer ↔ Regelbesteuerung; gilt für
+  das ganze Programm).
+
+### Neu: Sichtschutz (Augen-Symbol oben rechts)
+- Auf allen Seiten: Namen, Adressen, Telefonnummern und E-Mails von Kunden sowie alle Beträge werden unscharf; Hover,
+  Antippen und Markieren zeigen nichts, Eingabefelder sind gesperrt. Termine (Datum, Uhrzeit, belegt/frei) bleiben
+  lesbar. Oranger Rahmen und Hinweisleiste, solange er aktiv ist; bleibt beim Seitenwechsel und Neuladen an.
+- „Diesen Kunden zeigen“ (auf Kunden-, Auftrags- und Kalenderseiten): nimmt den Kunden aus, bei dem Sie gerade sind.
+- Private freie Einträge (Häkchen „privat“) erscheinen im Sichtschutz nur als „belegt“.
 
 ---
 

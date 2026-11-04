@@ -358,6 +358,7 @@ def initialisieren(pfad):
 
 # Spalten, die in neueren Versionen dazugekommen sind: (Tabelle, Spalte, Definition)
 MIGRATIONEN = [
+    ("arbeiten", "privat", "INTEGER NOT NULL DEFAULT 0"),
     ("benachrichtigungen", "zusatz", "TEXT"),
     ("rechnung_raten", "art", "TEXT NOT NULL DEFAULT 'rechnung'"),
     ("rechnung_raten", "auto", "INTEGER"),

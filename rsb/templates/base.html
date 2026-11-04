@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="de" data-design="{{ ui.design or 'auto' }}">
+<html lang="de" data-design="{{ ui.design or 'auto' }}"{% if sichtschutz %} class="sichtschutz"{% endif %}>
 {% from "_symbol.html" import symbol %}
 {% set ep = request.endpoint or "" %}
 {% set _nav_aktiv = nav.aktiver_schluessel(ep) %}
@@ -100,10 +100,15 @@
           <a class="glocke-fuss" href="{{ url_for('main.benachrichtigungen') }}">Alle Benachrichtigungen anzeigen{% if benachrichtigungen_offen %} ({{ benachrichtigungen_offen }} offen){% endif %}</a>
         </div>
       </div>
+      <button type="button" class="symbol-knopf{{ ' sv-an' if sichtschutz }}" data-sichtschutz="umschalten" aria-pressed="{{ 'true' if sichtschutz else 'false' }}" aria-label="Sichtschutz {{ 'ausschalten' if sichtschutz else 'einschalten' }}" title="Sichtschutz {{ 'ausschalten' if sichtschutz else 'einschalten' }} (Namen und Beträge unscharf)">{{ symbol('eye-off' if sichtschutz else 'eye') }}</button>
       <button type="button" class="symbol-knopf" id="design-wechseln" aria-label="Hell/Dunkel umschalten" title="Hell/Dunkel umschalten">{{ symbol('moon', 'mond') }}{{ symbol('sun', 'sonne') }}</button>
     </div>
   </header>
-  <main>
+  <main{% if seiten_kunde %} data-sv-kunde="{{ seiten_kunde }}"{% endif %}>
+    {% if sichtschutz %}<div class="sichtschutz-banner sv-frei">{{ symbol('eye-off') }} <b>Sichtschutz aktiv</b> – Namen, Kontaktdaten und Beträge sind unscharf.
+      {% if sichtschutz_kunde %}Ein Kunde ist ausgenommen. <a href="#" data-sichtschutz="kunde-aus">Wieder verbergen</a>
+      {% elif seiten_kunde %}<a href="#" data-sichtschutz="kunde" data-kunde="{{ seiten_kunde }}">Diesen Kunden zeigen</a>{% endif %}
+      <a href="#" data-sichtschutz="umschalten" class="knopf zweit klein">Ausschalten</a></div>{% endif %}
     {% if update_da and not ep.startswith('main.einstellungen') %}
     <div class="meldung info">Neue Programmversion {{ update_da }} verfügbar – <a href="{{ url_for('main.einstellungen', bereich='programm') }}">{{ 'jetzt aktualisieren' if ist_exe else 'Details' }}</a>{{ ' (oder einfach beim nächsten Start automatisch)' if ist_exe and einst.update_auto }}</div>
     {% endif %}
@@ -119,7 +124,9 @@
   <div class="ss-fuss klein"><span><kbd>↑</kbd><kbd>↓</kbd> auswählen</span><span><kbd>Enter</kbd> öffnen</span><span><kbd>Esc</kbd> schließen</span></div>
 </dialog>
 <div class="nav-tooltip" id="nav-tooltip" role="tooltip" hidden></div>
+{% if sichtschutz_daten %}<script type="application/json" id="sv-begriffe">{{ sichtschutz_daten|tojson }}</script>{% endif %}
 <script src="{{ url_for('static', filename='navigation.js', v=version) }}"></script>
+<script src="{{ url_for('static', filename='sichtschutz.js', v=version) }}"></script>
 {% block skript %}{% endblock %}
 </body>
 </html>

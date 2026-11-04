@@ -570,3 +570,17 @@ th a.sortieren .pfeil { font-size: 10px; opacity: .45; }
 th a.sortieren.aktiv { color: var(--blau); }
 th a.sortieren.aktiv .pfeil { opacity: 1; }
 .fin-paar { display: inline-flex; gap: 6px; align-items: center; flex-wrap: nowrap; }
+
+/* Sichtschutz (Diskretionsmodus) */
+.sichtschutz main { visibility: hidden; }
+.sichtschutz.sv-fertig main { visibility: visible; }
+.sichtschutz .rahmen { box-shadow: inset 0 0 0 4px #e07b00; min-height: 100vh; }
+.sichtschutz-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; background: #e07b00; color: #fff;
+  padding: 8px 14px; border-radius: var(--radius-klein); margin-bottom: 14px; font-size: 13.5px; }
+.sichtschutz-banner a { color: #fff; text-decoration: underline; }
+.sichtschutz-banner .knopf { margin-left: auto; color: var(--text); text-decoration: none; }
+.sichtschutz-banner .ic { width: 18px; height: 18px; }
+.symbol-knopf.sv-an { background: #e07b00; color: #fff; }
+.sv { filter: blur(6px); user-select: none; -webkit-user-select: none; }
+.sv-feld { filter: blur(5px); pointer-events: none; user-select: none; }
+@media print { .sichtschutz main { visibility: visible; } }

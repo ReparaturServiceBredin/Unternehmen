@@ -10,7 +10,6 @@
     <a class="knopf zweit" href="{{ url_for('kalender.uebersicht', ansicht=ansicht, datum=weiter.isoformat()) }}" title="weiter">›</a>
     {% for k, n in [('tag', 'Tag'), ('woche', 'Woche'), ('monat', 'Monat')] %}
     <a class="knopf {{ '' if ansicht == k else 'zweit' }}" href="{{ url_for('kalender.uebersicht', ansicht=k, datum=tag.isoformat()) }}">{{ n }}</a>{% endfor %}
-    <a class="knopf" href="{{ url_for('kalender.neu') }}">+ Neue Arbeit</a>
   </div>
 </div>
 {{ reiter('kalender') }}
@@ -20,58 +19,218 @@
   .ak-kopf a { color: inherit; }
   .ak-kopf.heute { color: var(--blau); }
   .ak-zeitachse div { height: 48px; font-size: 11px; color: var(--grau); text-align: right; padding-right: 6px; border-top: 1px solid var(--rand); }
-  .ak-spalte { position: relative; border-left: 1px solid var(--rand); background: repeating-linear-gradient(to bottom, transparent 0, transparent 47px, var(--rand) 47px, var(--rand) 48px); }
+  .ak-spalte { position: relative; border-left: 1px solid var(--rand); background: repeating-linear-gradient(to bottom, transparent 0, transparent 47px, var(--rand) 47px, var(--rand) 48px); cursor: cell; }
   .ak-spalte.heute { background-color: var(--blau-hell); }
-  .ak-spalte .ak-t { position: absolute; left: 3px; right: 3px; }
+  .ak-block { position: absolute; left: 3px; right: 3px; touch-action: pan-y; -webkit-touch-callout: none; user-select: none; }
+  .ak-block .ak-t { height: 100%; cursor: grab; }
+  .ak-griff { position: absolute; left: 0; right: 0; bottom: 0; height: 9px; cursor: ns-resize; touch-action: none; }
+  .ak-griff::after { content: ""; position: absolute; left: 40%; right: 40%; bottom: 3px; height: 2px; border-radius: 2px; background: currentColor; opacity: .35; }
+  .ak-block.zieht { opacity: .85; z-index: 5; box-shadow: var(--schatten-hoch); }
+  .ak-block.zieht .ak-t { cursor: grabbing; }
+  .ak-zeit-tipp { position: absolute; right: 4px; top: -18px; font-size: 11px; font-weight: 700; background: var(--text); color: var(--flaeche); padding: 0 5px; border-radius: 4px; }
   .ak-monat { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--rand); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
   .ak-monat .wt { padding: 6px 8px; font-weight: 600; font-size: 12px; color: var(--grau); background: var(--flaeche-2); border-bottom: 1px solid var(--rand); }
-  .ak-zelle { min-height: 104px; border-top: 1px solid var(--rand); border-left: 1px solid var(--rand); padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+  .ak-zelle { min-height: 104px; border-top: 1px solid var(--rand); border-left: 1px solid var(--rand); padding: 4px; display: flex; flex-direction: column; gap: 3px; cursor: cell; }
   .ak-zelle:nth-child(7n+1) { border-left: 0; }
   .ak-zelle .nr { font-size: 12px; color: var(--grau); }
   .ak-zelle.fremd { background: var(--flaeche-2); }
   .ak-zelle.fremd .nr { opacity: .5; }
   .ak-zelle.heute .nr { color: var(--blau); font-weight: 700; }
+  .ak-zelle.ziel { outline: 2px dashed var(--blau); outline-offset: -2px; }
+  .ak-zelle .ak-t { touch-action: pan-y; -webkit-touch-callout: none; user-select: none; cursor: grab; }
   .ak-mehr { font-size: 11px; color: var(--grau); }
+  dialog.ak-schnell { border: 0; border-radius: var(--radius); padding: 18px; width: min(420px, calc(100vw - 32px)); background: var(--flaeche); color: var(--text); box-shadow: var(--schatten-hoch); }
+  dialog.ak-schnell::backdrop { background: rgba(0, 0, 0, .35); }
+  .ak-typwahl { display: flex; gap: 6px; flex-wrap: wrap; }
+  .ak-typwahl label { flex: 1; text-align: center; border: 1px solid var(--rand); border-radius: var(--radius-klein); padding: 8px; font-weight: 600; color: var(--text); cursor: pointer; margin: 0; }
+  .ak-typwahl input { display: none; }
+  .ak-typwahl input:checked + span { color: var(--blau); }
+  .ak-typwahl label:has(input:checked) { border-color: var(--blau); background: var(--blau-hell); }
   @media (max-width: 760px) { .ak-raster { grid-template-columns: 40px repeat({{ tage|length }}, minmax(64px, 1fr)); overflow-x: auto; } .ak-zelle { min-height: 70px; } }
 </style>
 <div class="leiste" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">{{ titel }}</h2>{{ legende(ak) }}</div>
+<p class="klein" style="margin-top:-4px">Doppelklick (am Handy: lange drücken) auf eine freie Stelle legt einen Termin an. Termine ziehen zum Verschieben, an der Unterkante ziehen für die Dauer.</p>
 
 {% if ansicht == 'monat' %}
-<div class="ak-monat">
+<div class="ak-monat" id="ak-monat">
   {% for w in ak.WOCHENTAGE %}<div class="wt">{{ w }}</div>{% endfor %}
   {% for d in tage %}{% set liste = je_tag.get(d.isoformat(), []) %}
-  <div class="ak-zelle {{ 'fremd' if d.month != monat }} {{ 'heute' if d == heute }}">
+  <div class="ak-zelle {{ 'fremd' if d.month != monat }} {{ 'heute' if d == heute }}" data-datum="{{ d.isoformat() }}">
     <a class="nr" href="{{ url_for('kalender.uebersicht', ansicht='tag', datum=d.isoformat()) }}">{{ d.day }}</a>
-    {% for t in liste[:4] %}{{ termin_chip(t, ak) }}{% endfor %}
+    {% for t in liste[:4] %}{{ termin_chip(t, ak, sichtschutz=sichtschutz) }}{% endfor %}
     {% if liste|length > 4 %}<a class="ak-mehr" href="{{ url_for('kalender.uebersicht', ansicht='tag', datum=d.isoformat()) }}">+ {{ liste|length - 4 }} weitere</a>{% endif %}
   </div>{% endfor %}
 </div>
 {% else %}
 {% set px = 48 %}
-<div class="ak-raster">
+<div class="ak-raster" id="ak-raster" data-beginn="{{ beginn_h }}" data-ende="{{ ende_h }}">
   <div class="ak-kopf" style="border-left:0"></div>
   {% for d in tage %}<div class="ak-kopf {{ 'heute' if d == heute }}"><a href="{{ url_for('kalender.uebersicht', ansicht='tag', datum=d.isoformat()) }}">{{ ak.WOCHENTAGE[d.weekday()] }} {{ d.strftime('%d.%m.') }}</a></div>{% endfor %}
   <div class="ak-zeitachse">{% for h in range(beginn_h, ende_h) %}<div>{{ '%02d' % h }}:00</div>{% endfor %}</div>
   {% for d in tage %}
-  <div class="ak-spalte {{ 'heute' if d == heute }}" style="height:{{ (ende_h - beginn_h) * px }}px">
+  <div class="ak-spalte {{ 'heute' if d == heute }}" data-datum="{{ d.isoformat() }}" style="height:{{ (ende_h - beginn_h) * px }}px">
     {% for t in je_tag.get(d.isoformat(), []) %}
     {% set start = (t.beginn[:2]|int - beginn_h) * 60 + t.beginn[3:]|int %}
-    <div style="position:absolute;left:0;right:0;top:{{ start * px / 60 }}px;height:{{ [((t.dauer_min or 30) * px / 60) - 2, 20]|max }}px">
-      {{ termin_chip(t, ak, hoch=True) }}</div>
+    <div class="ak-block" style="top:{{ start * px / 60 }}px;height:{{ [((t.dauer_min or 30) * px / 60) - 2, 20]|max }}px">
+      {{ termin_chip(t, ak, hoch=True, sichtschutz=sichtschutz) }}<div class="ak-griff" title="Dauer ändern"></div></div>
     {% endfor %}
   </div>{% endfor %}
 </div>
 {% endif %}
 
+<dialog class="ak-schnell sv-frei" id="ak-schnell">
+  <form method="post" action="{{ url_for('kalender.schnell') }}">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}"><input type="hidden" name="weiter" value="{{ request.full_path }}">
+    <h2 style="margin-top:0">Neuer Termin</h2>
+    <div class="felder">
+      <div class="s5"><label>Datum</label><input type="date" name="datum" required></div>
+      <div class="s4"><label>Beginn</label><input type="time" name="beginn" required></div>
+      <div class="s3"><label>Dauer</label><input type="text" name="dauer" inputmode="numeric"></div>
+      <div class="s12"><label>Titel</label><input type="text" name="titel" placeholder="z. B. Material holen, Besichtigung Schmidt" autocomplete="off"></div>
+      <div class="s12 ak-typwahl">{% for k, n in [('frei', 'Frei'), ('kva', 'KVA'), ('reparatur', 'Reparatur')] %}
+        <label><input type="radio" name="typ" value="{{ k }}" {{ 'checked' if k == 'frei' }}><span>{{ n }}</span></label>{% endfor %}</div>
+      <div class="s12" id="ak-privat"><label class="check" style="font-weight:400"><input type="checkbox" name="privat" value="1"> privat (im Sichtschutz nur „belegt“)</label></div>
+    </div>
+    <div class="leiste" style="margin-top:12px">
+      <button>Speichern</button>
+      <button name="mehr" value="1" class="zweit">Mehr bearbeiten ›</button>
+      <button type="button" class="zweit" onclick="this.closest('dialog').close()">Abbrechen</button>
+    </div>
+  </form>
+</dialog>
+
 <div class="karte" style="margin-top:18px">
   <h2>Offene Arbeiten</h2>
   {% if offene %}<table class="liste"><thead><tr><th>Typ</th><th>Arbeit</th><th>Kunde</th><th>Status</th><th>Nächster Termin</th></tr></thead><tbody>
-  {% for a in offene %}<tr><td><span class="ak-typ {{ a.typ }}">{{ 'KVA' if a.typ == 'kva' else 'Reparatur' }}</span></td>
-    <td><a href="{{ url_for('kalender.arbeit', aid=a.id) }}">{{ a.titel }}</a>{% if a.prioritaet in ('hoch', 'dringend') %} <span class="ak-prio-{{ a.prioritaet }}">· {{ a.prioritaet }}</span>{% endif %}</td>
+  {% for a in offene %}<tr><td><span class="ak-typ {{ a.typ }}">{{ ak.TYP_KURZ[a.typ] }}</span></td>
+    <td><a href="{{ url_for('kalender.arbeit', aid=a.id) }}">{{ 'belegt' if sichtschutz and a.privat else a.titel }}</a>{% if a.prioritaet in ('hoch', 'dringend') %} <span class="ak-prio-{{ a.prioritaet }}">· {{ a.prioritaet }}</span>{% endif %}</td>
     <td>{{ a.name or '–' }}</td><td><span class="ak-st {{ a.status }}">{{ ak.STATUS[a.status] }}</span></td>
     <td>{% if a.naechster %}{{ a.naechster[:10]|datum }} {{ a.naechster[11:] }}{% else %}<a href="{{ url_for('kalender.arbeit', aid=a.id) }}#termine">Termin planen</a>{% endif %}</td></tr>{% endfor %}
   </tbody></table>
   <p class="klein"><a href="{{ url_for('kalender.offen') }}">Alle offenen Arbeiten mit Filter und Summen →</a></p>
-  {% else %}<p class="klein">Keine offenen Arbeiten. <a href="{{ url_for('kalender.offen') }}#uebernehmen">Bestehende Aufträge/KVAs übernehmen</a> oder <a href="{{ url_for('kalender.neu') }}">neue Arbeit anlegen</a>.</p>{% endif %}
+  {% else %}<p class="klein">Keine offenen Arbeiten. <a href="{{ url_for('kalender.offen') }}#uebernehmen">Bestehende Aufträge/KVAs übernehmen</a> oder Doppelklick in den Kalender.</p>{% endif %}
 </div>
+
+<script>
+(() => {
+  const PX = 48, RASTER = 15, LANG = 450;
+  const csrf = document.querySelector('meta[name=csrf]').content;
+  const dlg = document.getElementById('ak-schnell'), form = dlg.querySelector('form');
+  const standardDauer = {{ (einst.ak_standard_dauer or 60)|int }};
+  const hhmm = m => String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0');
+  const dauerText = m => Math.floor(m / 60) + ':' + String(m % 60).padStart(2, '0');
+
+  // ---------- Schnellformular
+  function schnell(datum, minuten) {
+    form.datum.value = datum; form.beginn.value = hhmm(minuten); form.dauer.value = dauerText(standardDauer);
+    form.titel.value = ''; form.typ.value = 'frei'; form.privat.checked = false; privatZeigen();
+    dlg.showModal(); setTimeout(() => form.titel.focus(), 30);
+  }
+  const privatZeigen = () => { document.getElementById('ak-privat').hidden = form.typ.value !== 'frei'; };
+  form.querySelectorAll('input[name=typ]').forEach(r => r.addEventListener('change', privatZeigen));
+  dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+
+  const raster = document.getElementById('ak-raster'), monat = document.getElementById('ak-monat');
+  const beginnH = raster ? +raster.dataset.beginn : 0;
+  const minutenAus = (spalte, clientY) => {
+    const y = clientY - spalte.getBoundingClientRect().top;
+    return Math.max(0, Math.min(24 * 60 - RASTER, beginnH * 60 + Math.round(y / PX * 60 / RASTER) * RASTER));
+  };
+  const leer = e => !e.target.closest('.ak-block, .ak-t, a');
+
+  function langDruecken(el, aufLang) {  // Handy: lange drücken auf eine freie Stelle
+    let timer = null, start = null;
+    el.addEventListener('touchstart', e => {
+      if (e.touches.length !== 1 || !leer(e)) return;
+      const t = e.touches[0]; start = [t.clientX, t.clientY];
+      timer = setTimeout(() => { timer = null; navigator.vibrate?.(20); aufLang(e.currentTarget || el, t); }, LANG);
+    }, { passive: true });
+    el.addEventListener('touchmove', e => { const t = e.touches[0]; if (timer && Math.hypot(t.clientX - start[0], t.clientY - start[1]) > 10) { clearTimeout(timer); timer = null; } }, { passive: true });
+    el.addEventListener('touchend', () => { clearTimeout(timer); timer = null; });
+  }
+  document.querySelectorAll('.ak-spalte').forEach(sp => {
+    sp.addEventListener('dblclick', e => { if (leer(e)) schnell(sp.dataset.datum, minutenAus(sp, e.clientY)); });
+    langDruecken(sp, (_, t) => schnell(sp.dataset.datum, minutenAus(sp, t.clientY)));
+  });
+  document.querySelectorAll('.ak-zelle').forEach(z => {
+    z.addEventListener('dblclick', e => { if (leer(e)) schnell(z.dataset.datum, 9 * 60); });
+    langDruecken(z, () => schnell(z.dataset.datum, 9 * 60));
+  });
+
+  // ---------- Verschieben / Dauer ziehen
+  async function speichern(tid, datum, beginn, dauer) {
+    const d = new FormData(); d.set('csrf', csrf); d.set('datum', datum); d.set('beginn', beginn); d.set('dauer', dauer);
+    const r = await fetch('{{ url_for("kalender.uebersicht") }}termin/' + tid + '/verschieben', { method: 'POST', body: d });
+    if (!r.ok) alert('Konnte den Termin nicht verschieben.');
+    location.reload();
+  }
+  let zug = null, sperreKlick = false;
+  document.addEventListener('click', e => { if (sperreKlick && e.target.closest('.ak-t')) { e.preventDefault(); sperreKlick = false; } }, true);
+  document.addEventListener('contextmenu', e => { if (e.target.closest('.ak-t') && zug) e.preventDefault(); });
+  document.addEventListener('touchmove', e => { if (zug && zug.aktiv) e.preventDefault(); }, { passive: false });
+
+  function zugStart(e, chip, art) {
+    if (e.button > 0) return;
+    const block = chip.closest('.ak-block');
+    zug = { art, chip, block, x: e.clientX, y: e.clientY, aktiv: false, touch: e.pointerType === 'touch',
+            tid: chip.dataset.tid, datum: chip.dataset.datum, dauer: +chip.dataset.dauer,
+            start: (+chip.dataset.beginn.slice(0, 2)) * 60 + (+chip.dataset.beginn.slice(3)), timer: null };
+    zug.neu = { datum: zug.datum, start: zug.start, dauer: zug.dauer };
+    if (zug.touch && art === 'ziehen') zug.timer = setTimeout(() => { if (zug) { zug.aktiv = true; navigator.vibrate?.(15); (block || chip).classList.add('zieht'); } }, LANG - 100);
+    else if (art === 'dauer') zug.aktiv = true;
+  }
+  document.querySelectorAll('.ak-block .ak-t, .ak-zelle .ak-t').forEach(chip => {
+    chip.addEventListener('pointerdown', e => zugStart(e, chip, 'ziehen'));
+    chip.addEventListener('dragstart', e => e.preventDefault());  // kein „Link ziehen“ des Browsers
+  });
+  document.querySelectorAll('.ak-griff').forEach(g => g.addEventListener('pointerdown', e => {
+    e.stopPropagation(); e.preventDefault(); zugStart(e, g.closest('.ak-block').querySelector('.ak-t'), 'dauer');
+  }));
+  document.addEventListener('pointermove', e => {
+    if (!zug) return;
+    const dx = e.clientX - zug.x, dy = e.clientY - zug.y;
+    if (!zug.aktiv) {
+      if (zug.touch) { if (Math.hypot(dx, dy) > 10) { clearTimeout(zug.timer); zug = null; } return; }  // Wischen = blättern
+      if (Math.hypot(dx, dy) < 5) return;
+      zug.aktiv = true; (zug.block || zug.chip).classList.add('zieht');
+    }
+    e.preventDefault();
+    if (zug.block) {
+      const tipp = zug.block.querySelector('.ak-zeit-tipp') || zug.block.appendChild(Object.assign(document.createElement('span'), { className: 'ak-zeit-tipp' }));
+      if (zug.art === 'dauer') {
+        zug.neu.dauer = Math.max(RASTER, Math.round((zug.dauer + dy / PX * 60) / RASTER) * RASTER);
+        zug.block.style.height = (zug.neu.dauer * PX / 60 - 2) + 'px';
+        tipp.textContent = dauerText(zug.neu.dauer) + ' Std.';
+      } else {
+        zug.block.style.pointerEvents = 'none';
+        const ziel = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ak-spalte');
+        zug.block.style.pointerEvents = '';
+        if (ziel && ziel !== zug.block.parentElement) ziel.appendChild(zug.block);
+        const spalte = zug.block.parentElement;
+        zug.neu.datum = spalte.dataset.datum;
+        zug.neu.start = Math.max(0, Math.min(24 * 60 - RASTER, Math.round((zug.start + dy / PX * 60) / RASTER) * RASTER));
+        zug.block.style.top = ((zug.neu.start - beginnH * 60) * PX / 60) + 'px';
+        tipp.textContent = hhmm(zug.neu.start);
+      }
+    } else {  // Monat: Tag wechseln, Uhrzeit bleibt
+      document.querySelectorAll('.ak-zelle.ziel').forEach(z => z.classList.remove('ziel'));
+      zug.chip.style.pointerEvents = 'none';
+      const zelle = document.elementFromPoint(e.clientX, e.clientY)?.closest('.ak-zelle');
+      zug.chip.style.pointerEvents = '';
+      if (zelle) { zelle.classList.add('ziel'); zug.neu.datum = zelle.dataset.datum; }
+    }
+  }, { passive: false });
+  document.addEventListener('pointerup', () => {
+    if (!zug) return;
+    clearTimeout(zug.timer);
+    const z = zug; zug = null;
+    if (!z.aktiv) return;
+    sperreKlick = true;
+    const n = z.neu;
+    if (n.datum !== z.datum || n.start !== z.start || n.dauer !== z.dauer) speichern(z.tid, n.datum, hhmm(n.start), n.dauer);
+    else location.reload();
+  });
+  document.addEventListener('pointercancel', () => { if (zug) { clearTimeout(zug.timer); if (zug.aktiv) location.reload(); zug = null; } });
+})();
+</script>
 {% endblock %}

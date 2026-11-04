@@ -247,3 +247,114 @@ def test_ics_falten_und_sonderzeichen(client, con):
     assert all(len(z.encode()) <= 75 for z in daten.split("\r\n"))
     assert "DTSTART:20260701T080000Z" in daten  # 10:00 MESZ = 08:00 UTC
     assert "\\;" in daten and "\\," in daten
+
+
+# ---------------------------------------------------------------------- 0.37.0
+
+def test_freier_eintrag_nur_titel_und_umwandeln(client, con):
+    r = post(client, "/kalender/neu", typ="frei", status="offen", prioritaet="", titel="Material holen")
+    aid = int(re.search(r"/kalender/(\d+)", r.headers["Location"]).group(1))
+    a = ak.laden(con, aid)
+    assert a["typ"] == "frei" and a["kunde_id"] is None and a["name"] == ""
+    termin_anlegen(client, aid)
+    tid = termine(con, aid)[0]["id"]
+    post(client, f"/kalender/termin/{tid}", datum="2026-11-10", beginn="09:00", dauer="1:30", art="", notiz="",
+         ist_dauer="1:00", km="", ist_beginn="", ist_ende="", fahrzeit="", anfahrt="keine")
+    assert ak.abrechnung(con, ak.laden(con, aid))["netto"] == 0  # freier Eintrag: keine Arbeitszeit berechnet
+    # später in einen Reparaturauftrag umwandeln – dann gilt der Standard-Stundensatz
+    post(client, f"/kalender/{aid}", typ="reparatur", status="geplant", prioritaet="", titel="Material holen")
+    assert ak.abrechnung(con, ak.laden(con, aid))["netto"] == 6000
+
+
+def test_schnell_anlegen_und_verschieben(client, con):
+    r = post(client, "/kalender/schnell", titel="Besichtigung Huber", typ="kva", datum="2026-11-11", beginn="14:15",
+             dauer="", weiter="/kalender/?ansicht=woche&datum=2026-11-11")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/kalender/?ansicht=woche&datum=2026-11-11")
+    a = con.execute("SELECT * FROM arbeiten ORDER BY id DESC").fetchone()
+    t = termine(con, a["id"])[0]
+    assert a["typ"] == "kva" and a["titel"] == "Besichtigung Huber" and a["status"] == "geplant"
+    assert (t["datum"], t["beginn"], t["dauer_min"]) == ("2026-11-11", "14:15", 60)
+    r = post(client, "/kalender/schnell", titel="", typ="frei", datum="2026-11-12", beginn="08:00", mehr="1")
+    neu = con.execute("SELECT * FROM arbeiten ORDER BY id DESC").fetchone()
+    assert neu["titel"] == "Termin" and r.headers["Location"].endswith(f"/kalender/{neu['id']}")
+    html = client.get("/kalender/?ansicht=woche&datum=2026-11-11").get_data(as_text=True)
+    assert 'id="ak-schnell"' in html and f'data-tid="{t["id"]}"' in html and 'class="ak-griff"' in html
+    assert client.post(f"/kalender/termin/{t['id']}/verschieben", data={
+        "csrf": "test-token", "datum": "2026-11-13", "beginn": "10:30", "dauer": "105"}).get_json() == {"ok": True}
+    t = termine(con, a["id"])[0]
+    assert (t["datum"], t["beginn"], t["dauer_min"]) == ("2026-11-13", "10:30", 105)
+    assert con.execute("SELECT 1 FROM protokoll WHERE aktion='arbeit_termin_verschoben'").fetchone()
+
+
+def test_zeit_erfasst_termin_und_arbeit_erledigt(client, con):
+    aid = arbeit_anlegen(client)
+    termin_anlegen(client, aid)
+    termin_anlegen(client, aid, datum="2026-11-20")
+    t1, t2 = [t["id"] for t in termine(con, aid)]
+    post(client, f"/kalender/termin/{t1}", datum="2026-11-10", beginn="09:00", dauer="1:30", art="", notiz="",
+         ist_dauer="0:45", km="12", ist_beginn="", ist_ende="", fahrzeit="", anfahrt="km", anfahrt_weiter="1")
+    assert termine(con, aid)[0]["status"] == "erledigt" and ak.laden(con, aid)["status"] == "geplant"
+    post(client, f"/kalender/termin/{t2}/timer", aktion="start")
+    assert ak.laden(con, aid)["status"] == "in_arbeit"
+    post(client, f"/kalender/termin/{t2}/timer", aktion="stopp")
+    assert termine(con, aid)[1]["status"] == "erledigt" and ak.laden(con, aid)["status"] == "erledigt"
+
+
+def test_auswertung_und_csv(client, con):
+    regelbesteuerung(con)
+    aid = arbeit_anlegen(client)
+    termin_anlegen(client, aid, datum="2026-11-10")
+    termin_anlegen(client, aid, datum="2026-12-02")
+    t1, t2 = [t["id"] for t in termine(con, aid)]
+    for tid, datum, dauer in ((t1, "2026-11-10", "2:00"), (t2, "2026-12-02", "1:00")):
+        post(client, f"/kalender/termin/{tid}", datum=datum, beginn="09:00", dauer="1:00", art="", notiz="",
+             ist_dauer=dauer, km="", ist_beginn="", ist_ende="", fahrzeit="", anfahrt="keine")
+    post(client, f"/kalender/{aid}/kosten", kategorie="maut", betrag="8,40", datum="2026-12-02", weiterberechnen="1")
+    seite = client.get("/kalender/offen?status=alle").get_data(as_text=True)
+    assert "11/2026" in seite and "12/2026" in seite and "Maut" in seite and "120,00 €" in seite
+    woche = client.get("/kalender/offen?status=alle&gruppe=woche").get_data(as_text=True)
+    assert "KW 46" in woche and "KW 49" in woche
+    r = client.get("/kalender/export.csv?status=alle")
+    assert r.mimetype == "text/csv" and "attachment" in r.headers["Content-Disposition"]
+    text = r.data.decode("utf-8")
+    assert text.startswith("﻿Datum;Typ;Arbeit") and "10.11.2026;Reparatur;Heizungssteuerung prüfen" in text
+    assert ";Arbeitszeit;" in text and ";120,00;ja;2,00" in text and ";Maut;" in text and ";8,40;ja;" in text
+
+
+def test_steuer_umschalten_in_kalender_einstellungen(client, con):
+    werte = dict(ak_stundensatz="60", ak_km_satz="0,50", ak_anfahrt_pauschale="25", ak_fahrzeit_satz="60",
+                 ak_verpflegung_8h="14", ak_verpflegung_24h="28", ak_verpflegung_anreise="14", ak_anfahrt="km",
+                 ak_standard_dauer="60", ak_tag_beginn="7", ak_tag_ende="19", ak_vorschlag_betreff="",
+                 ak_vorschlag_text="")
+    post(client, "/kalender/einstellungen", steuer_modus="regel", **werte)
+    assert dbm.einstellung("steuer_modus", con) == "regel"
+    post(client, "/kalender/einstellungen", steuer_modus="kleinunternehmer", **werte)
+    assert dbm.einstellung("steuer_modus", con) == "kleinunternehmer"
+
+
+def test_sichtschutz_und_privat(client, con):
+    kid = kunde_anlegen(client)
+    andere = kunde_anlegen(client, vorname="Bernd", nachname="Beispiel", email="bernd@example.com",
+                           telefon="0170 999888")
+    aid = arbeit_anlegen(client, kid)
+    termin_anlegen(client, aid, datum="2026-11-10")
+    post(client, "/kalender/schnell", titel="Zahnarzt", typ="frei", privat="1", datum="2026-11-10", beginn="15:00")
+    url = "/kalender/?ansicht=tag&datum=2026-11-10"
+    html = client.get(url).get_data(as_text=True)
+    assert "sichtschutz" not in html.split("<head>")[0] and "Zahnarzt" in html and "data-sichtschutz=\"umschalten\"" in html
+    client.set_cookie("rsb_sichtschutz", "1")
+    html = client.get(url).get_data(as_text=True)
+    assert 'class="sichtschutz"' in html and "Sichtschutz aktiv" in html and "sichtschutz.js" in html
+    assert "Zahnarzt" not in html.split("Offene Arbeiten")[0] and "belegt" in html  # privat → nur „belegt“
+    daten = json.loads(re.search(r'id="sv-begriffe">(.*?)</script>', html).group(1))
+    assert "Anna Müller" in daten["begriffe"] and "Bernd Beispiel" in daten["begriffe"]
+    assert "bernd@example.com" in daten["begriffe"] and "0170 999888" in daten["begriffe"]
+    # Kundenseite: „Diesen Kunden zeigen“ → Begriffe dieses Kunden fallen weg
+    seite = client.get(f"/kunden/{kid}").get_data(as_text=True)
+    assert f'data-sv-kunde="{kid}"' in seite and "Diesen Kunden zeigen" in seite
+    client.set_cookie("rsb_sichtschutz_kunde", str(kid))
+    daten = json.loads(re.search(r'id="sv-begriffe">(.*?)</script>', client.get(url).get_data(as_text=True)).group(1))
+    assert "Anna Müller" not in daten["begriffe"] and "Bernd Beispiel" in daten["begriffe"] and daten["kunde"] == kid
+    assert andere
+    client.delete_cookie("rsb_sichtschutz")
+    assert "sv-begriffe" not in client.get(url).get_data(as_text=True)

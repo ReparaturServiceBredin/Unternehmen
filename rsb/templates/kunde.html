@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% set seiten_kunde = k.id if k else none %}
 {% from "_status.html" import status, csrf %}
 {% from "_aenderungen.html" import aenderungen_karte %}
 {% block titel %}{{ k|kname if k else 'Neuer Kunde' }}{% endblock %}

@@ -18,15 +18,17 @@
     <div class="s2"><label>Zeitraum von</label><input type="date" name="von" value="{{ f.von }}"></div>
     <div class="s2"><label>bis</label><input type="date" name="bis" value="{{ f.bis }}"></div>
   </div>
+  <input type="hidden" name="gruppe" value="{{ gruppe }}">
   <div class="leiste" style="margin-top:8px"><button class="zweit">Filtern</button><a class="knopf zweit" href="{{ url_for('kalender.offen') }}">Zurücksetzen</a>
+    <a class="knopf zweit" href="{{ url_for('kalender.export_csv', **f) }}">CSV-Export</a>
     <span class="klein">Zeitraum: Termine bzw. Anlage in diesem Zeitraum.</span></div>
 </form>
 <div class="karte">
   <div style="overflow-x:auto"><table class="liste"><thead><tr><th>Typ</th><th>Arbeit</th><th>Kunde</th><th>Status</th><th>Nächster Termin</th>
     <th class="zahl">geplant</th><th class="zahl">tatsächlich</th><th class="zahl">netto</th><th class="zahl">brutto</th><th class="zahl">intern</th></tr></thead><tbody>
   {% for z in zeilen %}{% set a = z.a %}{% set r = z.r %}<tr>
-    <td><span class="ak-typ {{ a.typ }}">{{ 'KVA' if a.typ == 'kva' else 'Reparatur' }}</span></td>
-    <td><a href="{{ url_for('kalender.arbeit', aid=a.id) }}">{{ a.titel }}</a>{% if a.prioritaet in ('hoch', 'dringend') %} <span class="ak-prio-{{ a.prioritaet }}">· {{ a.prioritaet }}</span>{% endif %}</td>
+    <td><span class="ak-typ {{ a.typ }}">{{ ak.TYP_KURZ[a.typ] }}</span></td>
+    <td><a href="{{ url_for('kalender.arbeit', aid=a.id) }}">{{ 'belegt' if sichtschutz and a.privat else a.titel }}</a>{% if a.prioritaet in ('hoch', 'dringend') %} <span class="ak-prio-{{ a.prioritaet }}">· {{ a.prioritaet }}</span>{% endif %}</td>
     <td>{{ a.name or '–' }}{% if a.adresse %}<div class="klein">{{ a.adresse }}</div>{% endif %}</td>
     <td><span class="ak-st {{ a.status }}">{{ ak.STATUS[a.status] }}</span></td>
     <td>{% if a.naechster %}{{ a.naechster[:10]|datum }} {{ a.naechster[11:] }}{% else %}–{% endif %}</td>
@@ -37,7 +39,20 @@
     <td class="zahl">{{ ak.dauer_text(summe.geplant_min) }}</td><td class="zahl">{{ ak.dauer_text(summe.ist_min) }}</td>
     <td class="zahl">{{ summe.netto|euro }}</td><td class="zahl">{{ summe.brutto|euro }}</td><td class="zahl">{{ summe.intern|euro }}</td></tr>{% endif %}
   </tbody></table></div>
-  <p class="klein">netto/brutto: Arbeitszeit + Anfahrt + weiterberechnete Nebenkosten (bisher erfasst). „intern“: nur intern erfasste Kosten.</p>
+  <p class="klein">netto/brutto: Arbeitszeit + Anfahrt + weiterberechnete Nebenkosten (bisher erfasst). „intern“: nur intern erfasste Kosten. Der CSV-Export enthält alle Einzelpositionen (für Excel bzw. als Grundlage für die Rechnung).</p>
+</div>
+
+<div class="karte">
+  <div class="leiste" style="justify-content:space-between"><h2 style="margin:0">Auswertung je {{ 'Woche' if gruppe == 'woche' else 'Monat' }}</h2>
+    <div class="leiste">{% for k, n in [('woche', 'Woche'), ('monat', 'Monat')] %}<a class="knopf {{ '' if gruppe == k else 'zweit' }} klein" href="{{ url_for('kalender.offen', **dict(f, gruppe=k)) }}">{{ n }}</a>{% endfor %}</div></div>
+  {% if auswertung.perioden %}<div style="overflow-x:auto"><table class="liste"><thead><tr><th>Zeitraum</th><th class="zahl">Stunden</th>
+    {% for k, n in auswertung.kategorien %}<th class="zahl">{{ n }}</th>{% endfor %}<th class="zahl">an Kunden</th><th class="zahl">intern</th></tr></thead><tbody>
+  {% for p in auswertung.perioden %}<tr><td>{{ p.name }}</td><td class="zahl">{{ ak.dauer_text(p.minuten) }}</td>
+    {% for k, n in auswertung.kategorien %}<td class="zahl">{{ p.kategorien[k]|euro if p.kategorien.get(k) else '–' }}</td>{% endfor %}
+    <td class="zahl"><b>{{ p.weiter|euro }}</b></td><td class="zahl klein">{{ p.intern|euro if p.intern else '–' }}</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="klein">Beträge netto, nach Datum des Termins bzw. der Kostenposition{{ ' (gefiltert auf den Zeitraum oben)' if f.von or f.bis }}.</p>
+  {% else %}<p class="klein">Noch keine erfassten Zeiten oder Kosten für diese Auswahl.</p>{% endif %}
 </div>
 
 <div class="karte" id="uebernehmen">

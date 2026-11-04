@@ -11,7 +11,8 @@ from datetime import date, datetime, timedelta, timezone
 from . import db as dbm
 from .hilfen import BERLIN, EingabeFehler, anrede_brief, datum_de, euro, heute_datum, jetzt_dt, kunde_name
 
-TYPEN = {"kva": "Kostenvoranschlag", "reparatur": "Reparaturauftrag"}
+TYPEN = {"frei": "Freier Eintrag", "kva": "Kostenvoranschlag", "reparatur": "Reparaturauftrag"}
+TYP_KURZ = {"frei": "Frei", "kva": "KVA", "reparatur": "Reparatur"}
 STATUS = {"offen": "offen", "geplant": "geplant", "in_arbeit": "in Arbeit", "erledigt": "erledigt",
           "abgerechnet": "abgerechnet"}
 OFFEN = ("offen", "geplant", "in_arbeit")
@@ -132,7 +133,10 @@ def termin_rechnung(t, satz, einst):
 
 
 def stundensatz(arbeit, einst):
-    return int(arbeit["stundensatz"] if arbeit["stundensatz"] is not None else einst.get("ak_stundensatz") or 0)
+    """Eigener Satz der Arbeit, sonst Standard. Freie Einträge (Material holen, Büro …) nur mit eigenem Satz."""
+    if arbeit["stundensatz"] is not None:
+        return int(arbeit["stundensatz"])
+    return 0 if arbeit["typ"] == "frei" else int(einst.get("ak_stundensatz") or 0)
 
 
 def abrechnung(con, arbeit, einst=None):
@@ -147,10 +151,12 @@ def abrechnung(con, arbeit, einst=None):
             continue
         for kat, text, cent, weiter in termin_rechnung(t, satz, einst):
             zeilen.append({"kategorie": kat, "text": f"{datum_de(t['datum'])}: {text}", "cent": cent,
-                           "weiter": weiter, "termin_id": t["id"]})
+                           "weiter": weiter, "termin_id": t["id"], "datum": t["datum"]})
+    termin_datum = {t["id"]: t["datum"] for t in termine}
     for k in kosten:
         zeilen.append({"kategorie": k["kategorie"], "text": kosten_text(k), "cent": k["betrag"],
-                       "weiter": bool(k["weiterberechnen"]), "termin_id": k["termin_id"], "kosten_id": k["id"]})
+                       "weiter": bool(k["weiterberechnen"]), "termin_id": k["termin_id"], "kosten_id": k["id"],
+                       "datum": k["datum"] or termin_datum.get(k["termin_id"]) or k["erstellt_am"][:10]})
     namen = {"arbeitszeit": "Arbeitszeit", "anfahrt": "Anfahrt", "fahrzeit": "Fahrzeit", **KATEGORIEN}
     je_kategorie = {}
     for z in zeilen:
@@ -161,7 +167,7 @@ def abrechnung(con, arbeit, einst=None):
     prozent = steuersatz(einst)
     mwst = round(netto * prozent / 100)
     aktiv = [t for t in termine if t["status"] != "abgesagt"]
-    return {"stundensatz": satz, "zeilen": zeilen, "kategorien": je_kategorie, "netto": netto,
+    return {"stundensatz": satz, "termine": aktiv, "zeilen": zeilen, "kategorien": je_kategorie, "netto": netto,
             "intern": sum(z["cent"] for z in zeilen if not z["weiter"]), "steuersatz": prozent, "mwst": mwst,
             "brutto": netto + mwst, "geplant_min": sum(t["dauer_min"] or 0 for t in aktiv),
             "ist_min": sum(ist_minuten(t) or 0 for t in aktiv),
@@ -205,7 +211,8 @@ def termine_von(con, aid):
 
 def termine_zeitraum(con, von, bis):
     return con.execute(
-        "SELECT t.*, a.typ, a.titel, a.name, a.status AS arbeit_status, a.prioritaet FROM arbeit_termine t "
+        "SELECT t.*, a.typ, a.titel, a.name, a.kunde_id, a.privat, a.status AS arbeit_status, a.prioritaet "
+        "FROM arbeit_termine t "
         "JOIN arbeiten a ON a.id=t.arbeit_id WHERE t.datum BETWEEN ? AND ? ORDER BY t.datum, t.beginn",
         (von, bis)).fetchall()
 
@@ -267,11 +274,12 @@ def anlegen(con, werte):
     jetzt = dbm.jetzt()
     cur = con.execute(
         "INSERT INTO arbeiten (typ, kunde_id, name, adresse, telefon, email, titel, beschreibung, status, prioritaet, "
-        "stundensatz, auftrag_id, dokument_id, erstellt_am, geaendert_am) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        (werte.get("typ") or "reparatur", werte.get("kunde_id"), werte.get("name"), werte.get("adresse"),
+        "stundensatz, auftrag_id, dokument_id, privat, erstellt_am, geaendert_am) "
+        "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        (werte.get("typ") or "frei", werte.get("kunde_id"), werte.get("name"), werte.get("adresse"),
          werte.get("telefon"), werte.get("email"), werte["titel"], werte.get("beschreibung"),
          werte.get("status") or "offen", werte.get("prioritaet") or None, werte.get("stundensatz"),
-         werte.get("auftrag_id"), werte.get("dokument_id"), jetzt, jetzt))
+         werte.get("auftrag_id"), werte.get("dokument_id"), 1 if werte.get("privat") else 0, jetzt, jetzt))
     dbm.protokollieren("arbeit_angelegt", "arbeit", cur.lastrowid, {"titel": werte["titel"]}, con=con)
     return cur.lastrowid
 
@@ -327,6 +335,102 @@ def timer(con, tid, aktion):
         laufend = int((jetzt - datetime.fromisoformat(t["timer_start"])).total_seconds() // 60)
         con.execute("UPDATE arbeit_termine SET timer_start=NULL, ist_minuten=?, ist_ende=? WHERE id=?",
                     ((bisher or 0) + max(laufend, 0), jetzt.strftime("%H:%M"), tid))
+        termin_erledigt(con, tid)
+
+
+def termin_erledigt(con, tid):
+    """Zeit erfasst → Termin erledigt; ist es der letzte offene Termin, ist die Arbeit erledigt."""
+    t = con.execute("SELECT * FROM arbeit_termine WHERE id=?", (tid,)).fetchone()
+    if not t or t["status"] in ("erledigt", "abgesagt"):
+        return
+    con.execute("UPDATE arbeit_termine SET status='erledigt' WHERE id=?", (tid,))
+    a = laden(con, t["arbeit_id"])
+    offen = con.execute("SELECT 1 FROM arbeit_termine WHERE arbeit_id=? AND status NOT IN ('erledigt', 'abgesagt')",
+                        (a["id"],)).fetchone()
+    if not offen and a["status"] in ("offen", "geplant", "in_arbeit"):
+        con.execute("UPDATE arbeiten SET status='erledigt', geaendert_am=? WHERE id=?", (dbm.jetzt(), a["id"]))
+
+
+def schnell_anlegen(con, titel, typ, datum, beginn, dauer_min, privat=False):
+    """Schnellformular im Kalender: Eintrag + ersten Termin in einem Schritt. Gibt (arbeit_id, termin_id)."""
+    if typ not in TYPEN:
+        typ = "frei"
+    aid = anlegen(con, {"typ": typ, "titel": (titel or "").strip() or "Termin", "status": "geplant",
+                        "privat": 1 if privat and typ == "frei" else 0})
+    cur = con.execute("INSERT INTO arbeit_termine (arbeit_id, datum, beginn, dauer_min, anfahrt, erstellt_am) "
+                      "VALUES (?,?,?,?,?,?)", (aid, datum, beginn, dauer_min,
+                                               dbm.einstellung("ak_anfahrt", con) or "km", dbm.jetzt()))
+    return aid, cur.lastrowid
+
+
+def verschieben(con, tid, datum, beginn, dauer_min):
+    """Drag & Drop im Kalender: Termin verschieben bzw. Länge ändern."""
+    t = con.execute("SELECT * FROM arbeit_termine WHERE id=?", (tid,)).fetchone()
+    if not t:
+        raise EingabeFehler("Termin nicht gefunden.")
+    dauer_min = max(15, min(int(dauer_min), 24 * 60))
+    con.execute("UPDATE arbeit_termine SET datum=?, beginn=?, dauer_min=? WHERE id=?", (datum, beginn, dauer_min, tid))
+    dbm.protokollieren("arbeit_termin_verschoben", "arbeit", t["arbeit_id"],
+                       {"termin": tid, "von": f"{t['datum']} {t['beginn']}", "nach": f"{datum} {beginn}",
+                        "dauer": dauer_min}, con=con)
+    return t["arbeit_id"]
+
+
+# ---------------------------------------------------------------------- Auswertung / Export
+
+def zeitraum_schluessel(datum_iso, gruppe):
+    d = date.fromisoformat(datum_iso[:10])
+    if gruppe == "woche":
+        j, w, _ = d.isocalendar()
+        montag = d - timedelta(days=d.weekday())
+        return f"{j}-W{w:02d}", f"KW {w} ({montag:%d.%m.}–{montag + timedelta(days=6):%d.%m.%Y})"
+    return d.strftime("%Y-%m"), f"{d:%m/%Y}"
+
+
+def auswertung(con, arbeiten, gruppe="monat", von=None, bis=None, einst=None):
+    """Summen je Woche/Monat: erfasste Stunden, Beträge (an Kunden / intern) und Kosten je Kategorie."""
+    einst = einst or dbm.einstellungen(con)
+    perioden = {}
+    for a in arbeiten:
+        r = abrechnung(con, a, einst)
+        for t in r["termine"]:
+            minuten = ist_minuten(t) or 0
+            if minuten and (not von or t["datum"] >= von) and (not bis or t["datum"] <= bis):
+                schl, name = zeitraum_schluessel(t["datum"], gruppe)
+                perioden.setdefault(schl, {"name": name, "minuten": 0, "weiter": 0, "intern": 0, "kategorien": {}})
+                perioden[schl]["minuten"] += minuten
+        for z in r["zeilen"]:
+            if (von and z["datum"] < von) or (bis and z["datum"] > bis):
+                continue
+            schl, name = zeitraum_schluessel(z["datum"], gruppe)
+            p = perioden.setdefault(schl, {"name": name, "minuten": 0, "weiter": 0, "intern": 0, "kategorien": {}})
+            p["weiter" if z["weiter"] else "intern"] += z["cent"]
+            p["kategorien"][z["kategorie"]] = p["kategorien"].get(z["kategorie"], 0) + z["cent"]
+    namen = {"arbeitszeit": "Arbeitszeit", "anfahrt": "Anfahrt", "fahrzeit": "Fahrzeit", **KATEGORIEN}
+    kategorien = [k for k in namen if any(k in p["kategorien"] for p in perioden.values())]
+    return {"perioden": [perioden[k] for k in sorted(perioden)], "kategorien": [(k, namen[k]) for k in kategorien]}
+
+
+def csv_export(con, arbeiten, einst=None):
+    """Alle Positionen (Arbeitszeit, Anfahrt, Nebenkosten) als CSV für Excel – Grundlage für die Rechnung."""
+    import csv
+    import io
+    einst = einst or dbm.einstellungen(con)
+    puffer = io.StringIO()
+    w = csv.writer(puffer, delimiter=";")
+    w.writerow(["Datum", "Typ", "Arbeit", "Kunde", "Adresse", "Kategorie", "Position", "Betrag netto",
+                "an Kunden", "Stunden"])
+    namen = {"arbeitszeit": "Arbeitszeit", "anfahrt": "Anfahrt", "fahrzeit": "Fahrzeit", **KATEGORIEN}
+    for a in arbeiten:
+        r = abrechnung(con, a, einst)
+        minuten = {t["id"]: ist_minuten(t) for t in r["termine"]}
+        for z in sorted(r["zeilen"], key=lambda z: z["datum"]):
+            std = minuten.get(z["termin_id"]) if z["kategorie"] == "arbeitszeit" else None
+            w.writerow([datum_de(z["datum"]), TYP_KURZ.get(a["typ"], a["typ"]), a["titel"], a["name"] or "",
+                        a["adresse"] or "", namen.get(z["kategorie"], z["kategorie"]), z["text"],
+                        euro(z["cent"], False), "ja" if z["weiter"] else "nein",
+                        f"{std / 60:.2f}".replace(".", ",") if std else ""])
+    return "\ufeff" + puffer.getvalue()  # BOM: Excel erkennt UTF-8 (Umlaute)
 
 
 # ---------------------------------------------------------------------- Terminvorschlag

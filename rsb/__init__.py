@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.36.0"
+VERSION_NUMMER = "0.37.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -207,6 +207,9 @@ def create_app(daten_dir=None, testing=False):
         ui = einst.get(f"oberflaeche:{session.get('benutzer') or 'inhaber'}") or {}
         if not isinstance(ui, dict):
             ui = {}
+        from . import sichtschutz as sv
+        sv_aktiv = sv.aktiv()
+        sv_kunde = sv.ausgenommen() if sv_aktiv else None
         from .update import ist_exe, ist_neuer
         update_da = einst.get("update_verfuegbar") if ist_neuer(einst.get("update_verfuegbar"), VERSION_NUMMER) \
             else None
@@ -217,7 +220,9 @@ def create_app(daten_dir=None, testing=False):
                 "zaehler": {"offene_anfragen": offene_anfragen, "offene_auftraege": offene_auftraege,
                             "leihen_ueberfaellig": leihen_ueberfaellig, "posten_ueberfaellig": posten_ueberfaellig,
                             "lager_unter_min": lager_unter_min},
-                "update_da": update_da, "ist_exe": ist_exe(), "server_modus": app.config["SERVER_MODUS"]}
+                "update_da": update_da, "ist_exe": ist_exe(), "server_modus": app.config["SERVER_MODUS"],
+                "sichtschutz": sv_aktiv, "sichtschutz_kunde": sv_kunde,
+                "sichtschutz_daten": {"begriffe": sv.begriffe(con, sv_kunde), "kunde": sv_kunde} if sv_aktiv else None}
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):

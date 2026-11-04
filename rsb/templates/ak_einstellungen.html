@@ -16,6 +16,13 @@
     <div class="s3"><label>Stundensatz Fahrzeit (€/Std.)</label><input type="text" name="ak_fahrzeit_satz" value="{{ einst.ak_fahrzeit_satz|euro(false) }}">
       <div class="hilfe">Nur wenn beim Termin „Fahrzeit berechnen“ angehakt ist.</div></div>
   </div>
+  <h2 style="margin-top:18px">Mehrwertsteuer</h2>
+  <div class="felder">
+    <div class="s6"><label>Besteuerung</label><select name="steuer_modus">
+      <option value="kleinunternehmer" {{ 'selected' if einst.steuer_modus != 'regel' }}>Kleinunternehmer – keine MwSt.</option>
+      <option value="regel" {{ 'selected' if einst.steuer_modus == 'regel' }}>Regelbesteuerung – {{ einst.regel_steuersatz }} % MwSt.</option></select>
+      <div class="hilfe">Gilt für das ganze Programm (auch Rechnungen) – dieselbe Einstellung wie unter <a href="{{ url_for('main.einstellungen', bereich='rechnung') }}">Rechnung &amp; Steuer</a>.</div></div>
+  </div>
   <h2 style="margin-top:18px">Verpflegungspauschalen</h2>
   <div class="felder">
     <div class="s3"><label>Abwesenheit mehr als 8 Std. (€)</label><input type="text" name="ak_verpflegung_8h" value="{{ einst.ak_verpflegung_8h|euro(false) }}"></div>
@@ -36,6 +43,6 @@
     <div class="s12"><label>Text</label><textarea name="ak_vorschlag_text" style="min-height:220px">{{ einst.ak_vorschlag_text }}</textarea></div>
   </div>
   <br><button>Speichern</button>
-  <p class="klein">MwSt.: nach den Rechnungs-Einstellungen ({{ 'Regelbesteuerung, ' ~ einst.regel_steuersatz ~ ' %' if einst.steuer_modus == 'regel' else 'Kleinunternehmer – keine MwSt.' }}), änderbar unter <a href="{{ url_for('main.einstellungen', bereich='rechnung') }}">Einstellungen → Rechnung &amp; Steuer</a>.</p>
+
 </form>
 {% endblock %}
