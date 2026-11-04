@@ -99,7 +99,11 @@ def nachricht_bauen(einst, an, betreff, text, anhang=None, anhang_name=None, bcc
     msg.set_content(text)
     if anhang:
         msg.add_attachment(anhang, maintype="application", subtype="pdf", filename=anhang_name)
-    for daten, name in weitere or []:  # z. B. XRechnung-XML
+    for daten, name in weitere or []:  # z. B. XRechnung-XML, Kalenderdatei
+        if name.lower().endswith(".ics"):
+            msg.add_attachment(daten, maintype="text", subtype="calendar", filename=name,
+                               params={"charset": "utf-8", "method": "PUBLISH"})
+            continue
         typ = ("application", "xml") if name.lower().endswith(".xml") else ("application", "octet-stream")
         msg.add_attachment(daten, maintype=typ[0], subtype=typ[1], filename=name)
     return msg

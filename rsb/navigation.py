@@ -32,6 +32,8 @@ SEITENLEISTE = [
                 zaehler_titel="neue Anfragen", stichworte="Kontaktformular Posteingang"),
         Eintrag("auftraege", "Reparaturaufträge", "wrench", "main.auftraege", "offene_auftraege",
                 zaehler_titel="offene Aufträge", stichworte="Tafel Reparatur Annahme Abholung"),
+        Eintrag("kalender", "Arbeitskalender", "calendar-days", "kalender.uebersicht",
+                stichworte="Termine Kalender Einsatz vor Ort Zeiterfassung Anfahrt Nebenkosten Terminvorschlag"),
         Eintrag("leihgeraete", "Leihgeräte", "laptop", "main.leihgeraete", "leihen_ueberfaellig", True,
                 "überfällige Rückgaben", "Leihe Ersatzgerät"),
     ]),
@@ -132,6 +134,8 @@ def alle_eintraege():
 
 
 def aktiver_schluessel(endpoint):
+    if (endpoint or "").startswith("kalender."):
+        return "kalender"
     name = (endpoint or "").removeprefix("main.")
     for praefix, schluessel in ZUORDNUNG:
         if name.startswith(praefix):

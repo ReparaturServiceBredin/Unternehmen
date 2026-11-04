@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% from "_ak.html" import reiter %}
+{% from "_status.html" import csrf %}
+{% block titel %}Arbeitskalender – Sätze & Vorlagen{% endblock %}
+{% block inhalt %}
+<div class="kopf"><h1>Arbeitskalender – Sätze &amp; Vorlagen</h1></div>
+{{ reiter('einstellungen') }}
+<form method="post" class="karte">{{ csrf() }}
+  <h2>Stundensätze und Anfahrt <span class="klein">(alle Beträge netto)</span></h2>
+  <div class="felder">
+    <div class="s3"><label>Standard-Stundensatz (€/Std.)</label><input type="text" name="ak_stundensatz" value="{{ einst.ak_stundensatz|euro(false) }}">
+      <div class="hilfe">Je Arbeit änderbar.</div></div>
+    <div class="s3"><label>Anfahrt standardmäßig</label><select name="ak_anfahrt">{% for k, n in ak.ANFAHRT.items() %}<option value="{{ k }}" {{ 'selected' if einst.ak_anfahrt == k }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="s3"><label>Kilometersatz (€/km)</label><input type="text" name="ak_km_satz" value="{{ einst.ak_km_satz|euro(false) }}"></div>
+    <div class="s3"><label>Anfahrtspauschale (€)</label><input type="text" name="ak_anfahrt_pauschale" value="{{ einst.ak_anfahrt_pauschale|euro(false) }}"></div>
+    <div class="s3"><label>Stundensatz Fahrzeit (€/Std.)</label><input type="text" name="ak_fahrzeit_satz" value="{{ einst.ak_fahrzeit_satz|euro(false) }}">
+      <div class="hilfe">Nur wenn beim Termin „Fahrzeit berechnen“ angehakt ist.</div></div>
+  </div>
+  <h2 style="margin-top:18px">Verpflegungspauschalen</h2>
+  <div class="felder">
+    <div class="s3"><label>Abwesenheit mehr als 8 Std. (€)</label><input type="text" name="ak_verpflegung_8h" value="{{ einst.ak_verpflegung_8h|euro(false) }}"></div>
+    <div class="s3"><label>24 Std. abwesend (€)</label><input type="text" name="ak_verpflegung_24h" value="{{ einst.ak_verpflegung_24h|euro(false) }}"></div>
+    <div class="s3"><label>An-/Abreisetag (€)</label><input type="text" name="ak_verpflegung_anreise" value="{{ einst.ak_verpflegung_anreise|euro(false) }}"></div>
+    <div class="s12 hilfe">Bitte die aktuell gültigen Sätze selbst prüfen und hier eintragen. Statt Pauschale kann je Position auch der Betrag laut Beleg erfasst werden.</div>
+  </div>
+  <h2 style="margin-top:18px">Kalender</h2>
+  <div class="felder">
+    <div class="s3"><label>Standard-Dauer neuer Termine (Min.)</label><input type="number" min="5" name="ak_standard_dauer" value="{{ einst.ak_standard_dauer }}"></div>
+    <div class="s3"><label>Tages-/Wochenansicht ab (Uhr)</label><input type="number" min="0" max="23" name="ak_tag_beginn" value="{{ einst.ak_tag_beginn }}"></div>
+    <div class="s3"><label>bis (Uhr)</label><input type="number" min="1" max="24" name="ak_tag_ende" value="{{ einst.ak_tag_ende }}"></div>
+  </div>
+  <h2 style="margin-top:18px">Vorlage Terminvorschlag</h2>
+  <p class="klein">Platzhalter: <code>{anrede}</code> <code>{arbeit}</code> <code>{beschreibung}</code> <code>{termine}</code> <code>{termine_einleitung}</code> <code>{termine_schluss}</code> <code>{adresse}</code> <code>{dauer}</code> <code>{inhaber}</code> <code>{firma_name}</code> <code>{firma_telefon}</code>. Vor dem Senden lässt sich der Text jedes Mal anpassen.</p>
+  <div class="felder">
+    <div class="s12"><label>Betreff</label><input type="text" name="ak_vorschlag_betreff" value="{{ einst.ak_vorschlag_betreff }}"></div>
+    <div class="s12"><label>Text</label><textarea name="ak_vorschlag_text" style="min-height:220px">{{ einst.ak_vorschlag_text }}</textarea></div>
+  </div>
+  <br><button>Speichern</button>
+  <p class="klein">MwSt.: nach den Rechnungs-Einstellungen ({{ 'Regelbesteuerung, ' ~ einst.regel_steuersatz ~ ' %' if einst.steuer_modus == 'regel' else 'Kleinunternehmer – keine MwSt.' }}), änderbar unter <a href="{{ url_for('main.einstellungen', bereich='rechnung') }}">Einstellungen → Rechnung &amp; Steuer</a>.</p>
+</form>
+{% endblock %}

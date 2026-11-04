@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.36.0 | 04.11.2026 | Arbeitskalender: Termine, Zeiterfassung, Anfahrt, Nebenkosten, Terminvorschläge |
 | 0.35.0 | 03.11.2026 | Benachrichtigungen jederzeit von Hand, „Gerät versendet“ mit Sendungsnummer, Textbausteine |
 | 0.34.0 | 22.10.2026 | E-Mail an Kunden direkt schreiben, mit Vorlagen |
 | 0.33.0 | 21.10.2026 | Benutzer, Anmeldesperre, Umzug per Browser, Schlüssel in der Sicherung |
@@ -61,6 +62,33 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.36.0 – 04.11.2026
+### Neu: Arbeitskalender (Werkstatt → Arbeitskalender)
+Eigenständiges Modul mit eigenen Tabellen – bestehende Aufträge, KVAs und Rechnungen bleiben unverändert.
+- **Arbeiten** (KVA oder Reparatur) mit Kunde aus der Kundenliste (Name, Adresse, Telefon, E-Mail werden übernommen
+  und sind änderbar), Titel, Beschreibung, Status (offen / geplant / in Arbeit / erledigt / abgerechnet), Priorität
+  und eigenem Stundensatz. Offene Reparaturaufträge und KVAs lassen sich mit einem Klick übernehmen.
+- **Termine:** beliebig viele je Arbeit (z. B. Besichtigung + Reparatur) mit Datum, Uhrzeit und Dauer. Ansichten
+  Tag, Woche, Monat und „Alle offenen Arbeiten“; Farben nach Typ (Rand) und Termin-Status (Fläche).
+- **Zeiterfassung:** je Termin Start/Ende oder Dauer, dazu ein Start/Stopp-Timer für vor Ort.
+- **Anfahrt:** Kilometer × Kilometersatz oder Anfahrtspauschale, Fahrzeit optional separat berechnet; je Termin
+  einstellbar, ob die Anfahrt weiterberechnet wird.
+- **Nebenkosten** mit Betrag, Datum, Notiz und Belegfoto: Verpflegung (Pauschale nach Abwesenheit oder laut Beleg),
+  Übernachtung (Nächte × Preis oder laut Rechnung), Parken, Maut, Material, Sonstiges. Je Position: an den Kunden
+  weiterberechnen oder nur intern.
+- **Abrechnung je Arbeit:** geplante vs. tatsächliche Zeit, Kosten nach Kategorie (an Kunden / intern), netto, MwSt.
+  (nach den Rechnungs-Einstellungen; Kleinunternehmer ohne MwSt.) und brutto.
+- **Terminvorschlag an den Kunden:** ein oder mehrere Termine auswählen, Text wird vorbereitet und ist änderbar. Versand
+  per E-Mail mit Kalenderdatei (.ics) je Termin, oder WhatsApp/SMS öffnen bzw. Text kopieren. Vermerkt wird, wann
+  und wie vorgeschlagen wurde; „Kunde hat bestätigt“ per Klick (übrige Vorschläge derselben Nachricht werden
+  abgesagt).
+- **Übersicht** aller Arbeiten mit Filter (Status, Typ, Kunde, Zeitraum) und Summen (Stunden geplant/tatsächlich,
+  netto, brutto, intern).
+- **Sätze & Vorlagen** (nur Inhaber): Standard-Stundensatz, Kilometersatz, Anfahrtspauschale, Fahrzeit-Satz,
+  Verpflegungspauschalen, Standard-Dauer, Kalenderzeiten und die Vorlage für Terminvorschläge.
 
 ---
 

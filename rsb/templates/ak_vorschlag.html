@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% from "_ak.html" import reiter %}
+{% from "_status.html" import csrf %}
+{% block titel %}Terminvorschlag – {{ a.titel }}{% endblock %}
+{% block inhalt %}
+<div class="kopf"><h1>Terminvorschlag an {{ a.name or 'Kunden' }}</h1>
+  <div class="leiste"><a class="knopf zweit" href="{{ url_for('kalender.arbeit', aid=a.id) }}#termine">Zurück zur Arbeit</a></div></div>
+{{ reiter('') }}
+{% if not termine %}<div class="meldung warnung">Es gibt noch keine geplanten Termine. Bitte zuerst <a href="{{ url_for('kalender.arbeit', aid=a.id) }}#termine">einen oder mehrere Termine eintragen</a>.</div>{% else %}
+<form method="post" class="karte" id="ak-vorschlag">{{ csrf() }}
+  <h2>Termine</h2>
+  <p class="klein">Mehrere Termine auswählen = der Kunde wählt einen davon. Jeder Termin geht als eigene Kalenderdatei (.ics) mit.</p>
+  {% for t in termine %}<label class="check" style="font-weight:400"><input type="checkbox" name="termin" value="{{ t.id }}" {{ 'checked' if t.id in gewaehlt }}>
+    {{ ak.termin_zeile(t) }} <span class="ak-st {{ t.status }}">{{ ak.TERMIN_STATUS[t.status] }}</span>{% if t.vorgeschlagen_am %} <span class="klein">zuletzt vorgeschlagen {{ t.vorgeschlagen_am|zeit }} ({{ t.vorgeschlagen_per }})</span>{% endif %}</label>{% endfor %}
+  <div class="felder" style="margin-top:12px">
+    <div class="s12"><label>E-Mail an</label><input type="email" name="an" value="{{ an }}">
+      {% if not a.email %}<div class="hilfe">Bei der Arbeit ist keine E-Mail-Adresse hinterlegt.</div>{% endif %}</div>
+    <div class="s12"><label>Betreff</label><input type="text" name="betreff" id="ak-betreff" value="{{ betreff }}"></div>
+    <div class="s12"><label>Text</label><textarea name="text" id="ak-text" style="min-height:300px">{{ text }}</textarea>
+      <div class="hilfe">Vorlage änderbar unter <a href="{{ url_for('kalender.einstellungen') }}">Sätze &amp; Vorlagen</a>. Ändern Sie die Auswahl oben, wird der Text neu erzeugt (eigene Änderungen nach Rückfrage).</div></div>
+  </div>
+  {% if not smtp_ok %}<div class="meldung warnung">Für den E-Mail-Versand ist noch kein E-Mail-Server eingerichtet (<a href="{{ url_for('main.einstellungen', bereich='email') }}">Einstellungen → E-Mail</a>). WhatsApp, SMS und Kopieren gehen trotzdem.</div>{% endif %}
+  <div class="leiste" style="margin-top:10px">
+    <button>Per E-Mail senden (mit .ics)</button>
+    <button type="button" class="zweit" data-kanal="whatsapp" {{ 'disabled' if not telefon }}>WhatsApp öffnen</button>
+    <button type="button" class="zweit" data-kanal="sms" {{ 'disabled' if not telefon }}>SMS öffnen</button>
+    <button type="button" class="zweit" data-kanal="kopiert">Text kopieren</button>
+  </div>
+  <p class="klein">WhatsApp und SMS öffnen sich mit fertigem Text ({{ a.telefon or 'keine Telefonnummer hinterlegt' }}) – Sie drücken dort nur noch auf Senden. Der Vorschlag wird dabei hier als gesendet vermerkt. Bestätigt der Kunde, im Termin „✓ Kunde hat bestätigt“ anklicken.</p>
+</form>
+<script>
+(() => {
+  const f = document.getElementById('ak-vorschlag'), betreff = document.getElementById('ak-betreff'), text = document.getElementById('ak-text');
+  const telefon = {{ telefon|tojson }};
+  let bearbeitet = false;
+  [betreff, text].forEach(e => e.addEventListener('input', () => { bearbeitet = true; }));
+  const gewaehlt = () => [...f.querySelectorAll('input[name=termin]:checked')].map(e => e.value);
+  f.querySelectorAll('input[name=termin]').forEach(e => e.addEventListener('change', async () => {
+    if (bearbeitet && !confirm('Text für die neue Auswahl neu erzeugen? Ihre Änderungen gehen verloren.')) return;
+    const q = new URLSearchParams(gewaehlt().map(id => ['termin', id]));
+    const r = await fetch({{ url_for('kalender.vorschlag_text', aid=a.id)|tojson }} + '?' + q);
+    const d = await r.json(); betreff.value = d.betreff; text.value = d.text; bearbeitet = false;
+  }));
+  async function vermerken(kanal) {
+    const daten = new FormData(f); daten.set('kanal', kanal);
+    await fetch({{ url_for('kalender.vorschlag_vermerken', aid=a.id)|tojson }}, { method: 'POST', body: daten, headers: { 'X-Requested-With': 'fetch' } });
+  }
+  f.querySelectorAll('button[data-kanal]').forEach(b => b.addEventListener('click', async () => {
+    if (!gewaehlt().length) { alert('Bitte mindestens einen Termin auswählen.'); return; }
+    const kanal = b.dataset.kanal, nachricht = text.value;
+    if (kanal === 'whatsapp') window.open('https://wa.me/' + telefon + '?text=' + encodeURIComponent(nachricht), '_blank');
+    else if (kanal === 'sms') window.location.href = 'sms:+' + telefon + '?&body=' + encodeURIComponent(nachricht);
+    else { try { await navigator.clipboard.writeText(nachricht); } catch (e) { text.select(); document.execCommand('copy'); } }
+    await vermerken(kanal);
+    b.textContent = kanal === 'kopiert' ? 'Kopiert ✓' : b.textContent + ' ✓';
+  }));
+})();
+</script>
+{% endif %}
+{% endblock %}

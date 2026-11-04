@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_ak.html" import reiter %}
+{% from "_status.html" import csrf %}
+{% block titel %}Offene Arbeiten{% endblock %}
+{% block inhalt %}
+<div class="kopf"><h1>Arbeiten – Übersicht</h1>
+  <div class="leiste"><a class="knopf" href="{{ url_for('kalender.neu') }}">+ Neue Arbeit</a></div></div>
+{{ reiter('offen') }}
+<form method="get" class="karte">
+  <div class="felder">
+    <div class="s3"><label>Status</label><select name="status">
+      <option value="">alle offenen (offen, geplant, in Arbeit)</option>
+      {% for k, n in ak.STATUS.items() %}<option value="{{ k }}" {{ 'selected' if f.status == k }}>{{ n }}</option>{% endfor %}
+      <option value="alle" {{ 'selected' if f.status == 'alle' }}>alle (auch erledigt/abgerechnet)</option></select></div>
+    <div class="s2"><label>Typ</label><select name="typ"><option value="">alle</option>
+      {% for k, n in ak.TYPEN.items() %}<option value="{{ k }}" {{ 'selected' if f.typ == k }}>{{ n }}</option>{% endfor %}</select></div>
+    <div class="s3"><label>Kunde / Ort / Titel</label><input type="text" name="kunde" value="{{ f.kunde }}"></div>
+    <div class="s2"><label>Zeitraum von</label><input type="date" name="von" value="{{ f.von }}"></div>
+    <div class="s2"><label>bis</label><input type="date" name="bis" value="{{ f.bis }}"></div>
+  </div>
+  <div class="leiste" style="margin-top:8px"><button class="zweit">Filtern</button><a class="knopf zweit" href="{{ url_for('kalender.offen') }}">Zurücksetzen</a>
+    <span class="klein">Zeitraum: Termine bzw. Anlage in diesem Zeitraum.</span></div>
+</form>
+<div class="karte">
+  <div style="overflow-x:auto"><table class="liste"><thead><tr><th>Typ</th><th>Arbeit</th><th>Kunde</th><th>Status</th><th>Nächster Termin</th>
+    <th class="zahl">geplant</th><th class="zahl">tatsächlich</th><th class="zahl">netto</th><th class="zahl">brutto</th><th class="zahl">intern</th></tr></thead><tbody>
+  {% for z in zeilen %}{% set a = z.a %}{% set r = z.r %}<tr>
+    <td><span class="ak-typ {{ a.typ }}">{{ 'KVA' if a.typ == 'kva' else 'Reparatur' }}</span></td>
+    <td><a href="{{ url_for('kalender.arbeit', aid=a.id) }}">{{ a.titel }}</a>{% if a.prioritaet in ('hoch', 'dringend') %} <span class="ak-prio-{{ a.prioritaet }}">· {{ a.prioritaet }}</span>{% endif %}</td>
+    <td>{{ a.name or '–' }}{% if a.adresse %}<div class="klein">{{ a.adresse }}</div>{% endif %}</td>
+    <td><span class="ak-st {{ a.status }}">{{ ak.STATUS[a.status] }}</span></td>
+    <td>{% if a.naechster %}{{ a.naechster[:10]|datum }} {{ a.naechster[11:] }}{% else %}–{% endif %}</td>
+    <td class="zahl">{{ ak.dauer_text(r.geplant_min) }}</td><td class="zahl">{{ ak.dauer_text(r.ist_min) }}</td>
+    <td class="zahl">{{ r.netto|euro }}</td><td class="zahl">{{ r.brutto|euro }}</td><td class="zahl klein">{{ r.intern|euro if r.intern else '' }}</td></tr>
+  {% else %}<tr><td colspan="10" class="klein">Keine Arbeiten zu diesem Filter.</td></tr>{% endfor %}
+  {% if zeilen %}<tr class="summe"><td colspan="5">Summe ({{ zeilen|length }} Arbeit{{ 'en' if zeilen|length != 1 }})</td>
+    <td class="zahl">{{ ak.dauer_text(summe.geplant_min) }}</td><td class="zahl">{{ ak.dauer_text(summe.ist_min) }}</td>
+    <td class="zahl">{{ summe.netto|euro }}</td><td class="zahl">{{ summe.brutto|euro }}</td><td class="zahl">{{ summe.intern|euro }}</td></tr>{% endif %}
+  </tbody></table></div>
+  <p class="klein">netto/brutto: Arbeitszeit + Anfahrt + weiterberechnete Nebenkosten (bisher erfasst). „intern“: nur intern erfasste Kosten.</p>
+</div>
+
+<div class="karte" id="uebernehmen">
+  <h2>Bestehende Reparaturaufträge und KVAs übernehmen</h2>
+  <p class="klein">Offene Aufträge und KVAs, die noch nicht im Kalender stehen. Beim Übernehmen werden Kunde und Beschreibung kopiert; Auftrag bzw. KVA selbst bleiben unverändert.</p>
+  {% if auftraege or kvas %}<div style="overflow-x:auto"><table class="liste"><tbody>
+  {% for x in auftraege %}<tr><td><span class="ak-typ">Reparatur</span></td><td><a href="{{ url_for('main.auftrag', aid=x.id) }}">{{ x.auftragsnr }}</a> · {{ x.geraet or '' }}</td><td>{{ x|kname }}</td><td class="klein">{{ x.eingang_am|datum }}</td>
+    <td class="zahl"><form method="post" action="{{ url_for('kalender.uebernehmen') }}">{{ csrf() }}<input type="hidden" name="auftrag_id" value="{{ x.id }}"><button class="zweit klein">Übernehmen</button></form></td></tr>{% endfor %}
+  {% for x in kvas %}<tr><td><span class="ak-typ kva">KVA</span></td><td><a href="{{ url_for('main.dokument', did=x.id) }}">{{ x.nummer or 'Entwurf' }}</a> · {{ x.betreff or '' }}</td><td>{{ x|kname }}</td><td class="klein">{{ x.datum|datum }}</td>
+    <td class="zahl"><form method="post" action="{{ url_for('kalender.uebernehmen') }}">{{ csrf() }}<input type="hidden" name="dokument_id" value="{{ x.id }}"><button class="zweit klein">Übernehmen</button></form></td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="klein">Alles übernommen – keine weiteren offenen Aufträge oder KVAs.</p>{% endif %}
+</div>
+{% endblock %}

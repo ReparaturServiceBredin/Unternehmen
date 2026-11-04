@@ -1,0 +1,46 @@
+{# Arbeitskalender: gemeinsame Reiter, Farben und Kleinteile #}
+{% macro reiter(aktiv) -%}
+<nav class="reiter">
+  <a href="{{ url_for('kalender.uebersicht') }}" class="{{ 'aktiv' if aktiv == 'kalender' }}">Kalender</a>
+  <a href="{{ url_for('kalender.offen') }}" class="{{ 'aktiv' if aktiv == 'offen' }}">Alle offenen Arbeiten</a>
+  <a href="{{ url_for('kalender.neu') }}" class="{{ 'aktiv' if aktiv == 'neu' }}">+ Neue Arbeit</a>
+  {% if session.rolle != 'mitarbeiter' %}<a href="{{ url_for('kalender.einstellungen') }}" class="{{ 'aktiv' if aktiv == 'einstellungen' }}">Sätze &amp; Vorlagen</a>{% endif %}
+</nav>
+<style>
+  :root { --ak-kva: #b86e00; --ak-rep: #1C54A3;
+    --ak-geplant: #e8eff9; --ak-vorschlag: #fff1c7; --ak-bestaetigt: #dff1e5; --ak-erledigt: #eceff3; --ak-abgesagt: #fbe5e3; }
+  :root[data-theme="dunkel"] { --ak-kva: #f0a54a; --ak-rep: #6b9cf0;
+    --ak-geplant: #1d2a40; --ak-vorschlag: #3a2f10; --ak-bestaetigt: #16301f; --ak-erledigt: #242b35; --ak-abgesagt: #3a1c1b; }
+  .ak-t { display: block; border-left: 4px solid var(--ak-rep); border-radius: 6px; padding: 3px 6px; font-size: 12px;
+    color: var(--text); background: var(--ak-geplant); overflow: hidden; text-decoration: none; line-height: 1.3; }
+  .ak-t:hover { filter: brightness(.97); text-decoration: none; }
+  .ak-t.typ-kva { border-left-color: var(--ak-kva); }
+  .ak-t.st-vorschlag { background: var(--ak-vorschlag); }
+  .ak-t.st-bestaetigt { background: var(--ak-bestaetigt); }
+  .ak-t.st-erledigt { background: var(--ak-erledigt); color: var(--grau); }
+  .ak-t.st-abgesagt { background: var(--ak-abgesagt); text-decoration: line-through; color: var(--grau); }
+  .ak-legende { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--grau); align-items: center; }
+  .ak-legende .ak-t { display: inline-block; padding: 1px 8px; }
+  .ak-typ { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; color: #fff; background: var(--ak-rep); }
+  .ak-typ.kva { background: var(--ak-kva); }
+  .ak-st { display: inline-block; padding: 1px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; background: var(--neutral-bg); color: var(--grau); }
+  .ak-st.offen { background: var(--gelb-hell); color: var(--text-warnung); }
+  .ak-st.geplant, .ak-st.vorschlag { background: var(--blau-hell); color: var(--blau); }
+  .ak-st.in_arbeit, .ak-st.bestaetigt { background: var(--gruen-hell); color: var(--gruen); }
+  .ak-st.abgesagt { background: var(--rot-hell); color: var(--rot); }
+  .ak-prio-hoch, .ak-prio-dringend { color: var(--rot); font-weight: 700; }
+</style>
+{%- endmacro %}
+
+{% macro termin_chip(t, ak, mit_zeit=True, hoch=False) -%}
+<a {{ 'style=height:100%' if hoch }} class="ak-t typ-{{ t.typ }} st-{{ t.status }}" href="{{ url_for('kalender.arbeit', aid=t.arbeit_id) }}#termin-{{ t.id }}"
+   title="{{ ak.TYPEN[t.typ] }} · {{ ak.TERMIN_STATUS[t.status] }} · {{ t.titel }}{{ ' · ' ~ t.name if t.name }}">
+  {% if mit_zeit %}<b>{{ t.beginn }}</b> {% endif %}{{ t.name or t.titel }}{% if t.art %} · {{ t.art }}{% endif %}</a>
+{%- endmacro %}
+
+{% macro legende(ak) -%}
+<div class="ak-legende">
+  <span><span class="ak-typ">Reparatur</span> <span class="ak-typ kva">KVA</span> (linker Rand)</span>
+  {% for k, n in ak.TERMIN_STATUS.items() %}<span class="ak-t st-{{ k }}">{{ n }}</span>{% endfor %}
+</div>
+{%- endmacro %}

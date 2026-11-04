@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% from "_ak.html" import reiter, termin_chip, legende %}
+{% block titel %}Arbeitskalender{% endblock %}
+{% block inhalt %}
+<div class="kopf">
+  <h1>Arbeitskalender</h1>
+  <div class="leiste">
+    <a class="knopf zweit" href="{{ url_for('kalender.uebersicht', ansicht=ansicht, datum=zurueck.isoformat()) }}" title="zurück">‹</a>
+    <a class="knopf zweit" href="{{ url_for('kalender.uebersicht', ansicht=ansicht) }}">Heute</a>
+    <a class="knopf zweit" href="{{ url_for('kalender.uebersicht', ansicht=ansicht, datum=weiter.isoformat()) }}" title="weiter">›</a>
+    {% for k, n in [('tag', 'Tag'), ('woche', 'Woche'), ('monat', 'Monat')] %}
+    <a class="knopf {{ '' if ansicht == k else 'zweit' }}" href="{{ url_for('kalender.uebersicht', ansicht=k, datum=tag.isoformat()) }}">{{ n }}</a>{% endfor %}
+    <a class="knopf" href="{{ url_for('kalender.neu') }}">+ Neue Arbeit</a>
+  </div>
+</div>
+{{ reiter('kalender') }}
+<style>
+  .ak-raster { display: grid; grid-template-columns: 48px repeat({{ tage|length }}, minmax(0, 1fr)); border: 1px solid var(--rand); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
+  .ak-kopf { padding: 8px 6px; font-weight: 600; font-size: 13px; border-bottom: 1px solid var(--rand); border-left: 1px solid var(--rand); background: var(--flaeche-2); }
+  .ak-kopf a { color: inherit; }
+  .ak-kopf.heute { color: var(--blau); }
+  .ak-zeitachse div { height: 48px; font-size: 11px; color: var(--grau); text-align: right; padding-right: 6px; border-top: 1px solid var(--rand); }
+  .ak-spalte { position: relative; border-left: 1px solid var(--rand); background: repeating-linear-gradient(to bottom, transparent 0, transparent 47px, var(--rand) 47px, var(--rand) 48px); }
+  .ak-spalte.heute { background-color: var(--blau-hell); }
+  .ak-spalte .ak-t { position: absolute; left: 3px; right: 3px; }
+  .ak-monat { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--rand); border-radius: var(--radius); overflow: hidden; background: var(--flaeche); }
+  .ak-monat .wt { padding: 6px 8px; font-weight: 600; font-size: 12px; color: var(--grau); background: var(--flaeche-2); border-bottom: 1px solid var(--rand); }
+  .ak-zelle { min-height: 104px; border-top: 1px solid var(--rand); border-left: 1px solid var(--rand); padding: 4px; display: flex; flex-direction: column; gap: 3px; }
+  .ak-zelle:nth-child(7n+1) { border-left: 0; }
+  .ak-zelle .nr { font-size: 12px; color: var(--grau); }
+  .ak-zelle.fremd { background: var(--flaeche-2); }
+  .ak-zelle.fremd .nr { opacity: .5; }
+  .ak-zelle.heute .nr { color: var(--blau); font-weight: 700; }
+  .ak-mehr { font-size: 11px; color: var(--grau); }
+  @media (max-width: 760px) { .ak-raster { grid-template-columns: 40px repeat({{ tage|length }}, minmax(64px, 1fr)); overflow-x: auto; } .ak-zelle { min-height: 70px; } }
+</style>
+<div class="leiste" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">{{ titel }}</h2>{{ legende(ak) }}</div>
+
+{% if ansicht == 'monat' %}
+<div class="ak-monat">
+  {% for w in ak.WOCHENTAGE %}<div class="wt">{{ w }}</div>{% endfor %}
+  {% for d in tage %}{% set liste = je_tag.get(d.isoformat(), []) %}
+  <div class="ak-zelle {{ 'fremd' if d.month != monat }} {{ 'heute' if d == heute }}">
+    <a class="nr" href="{{ url_for('kalender.uebersicht', ansicht='tag', datum=d.isoformat()) }}">{{ d.day }}</a>
+    {% for t in liste[:4] %}{{ termin_chip(t, ak) }}{% endfor %}
+    {% if liste|length > 4 %}<a class="ak-mehr" href="{{ url_for('kalender.uebersicht', ansicht='tag', datum=d.isoformat()) }}">+ {{ liste|length - 4 }} weitere</a>{% endif %}
+  </div>{% endfor %}
+</div>
+{% else %}
+{% set px = 48 %}
+<div class="ak-raster">
+  <div class="ak-kopf" style="border-left:0"></div>
+  {% for d in tage %}<div class="ak-kopf {{ 'heute' if d == heute }}"><a href="{{ url_for('kalender.uebersicht', ansicht='tag', datum=d.isoformat()) }}">{{ ak.WOCHENTAGE[d.weekday()] }} {{ d.strftime('%d.%m.') }}</a></div>{% endfor %}
+  <div class="ak-zeitachse">{% for h in range(beginn_h, ende_h) %}<div>{{ '%02d' % h }}:00</div>{% endfor %}</div>
+  {% for d in tage %}
+  <div class="ak-spalte {{ 'heute' if d == heute }}" style="height:{{ (ende_h - beginn_h) * px }}px">
+    {% for t in je_tag.get(d.isoformat(), []) %}
+    {% set start = (t.beginn[:2]|int - beginn_h) * 60 + t.beginn[3:]|int %}
+    <div style="position:absolute;left:0;right:0;top:{{ start * px / 60 }}px;height:{{ [((t.dauer_min or 30) * px / 60) - 2, 20]|max }}px">
+      {{ termin_chip(t, ak, hoch=True) }}</div>
+    {% endfor %}
+  </div>{% endfor %}
+</div>
+{% endif %}
+
+<div class="karte" style="margin-top:18px">
+  <h2>Offene Arbeiten</h2>
+  {% if offene %}<table class="liste"><thead><tr><th>Typ</th><th>Arbeit</th><th>Kunde</th><th>Status</th><th>Nächster Termin</th></tr></thead><tbody>
+  {% for a in offene %}<tr><td><span class="ak-typ {{ a.typ }}">{{ 'KVA' if a.typ == 'kva' else 'Reparatur' }}</span></td>
+    <td><a href="{{ url_for('kalender.arbeit', aid=a.id) }}">{{ a.titel }}</a>{% if a.prioritaet in ('hoch', 'dringend') %} <span class="ak-prio-{{ a.prioritaet }}">· {{ a.prioritaet }}</span>{% endif %}</td>
+    <td>{{ a.name or '–' }}</td><td><span class="ak-st {{ a.status }}">{{ ak.STATUS[a.status] }}</span></td>
+    <td>{% if a.naechster %}{{ a.naechster[:10]|datum }} {{ a.naechster[11:] }}{% else %}<a href="{{ url_for('kalender.arbeit', aid=a.id) }}#termine">Termin planen</a>{% endif %}</td></tr>{% endfor %}
+  </tbody></table>
+  <p class="klein"><a href="{{ url_for('kalender.offen') }}">Alle offenen Arbeiten mit Filter und Summen →</a></p>
+  {% else %}<p class="klein">Keine offenen Arbeiten. <a href="{{ url_for('kalender.offen') }}#uebernehmen">Bestehende Aufträge/KVAs übernehmen</a> oder <a href="{{ url_for('kalender.neu') }}">neue Arbeit anlegen</a>.</p>{% endif %}
+</div>
+{% endblock %}

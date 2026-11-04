@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.35.0"
+VERSION_NUMMER = "0.36.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -98,6 +98,8 @@ def create_app(daten_dir=None, testing=False):
 
     from .views import bp
     app.register_blueprint(bp)
+    from .kalender_views import bp as kalender_bp
+    app.register_blueprint(kalender_bp)
 
     offen = {"main.login", "main.einrichten", "main.version_info", "static"}
 

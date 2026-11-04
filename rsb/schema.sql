@@ -1325,3 +1325,80 @@ CREATE TABLE IF NOT EXISTS benutzer (
     angelegt_am      TEXT NOT NULL,
     letzte_anmeldung TEXT
 );
+
+-- Arbeitskalender (0.36.0): offene Arbeiten (KVA / Reparatur) mit Terminen, Zeiterfassung und Nebenkosten.
+-- Eigenständiges Modul – verweist optional auf Kunde, Reparaturauftrag oder KVA, ändert diese aber nie.
+CREATE TABLE IF NOT EXISTS arbeiten (
+    id              INTEGER PRIMARY KEY,
+    typ             TEXT NOT NULL DEFAULT 'reparatur',  -- kva / reparatur
+    kunde_id        INTEGER REFERENCES kunden(id),
+    name            TEXT,                               -- Kundenname/Anschrift: aus dem Kunden übernommen, änderbar
+    adresse         TEXT,
+    telefon         TEXT,
+    email           TEXT,
+    titel           TEXT NOT NULL,
+    beschreibung    TEXT,
+    status          TEXT NOT NULL DEFAULT 'offen',      -- offen / geplant / in_arbeit / erledigt / abgerechnet
+    prioritaet      TEXT,                               -- niedrig / normal / hoch / dringend
+    stundensatz     INTEGER,                            -- Cent netto je Stunde; leer = Standard aus den Einstellungen
+    auftrag_id      INTEGER REFERENCES auftraege(id),
+    dokument_id     INTEGER REFERENCES dokumente(id),
+    erstellt_am     TEXT NOT NULL,
+    geaendert_am    TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS arbeit_termine (
+    id              INTEGER PRIMARY KEY,
+    arbeit_id       INTEGER NOT NULL REFERENCES arbeiten(id) ON DELETE CASCADE,
+    art             TEXT,                               -- z. B. Besichtigung, Reparatur
+    datum           TEXT NOT NULL,
+    beginn          TEXT NOT NULL,                      -- HH:MM
+    dauer_min       INTEGER NOT NULL DEFAULT 60,        -- voraussichtlich
+    notiz           TEXT,
+    status          TEXT NOT NULL DEFAULT 'geplant',    -- geplant / vorschlag / bestaetigt / erledigt / abgesagt
+    vorgeschlagen_am TEXT,
+    vorgeschlagen_per TEXT,
+    bestaetigt_am   TEXT,
+    ist_beginn      TEXT,                               -- tatsächlich, HH:MM
+    ist_ende        TEXT,
+    ist_minuten     INTEGER,                            -- tatsächliche Arbeitszeit (Summe inkl. Timer)
+    timer_start     TEXT,                               -- laufender Timer seit (ISO)
+    anfahrt         TEXT,                               -- km / pauschale / keine (leer = Standard)
+    km              REAL,
+    fahrzeit_min    INTEGER,
+    fahrzeit_berechnen INTEGER NOT NULL DEFAULT 0,
+    anfahrt_weiter  INTEGER NOT NULL DEFAULT 1,         -- Anfahrt an den Kunden weiterberechnen
+    erstellt_am     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS arbeit_kosten (
+    id              INTEGER PRIMARY KEY,
+    arbeit_id       INTEGER NOT NULL REFERENCES arbeiten(id) ON DELETE CASCADE,
+    termin_id       INTEGER REFERENCES arbeit_termine(id) ON DELETE SET NULL,
+    kategorie       TEXT NOT NULL,                      -- verpflegung / uebernachtung / parken / maut / material / sonstiges
+    bezeichnung     TEXT,
+    datum           TEXT,
+    modus           TEXT,                               -- beleg / pauschale (Verpflegung) / naechte (Übernachtung)
+    menge           REAL,                               -- Nächte bzw. Abwesenheit in Stunden
+    einzel          INTEGER,                            -- Cent je Nacht
+    betrag          INTEGER NOT NULL DEFAULT 0,         -- Cent netto
+    weiterberechnen INTEGER NOT NULL DEFAULT 1,
+    notiz           TEXT,
+    foto            TEXT,                               -- Belegfoto (Datei in Daten/belege/arbeitskalender)
+    erstellt_am     TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS arbeit_nachrichten (
+    id              INTEGER PRIMARY KEY,
+    arbeit_id       INTEGER NOT NULL REFERENCES arbeiten(id) ON DELETE CASCADE,
+    zeitpunkt       TEXT NOT NULL,
+    kanal           TEXT NOT NULL,                      -- email / whatsapp / sms / kopiert
+    an              TEXT,
+    betreff         TEXT,
+    text            TEXT,
+    termin_ids      TEXT,                               -- JSON-Liste der vorgeschlagenen Termine
+    benutzer        TEXT
+);
+CREATE INDEX IF NOT EXISTS ix_arbeit_termine_datum ON arbeit_termine(datum);
+CREATE INDEX IF NOT EXISTS ix_arbeit_termine_arbeit ON arbeit_termine(arbeit_id);
+CREATE INDEX IF NOT EXISTS ix_arbeit_kosten_arbeit ON arbeit_kosten(arbeit_id);

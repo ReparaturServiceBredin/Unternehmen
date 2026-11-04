@@ -241,6 +241,9 @@ STANDARD_EINSTELLUNGEN.update(_ben_standard())
 from .datenschutz import einstellungs_standard as _ds_standard  # noqa: E402
 
 STANDARD_EINSTELLUNGEN.update(_ds_standard())
+from .arbeitskalender import einstellungs_standard as _ak_standard  # noqa: E402
+
+STANDARD_EINSTELLUNGEN.update(_ak_standard())
 
 
 # Mitgelieferte Vertragsarten (Preise bitte anpassen; alles unter Verträge & Lizenzen → Vertragsarten änderbar)
@@ -428,7 +431,8 @@ NEUE_TABELLEN = ["auftrag_fotos", "auftrag_verlauf", "leihgeraete", "leihen", "s
                  "artikel_lieferanten", "bestellungen", "bestell_positionen", "wareneingaenge", "eingangsrechnungen",
                  "er_zahlungen", "kassenbuch", "kassen_abschluesse", "datev_exporte", "datev_posten",
                  "loeschprotokolle", "loeschfreigaben", "loesch_zurueckstellungen", "fixkosten",
-                 "fixkosten_betraege", "hinweise_gelesen", "anfragen_entfernt", "rechnung_raten", "benutzer"]
+                 "fixkosten_betraege", "hinweise_gelesen", "anfragen_entfernt", "rechnung_raten", "benutzer",
+                 "arbeiten", "arbeit_termine", "arbeit_kosten", "arbeit_nachrichten"]
 
 
 def _migrieren(con, pfad=None):
