@@ -5,6 +5,7 @@ import sys
 import threading
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from waitress import serve
 
@@ -201,6 +202,48 @@ def port_belegt(host, port):
         return s.connect_ex((host if host != "0.0.0.0" else "127.0.0.1", port)) == 0
 
 
+def eigene_instanz(port):
+    """Läuft auf diesem Port genau dieses Programm (nicht ein anderes, z. B. eine zweite Buchhaltung)?"""
+    import json
+    import urllib.request
+    from . import PROGRAMM_KENNUNG
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/version", timeout=1.5) as r:
+            return json.loads(r.read().decode("utf-8")).get("programm") == PROGRAMM_KENNUNG
+    except Exception:
+        return False
+
+
+PORT_DATEI = "port.txt"  # im Datenordner: Port der laufenden Instanz (für Neustart nach Update)
+PORTS_PRUEFEN = 20
+
+
+def port_suchen(host, start):
+    """Erster Port ab `start`, auf dem dieses Programm schon läuft oder der frei ist. → (port, läuft_schon).
+
+    Ein Port, auf dem ein fremdes Programm läuft, wird übersprungen."""
+    for p in range(start, start + PORTS_PRUEFEN):
+        if eigene_instanz(p):
+            return p, True
+        if not port_belegt(host, p):
+            return p, False
+    return start, False
+
+
+def port_merken(daten_dir, port):
+    try:
+        (Path(daten_dir) / PORT_DATEI).write_text(str(port), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def gemerkter_port(daten_dir):
+    try:
+        return int((Path(daten_dir) / PORT_DATEI).read_text(encoding="utf-8").strip())
+    except (OSError, ValueError):
+        return None
+
+
 def fenster_modus(db_pfad):
     try:
         con = dbm.verbinden(db_pfad)
@@ -278,22 +321,37 @@ def main():
     host = os.environ.get("RSB_HOST") or ("0.0.0.0" if server or (os.path.exists(daten_db) and im_netz(daten_db))
                                           else "127.0.0.1")
     port = int(os.environ.get("RSB_PORT", "5000"))
-    adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
+    fester_port = server or bool(os.environ.get("RSB_PORT"))  # ausdrücklich gesetzt: nie ausweichen
 
     if server and port_belegt(host, port):
         log.error(f"Port {port} ist bereits belegt – läuft das Programm schon? Abbruch.")
         sys.exit(1)
     if os.environ.get("RSB_WARTE_AUF_PORT"):
-        # Neustart nach Update: warten, bis die alte Version den Port freigegeben hat
+        # Neustart nach Update: warten, bis die alte Version ihren Port freigegeben hat
+        alt = (None if fester_port else gemerkter_port(os.environ["RSB_DATEN"])) or port
         for _ in range(60):
-            if not port_belegt(host, port):
+            if not port_belegt(host, alt):
                 break
             time.sleep(0.5)
-    elif port_belegt(host, port):
-        log.info("Das Programm läuft bereits – öffne das Fenster.")
-        fenster.oeffnen(adresse, fenster_modus(daten_db))
-        time.sleep(1)
-        return
+        if not fester_port:  # dieselbe Adresse wie vorher, damit das offene Fenster sie wiederfindet
+            port = alt if not port_belegt(host, alt) else port_suchen(host, port)[0]
+    elif fester_port:
+        if port_belegt(host, port):
+            log.info("Das Programm läuft bereits – öffne das Fenster.")
+            fenster.oeffnen(f"http://localhost:{port}", fenster_modus(daten_db))
+            time.sleep(1)
+            return
+    else:
+        start = port
+        port, laeuft = port_suchen(host, port)
+        if laeuft:
+            log.info(f"Das Programm läuft bereits (Port {port}) – öffne das Fenster.")
+            fenster.oeffnen(f"http://localhost:{port}", fenster_modus(daten_db))
+            time.sleep(1)
+            return
+        if port != start:
+            log.info(f"Port {start} ist von einem anderen Programm belegt – nehme Port {port}.")
+    adresse = f"http://{'localhost' if host in ('127.0.0.1', '0.0.0.0') else host}:{port}"
 
     if not server:
         update.alte_versionen_aufraeumen()
@@ -303,6 +361,8 @@ def main():
     else:
         update_beim_start(app)
     app.config["SERVER_HOST"], app.config["SERVER_PORT"] = host, port
+    if not server:
+        port_merken(app.config["DATEN"], port)
     try:
         ziel = auto_backup(app.config["DATEN"], app.config["DB_PFAD"])
         if ziel:

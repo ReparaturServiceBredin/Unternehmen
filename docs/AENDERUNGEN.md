@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.38.1 | 05.11.2026 | Fehlerbehebung: falsches Programm (Omikron-Logo) beim Start |
 | 0.38.0 | 05.11.2026 | Oberfläche anpassen (aus Omikron), Finanzen nach Leistungsart |
 | 0.37.0 | 04.11.2026 | Arbeitskalender: freie Einträge, Schnellanlegen, Drag & Drop, Auswertung/CSV, Sichtschutz |
 | 0.36.0 | 04.11.2026 | Arbeitskalender: Termine, Zeiterfassung, Anfahrt, Nebenkosten, Terminvorschläge |
@@ -64,6 +65,17 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.38.1 – 05.11.2026
+### Behoben
+- **Beim Start öffnete sich ein anderes Programm** (z. B. die Omikron-Buchhaltung mit den drei Waben als Logo), wenn
+  es auf demselben PC lief: Beide benutzten Port 5000, und das Programm hielt das fremde für sich selbst. Jetzt
+  erkennt es sich an einer eigenen Kennung, weicht bei einem fremden Programm automatisch auf den nächsten freien Port
+  aus (5001 …) und findet sich beim nächsten Start bzw. nach einem Update dort wieder.
+- Eigener Name für das Anmelde-Cookie: Programme auf demselben PC melden sich nicht mehr gegenseitig ab. (Einmalig
+  nach dem Update neu anmelden, falls der Passwortschutz an ist.)
 
 ---
 

@@ -10,8 +10,11 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.38.0"
+VERSION_NUMMER = "0.38.1"
 VERSION = VERSION_NUMMER
+# Erkennungszeichen unter /version: unterscheidet dieses Programm von anderen auf demselben PC (z. B. einer zweiten
+# Buchhaltung auf Port 5000), damit der Start nicht das fremde Programm für sich selbst hält.
+PROGRAMM_KENNUNG = "rsb-buchhaltung"
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
     PROJEKT = Path(sys.executable).resolve().parent
@@ -33,6 +36,7 @@ def create_app(daten_dir=None, testing=False):
         PERMANENT_SESSION_LIFETIME=timedelta(hours=10),
         SESSION_COOKIE_SAMESITE="Lax",
         SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_NAME="rsb_sitzung",  # eigener Name: andere Programme auf localhost melden nicht ab
         MAX_CONTENT_LENGTH=60 * 1024 * 1024,  # Fotos vom Handy können groß sein
         TESTING=testing,
     )

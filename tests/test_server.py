@@ -106,3 +106,58 @@ def test_zeit_immer_deutsch_auch_bei_utc_rechner(monkeypatch):
         monkeypatch.undo()
         if hasattr(time, "tzset"):
             time.tzset()
+
+
+def test_fremdes_programm_auf_dem_port_wird_erkannt(app, tmp_path):
+    """Läuft auf Port 5000 ein anderes Programm (z. B. eine zweite Buchhaltung), weicht der Start aus statt dessen
+    Fenster zu öffnen."""
+    import http.server
+    import json
+    import socket
+    import threading
+    from rsb import PROGRAMM_KENNUNG
+    from rsb.__main__ import gemerkter_port, port_merken, port_suchen
+
+    def antwort(kennung):
+        class H(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                daten = {"version": "1.1.2", "gestartet": "x"}
+                if kennung:
+                    daten["programm"] = kennung
+                roh = json.dumps(daten).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(roh)
+
+            def log_message(self, *a):
+                pass
+        return H
+
+    def freier_block():
+        for start in range(52000, 60000, 10):
+            ok = True
+            for p in range(start, start + 3):
+                with socket.socket() as s:
+                    if s.connect_ex(("127.0.0.1", p)) == 0:
+                        ok = False
+            if ok:
+                return start
+    start = freier_block()
+    fremd = http.server.HTTPServer(("127.0.0.1", start), antwort(None))
+    threading.Thread(target=fremd.serve_forever, daemon=True).start()
+    try:
+        assert port_suchen("127.0.0.1", start) == (start + 1, False)  # fremdes Programm übersprungen
+        eigen = http.server.HTTPServer(("127.0.0.1", start + 1), antwort(PROGRAMM_KENNUNG))
+        threading.Thread(target=eigen.serve_forever, daemon=True).start()
+        try:
+            assert port_suchen("127.0.0.1", start) == (start + 1, True)  # eigene Instanz → nur Fenster öffnen
+        finally:
+            eigen.shutdown()
+    finally:
+        fremd.shutdown()
+    port_merken(tmp_path, start + 1)
+    assert gemerkter_port(tmp_path) == start + 1 and gemerkter_port(tmp_path / "gibtsnicht") is None
+    c = app.test_client()
+    assert c.get("/version").get_json()["programm"] == PROGRAMM_KENNUNG
+    assert app.config["SESSION_COOKIE_NAME"] == "rsb_sitzung"
