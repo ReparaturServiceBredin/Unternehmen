@@ -161,3 +161,16 @@ def test_fremdes_programm_auf_dem_port_wird_erkannt(app, tmp_path):
     c = app.test_client()
     assert c.get("/version").get_json()["programm"] == PROGRAMM_KENNUNG
     assert app.config["SESSION_COOKIE_NAME"] == "rsb_sitzung"
+
+
+def test_fenster_eigenes_edge_profil(monkeypatch, tmp_path):
+    """Eigenes Edge-Profil → eigener Taskleisten-Eintrag mit eigenem Symbol (nicht das einer anderen Buchhaltung)."""
+    from rsb import fenster
+    aufrufe = []
+    monkeypatch.setattr(fenster, "_edge_pfad", lambda: "msedge.exe")
+    monkeypatch.setattr(fenster.subprocess, "Popen", lambda args, **k: aufrufe.append(args))
+    monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
+    fenster.oeffnen("http://localhost:5001")
+    args = aufrufe[0]
+    assert "--app=http://localhost:5001" in args and "--no-first-run" in args
+    assert f"--user-data-dir={tmp_path / 'RSB-Buchhaltung' / 'Fenster-Profil'}" in args

@@ -2,6 +2,8 @@
 
 - Die Oberfläche öffnet sich als eigenes Fenster ohne Browser-Leiste (Microsoft Edge im App-Modus,
   ist bei Windows 11 immer dabei). Klappt das nicht, öffnet sich der normale Browser.
+- Das Fenster benutzt ein eigenes Edge-Profil (EDGE_PROFIL). Sonst fasst Windows es in der Taskleiste mit anderen
+  Edge-App-Fenstern auf localhost zusammen (z. B. einer zweiten Buchhaltung) und zeigt deren Symbol.
 - Unten rechts neben der Uhr erscheint das Programmsymbol mit dem Menü
   „Buchhaltung öffnen“, „Daten-Ordner öffnen“, „Beenden“.
 """
@@ -12,6 +14,7 @@ import webbrowser
 from pathlib import Path
 
 SYMBOL = Path(__file__).parent / "static" / "bilder" / "symbol.png"
+PROGRAMM_ORDNER = "RSB-Buchhaltung"
 _symbol_ref = {"icon": None}
 
 
@@ -25,13 +28,21 @@ def _edge_pfad():
     return next((k for k in kandidaten if k and os.path.isfile(k)), None)
 
 
+def edge_profil():
+    """Eigenes Edge-Profil fürs Programmfenster (nicht im Datenordner – gehört nicht in die Sicherung)."""
+    basis = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local")
+    return basis / PROGRAMM_ORDNER / "Fenster-Profil"
+
+
 def oeffnen(adresse, modus="app"):
     """Öffnet die Oberfläche als eigenes Fenster (Edge-App-Modus) oder im Standardbrowser."""
     if modus == "app":
         edge = _edge_pfad()
         if edge:
             try:
-                subprocess.Popen([edge, f"--app={adresse}", "--window-size=1400,900"],
+                subprocess.Popen([edge, f"--app={adresse}", "--window-size=1400,900",
+                                  f"--user-data-dir={edge_profil()}", "--no-first-run",
+                                  "--no-default-browser-check"],
                                  creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), close_fds=True)
                 return
             except OSError:
@@ -79,7 +90,7 @@ def symbol_anzeigen(titel, adresse, daten_dir, modus_abfrage, beenden):
         pystray.MenuItem("Beenden", menue_beenden),
     )
     try:
-        icon = pystray.Icon("RSB-Buchhaltung", Image.open(SYMBOL), titel, menue)
+        icon = pystray.Icon(PROGRAMM_ORDNER, Image.open(SYMBOL), titel, menue)
         _symbol_ref["icon"] = icon
         icon.run()
         return True

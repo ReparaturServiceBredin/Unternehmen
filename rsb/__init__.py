@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.38.1"
+VERSION_NUMMER = "0.38.2"
 VERSION = VERSION_NUMMER
 # Erkennungszeichen unter /version: unterscheidet dieses Programm von anderen auf demselben PC (z. B. einer zweiten
 # Buchhaltung auf Port 5000), damit der Start nicht das fremde Programm für sich selbst hält.

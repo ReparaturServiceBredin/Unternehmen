@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.38.2 | 05.11.2026 | Eigenes Symbol in der Taskleiste |
 | 0.38.1 | 05.11.2026 | Fehlerbehebung: falsches Programm (Omikron-Logo) beim Start |
 | 0.38.0 | 05.11.2026 | Oberfläche anpassen (aus Omikron), Finanzen nach Leistungsart |
 | 0.37.0 | 04.11.2026 | Arbeitskalender: freie Einträge, Schnellanlegen, Drag & Drop, Auswertung/CSV, Sichtschutz |
@@ -65,6 +66,15 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.38.2 – 05.11.2026
+### Behoben
+- **Taskleiste zeigte das Symbol eines anderen Programms** (z. B. Omikron): Windows fasste die Programmfenster (Edge im
+  App-Modus auf localhost) mit denen einer zweiten Buchhaltung zusammen. Das Fenster öffnet sich jetzt mit einem
+  eigenen Edge-Profil und bekommt damit einen eigenen Taskleisten-Eintrag mit eigenem Symbol. Einmalig danach: alle
+  Programmfenster schließen und neu öffnen; ein alter angehefteter Eintrag in der Taskleiste ggf. lösen und neu anheften.
 
 ---
 
