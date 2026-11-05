@@ -4041,7 +4041,7 @@ def vertraege_liste():
     }
     return render_template("vertraege.html", liste=gruppen.get(filt, gruppen["aktiv"]), filt=filt,
                            anzahl={k: len(v) for k, v in gruppen.items()}, kennzahlen=kennzahlen,
-                           kategorien=vtr.KATEGORIEN, kategorie=kategorie, abrechnung=vtr.ABRECHNUNG)
+                           kategorien=vtr.kategorien(con), kategorie=kategorie, abrechnung=vtr.ABRECHNUNG)
 
 
 def _vertrag_formular():
@@ -4120,7 +4120,7 @@ def vertrag(vid=None):
         kunden=con.execute("SELECT * FROM kunden WHERE archiviert=0 ORDER BY COALESCE(NULLIF(firma,''), nachname), "
                            "vorname").fetchall(),
         arten=[dict(a) for a in con.execute("SELECT * FROM vertragsarten WHERE aktiv=1 ORDER BY kategorie, name")],
-        kategorien=vtr.KATEGORIEN, abrechnung=vtr.ABRECHNUNG, abrechnungen=abrechnungen, heute=heute(),
+        kategorien=vtr.kategorien(con), abrechnung=vtr.ABRECHNUNG, abrechnungen=abrechnungen, heute=heute(),
         kuendigung_vorschlag=vtr.fruehestes_kuendigungsdatum(v).isoformat() if v else "",
         faellig=vtr.faellige_zeitraeume(con, v) if v else [])
 
@@ -4228,7 +4228,7 @@ def vertragsarten(aid=None):
         flash("Vertragsart gespeichert.", "ok")
         return redirect(url_for("main.vertragsarten"))
     liste = con.execute("SELECT * FROM vertragsarten ORDER BY aktiv DESC, kategorie, name").fetchall()
-    return render_template("vertragsarten.html", liste=liste, art=art, kategorien=vtr.KATEGORIEN,
+    return render_template("vertragsarten.html", liste=liste, art=art, kategorien=vtr.kategorien(con),
                            abrechnung=vtr.ABRECHNUNG, neu=request.args.get("neu") or aid)
 
 
@@ -4370,9 +4370,46 @@ def _oberflaeche_schluessel():
     return f"oberflaeche:{session.get('benutzer') or 'inhaber'}"
 
 
+_ID_MUSTER = re.compile(r"^[\w.:/#-]{1,100}$")
+_NAME_MUSTER = re.compile(r"^[^<>\x00-\x1f]{1,40}$")
+
+
+def _layout_merken(zustand, l):
+    """Anordnung der Bausteine einer Seite: Reihenfolge, ausgeblendet, Breite (siehe static/anpassen.js)."""
+    seite = str(l.get("seite") or "")
+    if not _ID_MUSTER.match(seite):
+        return
+    layouts = dict(zustand.get("layouts") or {})
+    if l.get("zuruecksetzen"):
+        layouts.pop(seite, None)
+    else:
+        ids = lambda x: [str(i) for i in (x or []) if _ID_MUSTER.match(str(i))][:60]  # noqa: E731
+        breite = {str(k): str(v) for k, v in (l.get("breite") or {}).items()
+                  if _ID_MUSTER.match(str(k)) and str(v) in ("3", "4", "6", "8", "12")}
+        layouts[seite] = {"reihe": ids(l.get("reihe")), "aus": ids(l.get("aus")), "breite": breite}
+    if len(layouts) <= 50:
+        zustand["layouts"] = layouts
+
+
+def _spalten_merken(zustand, s):
+    """Ausgeblendete Tabellenspalten je Tabelle (Schlüssel: Seite#Nummer, Werte: Spaltenüberschriften)."""
+    tabelle = str(s.get("tabelle") or "")
+    if not _ID_MUSTER.match(tabelle):
+        return
+    spalten = dict(zustand.get("spalten") or {})
+    aus = [str(n) for n in (s.get("aus") or []) if _NAME_MUSTER.match(str(n))][:40]
+    if aus:
+        spalten[tabelle] = aus
+    else:
+        spalten.pop(tabelle, None)
+    if len(spalten) <= 200:
+        zustand["spalten"] = spalten
+
+
 @bp.route("/oberflaeche", methods=["POST"])
 def oberflaeche_speichern():
-    """Zustand der Oberfläche je Benutzer merken: eingeklappte Gruppen, schmale Seitenleiste, Hell/Dunkel."""
+    """Zustand der Oberfläche je Benutzer merken: eingeklappte Gruppen, schmale Seitenleiste, Hell/Dunkel,
+    Anordnung der Bausteine (Übersicht, Finanzen …) und ausgeblendete Tabellenspalten."""
     daten = request.get_json(silent=True) or {}
     con = dbm.get_db()
     zustand = dict(dbm.einstellung(_oberflaeche_schluessel(), con) or {})
@@ -4383,6 +4420,10 @@ def oberflaeche_speichern():
         zustand["schmal"] = bool(daten["schmal"])
     if daten.get("design") in ("hell", "dunkel", "auto"):
         zustand["design"] = daten["design"]
+    if isinstance(daten.get("layout"), dict):
+        _layout_merken(zustand, daten["layout"])
+    if isinstance(daten.get("spalten"), dict):
+        _spalten_merken(zustand, daten["spalten"])
     with dbm.Transaktion(con):
         dbm.einstellungen_speichern({_oberflaeche_schluessel(): zustand}, con)
     return jsonify({"ok": True})

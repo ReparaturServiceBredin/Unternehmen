@@ -13,7 +13,7 @@
     <div class="s12"><label>Beschreibung</label><textarea name="beschreibung" rows="7" style="min-height:150px" placeholder="z. B. technische Details: Anschlüsse/Ports, Varianten, Maße, Kompatibilität …">{{ (a.beschreibung or '') if a }}</textarea>
       <div class="hilfe">Erscheint im Kostenvoranschlag und in der Rechnung unter der Bezeichnung (Zeilenumbrüche bleiben erhalten). Im Dokument kann sie für den Einzelfall angepasst werden, ohne diesen Katalogeintrag zu ändern.</div></div>
     <div class="s4"><label>Leistungsart (für Auswertungen)</label>
-      <select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if a and a.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
+      <select name="leistungsart" data-frei data-vorgabe="leistungsarten" data-wert="{{ (a.leistungsart or '') if a }}">{% for l in leistungsarten %}<option {{ 'selected' if a and a.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
     <div class="s4"><label>Typ</label><select name="typ">
       <option value="leistung" {{ 'selected' if not a or a.typ == 'leistung' }}>Leistung (Arbeit / Festpreis)</option>
       <option value="material" {{ 'selected' if a and a.typ == 'material' }}>Artikel (Material / Ersatzteil)</option></select></div>

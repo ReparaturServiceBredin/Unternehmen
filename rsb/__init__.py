@@ -10,7 +10,7 @@ from . import navigation
 from .hilfen import EingabeFehler, datum_de, euro, heute, heute_datum, jetzt_dt, kunde_name, menge_text, zeit_de
 from .sicherheit import csrf_pruefen, csrf_token, sitzungs_schluessel
 
-VERSION_NUMMER = "0.37.0"
+VERSION_NUMMER = "0.38.0"
 VERSION = VERSION_NUMMER
 if getattr(sys, "frozen", False):
     # EXE-Version: Programmordner = Ordner der EXE (die Daten liegen am festen Ort, siehe datenort.py)
@@ -110,9 +110,26 @@ def create_app(daten_dir=None, testing=False):
     def sicherheits_header(antwort):
         antwort.headers.setdefault("X-Content-Type-Options", "nosniff")
         antwort.headers.setdefault("X-Frame-Options", "SAMEORIGIN")
+        antwort.headers.setdefault("Content-Security-Policy", "frame-ancestors 'self'")
         antwort.headers.setdefault("Referrer-Policy", "same-origin")
         if app.config.get("SESSION_COOKIE_SECURE"):
             antwort.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+        return antwort
+
+    @app.after_request
+    def vorgaben_uebernehmen(antwort):
+        """Eigene Einträge aus Auswahllisten nach erfolgreichem Speichern in die Vorgabenliste übernehmen."""
+        from flask import g
+        if (request.method == "POST" and antwort.status_code < 400 and not g.get("eingabe_fehler")
+                and request.mimetype in ("application/x-www-form-urlencoded", "multipart/form-data")
+                and request.form.getlist("_neue_vorgabe") and session.get("angemeldet")):
+            from . import vorgaben
+            try:
+                con = dbm.get_db()
+                with dbm.Transaktion(con):
+                    vorgaben.merken(con, request.form.getlist("_neue_vorgabe"))
+            except Exception as e:  # darf das eigentliche Speichern nie stören
+                print(f"Hinweis: Vorgabe nicht übernommen ({e})")
         return antwort
 
     @app.before_request
@@ -226,6 +243,8 @@ def create_app(daten_dir=None, testing=False):
 
     @app.errorhandler(EingabeFehler)
     def eingabefehler(e):
+        from flask import g
+        g.eingabe_fehler = True  # nichts in Vorgabenlisten übernehmen
         flash(str(e), "fehler")
         return redirect(request.referrer or url_for("main.start"))
 

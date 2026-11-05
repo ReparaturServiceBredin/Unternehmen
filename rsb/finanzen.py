@@ -5,7 +5,7 @@ Jeder Posten trägt Schlüssel („umsatz“, „ausgabe:Strom“, „monat:2026
 Klick auf genau die Belege zurückführen, aus denen sie besteht.
 
 - Einnahmen nach Rechnungsdatum: festgeschriebene Rechnungen minus Stornos und Gutschriften (netto/brutto), aufgeteilt
-  in Reparaturen & Dienstleistungen, Artikelverkauf, Leihgebühren, KVA-Gebühren (anhand der Positionen).
+  nach der Leistungsart der Positionen (dazu Artikelverkauf, Leihgebühren, KVA-Gebühren); nur Kategorien mit Umsatz.
 - Einnahmen nach Zahlungseingang: Zahlungen im Zeitraum, anteilig auf die Kategorien der Rechnung verteilt.
 - Ausgaben: Fixkosten (anteilig oder im Fälligkeitsmonat), Eingangsrechnungen (Wareneinsatz bzw. sonstige, nach
   Kostenart; Rechnungen, die zu einer Fixkosten-Position gehören, zählen dort), Kassenausgaben (ohne bar bezahlte
@@ -22,7 +22,7 @@ from . import fixkosten as fk
 from .hilfen import heute_datum
 from .logik import positions_betrag
 
-KATEGORIEN_EIN = ["Reparaturen & Dienstleistungen", "Artikelverkauf", "Leihgebühren", "KVA-Gebühren"]
+KAT_OHNE = "Sonstige Leistungen"  # Positionen ohne Leistungsart
 ARTEN = {"monat": "Monat", "quartal": "Quartal", "halbjahr": "Halbjahr", "jahr": "Jahr", "frei": "Zeitraum"}
 MONATE = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November",
           "Dezember"]
@@ -96,6 +96,15 @@ def _vorjahr(von, bis):
 
 # ---------------------------------------------------------------------- Einzelposten
 
+def _umsatz_kategorien(liste):
+    """Einnahmen je Leistungsart – nur Kategorien, in denen im Zeitraum etwas berechnet wurde, größte zuerst."""
+    kat = {}
+    for x in liste:
+        if x["gruppe"] == "einnahme":
+            kat[x["kategorie"]] = kat.get(x["kategorie"], 0) + x["netto"]
+    return dict(sorted(((k, v) for k, v in kat.items() if v), key=lambda kv: -abs(kv[1])))
+
+
 def _kat_position(p, artikel):
     from .auftraege import KVA_ARTIKEL
     from .leihgeraete import KATALOG
@@ -106,16 +115,20 @@ def _kat_position(p, artikel):
         return "KVA-Gebühren"
     if name in KATALOG.values() or bez.startswith("Leihgerät") or bez.startswith("Schaden Leihgerät"):
         return "Leihgebühren"
+    # Leistungsart der Position (beim Rechnung schreiben gewählt), sonst die des Katalogartikels
+    art = (p["leistungsart"] or (a["leistungsart"] if a else "") or "").strip()
+    if art and art != "Sonstiges":
+        return art
     if a and a["typ"] == "material":
         return "Artikelverkauf"
-    return "Reparaturen & Dienstleistungen"
+    return KAT_OHNE
 
 
 def _aufteilung(con, dok_ids):
     """Anteil je Einnahmen-Kategorie pro Beleg (aus den Positionen) und Wareneinsatz laut Positionen."""
     if not dok_ids:
         return {}
-    artikel = {a["id"]: a for a in con.execute("SELECT id, name, typ FROM artikel")}
+    artikel = {a["id"]: a for a in con.execute("SELECT id, name, typ, leistungsart FROM artikel")}
     teile = {}
     platz = ",".join("?" * len(dok_ids))
     for p in con.execute(f"SELECT * FROM positionen WHERE dokument_id IN ({platz})", list(dok_ids)):
@@ -130,7 +143,7 @@ def _verteilen(gesamt, kat):
     """Betrag nach Anteilen aufteilen (Rundungsrest auf die größte Kategorie)."""
     summe = sum(kat.values())
     if not kat or not summe:
-        return {"Reparaturen & Dienstleistungen": gesamt}
+        return {KAT_OHNE: gesamt}
     teile = {k: int(round(gesamt * v / summe)) for k, v in kat.items()}
     rest = gesamt - sum(teile.values())
     if rest:
@@ -291,7 +304,7 @@ def kennzahlen(con, von, bis, basis="rechnung", fix_modus="anteilig", ku=None, l
     rohertrag = umsatz - waren
     return {
         "umsatz_netto": umsatz, "umsatz_brutto": _summe(liste, "einnahme", "brutto"),
-        "umsatz_kat": {k: _summe(liste, f"einnahme:{k}", "netto") for k in KATEGORIEN_EIN},
+        "umsatz_kat": _umsatz_kategorien(liste),
         "fixkosten": fix, "wareneinsatz": waren, "sonstige": sonst,
         "kasse": _summe(liste, "kasse"), "er": _summe(liste, "er"), "ek": _summe(liste, "ek"),
         "waren_beleg": _summe(liste, "waren_beleg"),

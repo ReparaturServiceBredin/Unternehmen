@@ -155,7 +155,7 @@
   </tbody></table>{% endif %}
   <form method="post" action="{{ url_for('kalender.kosten_neu', aid=a.id) }}" enctype="multipart/form-data" id="ak-kosten" style="margin-top:10px">{{ csrf() }}
     <div class="felder">
-      <div class="s6"><label>Kategorie</label><select name="kategorie" id="ak-kat">{% for k, n in ak.KATEGORIEN.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
+      <div class="s6"><label>Kategorie</label><select name="kategorie" id="ak-kat" data-frei>{% for k, n in ak.KATEGORIEN.items() %}<option value="{{ k }}">{{ n }}</option>{% endfor %}</select></div>
       <div class="s6 nur-betrag"><label>Betrag netto (€)</label><input type="text" name="betrag" inputmode="decimal"></div>
       <div class="s6 ak-nur nur-verpflegung nur-uebernachtung"><label>Berechnung</label><select name="modus" id="ak-modus">
         <option value="beleg">Betrag laut Beleg/Rechnung</option>

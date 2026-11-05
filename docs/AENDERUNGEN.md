@@ -16,6 +16,7 @@ technischen Hinweisen. Die neueste Version steht oben.
 
 | Version | Datum | Schwerpunkt |
 |---|---|---|
+| 0.38.0 | 05.11.2026 | Oberfläche anpassen (aus Omikron), Finanzen nach Leistungsart |
 | 0.37.0 | 04.11.2026 | Arbeitskalender: freie Einträge, Schnellanlegen, Drag & Drop, Auswertung/CSV, Sichtschutz |
 | 0.36.0 | 04.11.2026 | Arbeitskalender: Termine, Zeiterfassung, Anfahrt, Nebenkosten, Terminvorschläge |
 | 0.35.0 | 03.11.2026 | Benachrichtigungen jederzeit von Hand, „Gerät versendet“ mit Sendungsnummer, Textbausteine |
@@ -63,6 +64,28 @@ technischen Hinweisen. Die neueste Version steht oben.
 | 0.3.0 | 14.10.2026 | Reparaturaufträge (Tafel) und Kostenvoranschlag |
 | 0.2.0 | 14.10.2026 | Anfragen aus dem Kontaktformular |
 | 0.1.0 | 14.10.2026 | Grundversion: Kunden, Leistungen, Rechnungen, E-Mail |
+
+---
+
+## 0.38.0 – 05.11.2026
+Übernommen aus der Omikron-Version (1.1.0 und 1.1.1).
+
+### Neu
+- **Übersicht und Finanzen anpassen:** Knopf **„Anpassen“** oben rechts. Jeder Baustein lässt sich ausblenden bzw.
+  einblenden, verschieben (ziehen oder Pfeile ↑ ↓) und in der Breite ändern (¼, ⅓, ½, ⅔, ganz). „Fertig“ beendet das
+  Anpassen, „Standard“ stellt die ursprüngliche Anordnung wieder her. Gilt je Benutzer und auf allen Geräten.
+- **Zusätzliche Kacheln auf der Übersicht** zum Einblenden: neue Anfragen, überfällige Rechnungen,
+  Benachrichtigungen, überfällige Leihgeräte, Lager unter Mindestbestand, Schnellzugriff.
+- **Tabellenspalten ein-/ausblenden:** bei Listen mit mehreren Spalten oben rechts **„⚙ Spalten“**.
+- **Eigene Einträge in Auswahllisten:** „✎ Eigener Eintrag …“ bei Leistungsart, Kostenart, Fixkosten-Kategorie,
+  Gerätetyp, Anrede, Versanddienst, Vertragskategorie und Nebenkosten im Arbeitskalender. Neue Leistungsarten,
+  Kostenarten und Fixkosten-Kategorien landen automatisch in der Vorgabenliste. Auswahllisten, die Berechnungen
+  steuern (Status, Zahlart, Besteuerung …), bleiben fest.
+
+### Geändert
+- **Finanzen → Einnahmen nach Leistungsart:** statt fester Zeilen die Leistungsarten, die im Zeitraum tatsächlich
+  berechnet wurden (z. B. Smartphone, Kaffeemaschine, PC/Laptop), größte zuerst; dazu KVA-Gebühren, Leihgebühren und
+  Artikelverkauf. Positionen ohne Leistungsart zählen als „Sonstige Leistungen“.
 
 ---
 

@@ -128,5 +128,7 @@
 <script src="{{ url_for('static', filename='navigation.js', v=version) }}"></script>
 <script src="{{ url_for('static', filename='sichtschutz.js', v=version) }}"></script>
 {% block skript %}{% endblock %}
+<script>window.UI_ZUSTAND = {{ {"layouts": ui.layouts or {}, "spalten": ui.spalten or {}}|tojson }};</script>
+<script src="{{ url_for('static', filename='anpassen.js', v=version) }}"></script>
 </body>
 </html>

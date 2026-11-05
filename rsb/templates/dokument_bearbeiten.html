@@ -148,7 +148,7 @@ function zeile(p) {
           ? `<input type="hidden" name="p_typ" value=""><div class="klein katalog-info">aus „Leistungen und Artikel“ – Änderungen gelten nur für dieses Dokument</div>`
           : `<div class="katalog-zeile"><label class="check klein"><input type="checkbox" class="katalog-haken" ${p.katalog === false ? '' : 'checked'}> In Leistungen und Artikel speichern</label>
              <select name="p_typ" class="klein-select" title="Typ im Katalog"><option value="leistung" ${p.typ === 'material' ? '' : 'selected'}>Leistung</option><option value="material" ${p.typ === 'material' ? 'selected' : ''}>Artikel</option></select></div>`}</td>
-    <td><select name="p_leistungsart"><option></option>${arten}</select></td>
+    <td><select name="p_leistungsart" data-frei data-vorgabe="leistungsarten" data-wert="${esc(p.leistungsart || '')}"><option></option>${arten}</select></td>
     <td><input type="text" name="p_menge" value="${esc(String(p.menge ?? 1).replace('.', ','))}"></td>
     <td><input type="text" name="p_einheit" value="${esc(p.einheit)}"></td>
     <td><input type="text" name="p_teilekosten" value="${p.teilekosten ? euroText(p.teilekosten / 100) : ''}" placeholder="unbekannt"></td>

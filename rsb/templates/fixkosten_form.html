@@ -11,7 +11,7 @@
   {% set w = f or {} %}
   <div class="felder">
     <div class="s8"><label>Bezeichnung</label><input type="text" name="bezeichnung" required value="{{ w.bezeichnung or '' }}" placeholder="z. B. Werkstattmiete"></div>
-    <div class="s4"><label>Kategorie</label><select name="kategorie">{% for k in kategorien %}<option {{ 'selected' if w.kategorie == k }}>{{ k }}</option>{% endfor %}{% if w.kategorie and w.kategorie not in kategorien %}<option selected>{{ w.kategorie }}</option>{% endif %}</select></div>
+    <div class="s4"><label>Kategorie</label><select name="kategorie" data-frei data-vorgabe="fixkosten_kategorien">{% for k in kategorien %}<option {{ 'selected' if w.kategorie == k }}>{{ k }}</option>{% endfor %}{% if w.kategorie and w.kategorie not in kategorien %}<option selected>{{ w.kategorie }}</option>{% endif %}</select></div>
     {% if not f %}
     <div class="s4"><label>Betrag netto (€)</label><input type="text" name="netto" id="fx_netto" inputmode="decimal"></div>
     <div class="s4"><label>Steuersatz (%)</label><input type="text" name="steuersatz" id="fx_satz" value="{{ standard_satz }}"></div>

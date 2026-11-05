@@ -21,7 +21,7 @@
       <div class="hilfe">Füllt die Felder vor. <a href="{{ url_for('main.vertragsarten', neu=1) }}">Neue Vertragsart anlegen</a></div></div>
     {% endif %}
     <div class="s8"><label>Bezeichnung (erscheint auf der Rechnung)</label><input type="text" name="bezeichnung" required value="{{ v.bezeichnung if v }}"></div>
-    <div class="s4"><label>Kategorie</label><select name="kategorie">{% for k in kategorien %}<option {{ 'selected' if v and v.kategorie == k }}>{{ k }}</option>{% endfor %}</select></div>
+    <div class="s4"><label>Kategorie</label><select name="kategorie" data-frei data-wert="{{ (v.kategorie or '') if v }}">{% for k in kategorien %}<option {{ 'selected' if v and v.kategorie == k }}>{{ k }}</option>{% endfor %}</select></div>
     <div class="s6"><label>Vertrags-/Policen-/Lizenznummer</label><input type="text" name="vertragsnummer" value="{{ v.vertragsnummer or '' if v }}" placeholder="z. B. Lizenzschlüssel oder Policennummer"></div>
     <div class="s6"><label>Gerät / Seriennummer</label><input type="text" name="geraet" value="{{ v.geraet or '' if v }}" placeholder="z. B. iPhone 15, IMEI …"></div>
     <div class="s4"><label>Beginn</label><input type="date" name="beginn" required value="{{ v.beginn if v else heute }}"></div>

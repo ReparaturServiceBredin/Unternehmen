@@ -16,24 +16,33 @@
 {% if einst.abo_modus == 'automatisch' and not einst.smtp_host and zahlen.vertraege_aktiv %}<div class="meldung warnung">Vertragsrechnungen gehen automatisch raus, aber der <a href="{{ url_for('main.einstellungen', bereich='email') }}">E-Mail-Zugang</a> ist noch nicht eingerichtet – sie werden nur festgeschrieben, nicht versendet.</div>{% endif %}
 {% if zahlen.anfragen %}<div class="meldung info"><b>{{ zahlen.anfragen }} neue Anfrage(n)</b> aus dem Kontaktformular – <a href="{{ url_for('main.anfragen_liste') }}">jetzt ansehen</a></div>{% endif %}
 {% if einst.anfragen_letzter_fehler %}<div class="meldung fehler">Abruf der Anfragen fehlgeschlagen: {{ einst.anfragen_letzter_fehler }}</div>{% endif %}
-<div class="raster">
+<div class="anpassbar" data-anpassbar="start">
   {% for st, name in [('offen','Aufträge offen'),('in_arbeit','In Arbeit'),('erledigt','Erledigt (30 Tage)')] %}
-  <a class="kachel kachel-link s-rand-{{ st }}" href="{{ url_for('main.auftraege') }}"><div class="label">{{ name }}</div><div class="wert">{{ zahlen.auftraege.get(st, 0) }}</div></a>
+  <a class="kachel kachel-link s-rand-{{ st }}" data-kachel="auftraege_{{ st }}" data-titel="{{ name }}" data-breite="4" href="{{ url_for('main.auftraege') }}"><div class="label">{{ name }}</div><div class="wert">{{ zahlen.auftraege.get(st, 0) }}</div></a>
   {% endfor %}
-</div>
-<div class="raster">
-  <a class="kachel kachel-link" href="{{ url_for('main.vertraege_liste') }}"><div class="label">Verträge &amp; Lizenzen</div><div class="wert">{{ zahlen.vertraege_aktiv }}</div><div class="klein">{{ zahlen.vertraege_monatlich|euro }} regelmäßig pro Monat</div></a>
-  <a class="kachel kachel-link {{ 's-rand-in_arbeit' if zahlen.vertraege_laeuft_ab }}" href="{{ url_for('main.vertraege_liste', filter='laeuft_ab') }}"><div class="label">Laufen bald ab</div><div class="wert">{{ zahlen.vertraege_laeuft_ab }}</div><div class="klein">Lizenzen/Garantien</div></a>
-</div>
-<div class="raster">
-  <div class="kachel"><div class="label">Umsatz {{ jahr }}</div><div class="wert">{{ zahlen.umsatz_jahr|euro }}</div></div>
-  <div class="kachel"><div class="label">Umsatz {{ jahr - 1 }}</div><div class="wert">{{ zahlen.umsatz_vorjahr|euro }}</div></div>
-  <a class="kachel kachel-link" href="{{ url_for('main.offene_posten') }}"><div class="label">Noch nicht bezahlt</div><div class="wert">{{ zahlen.offen|euro }}</div><div class="klein">{{ zahlen.ueberfaellig }} Rechnung(en) überfällig</div></a>
-  <div class="kachel"><div class="label">Kunden / Entwürfe</div><div class="wert">{{ zahlen.kunden }} / {{ zahlen.entwuerfe }}</div></div>
-</div>
+  <a class="kachel kachel-link" data-kachel="vertraege" data-titel="Verträge &amp; Lizenzen" data-breite="6" href="{{ url_for('main.vertraege_liste') }}"><div class="label">Verträge &amp; Lizenzen</div><div class="wert">{{ zahlen.vertraege_aktiv }}</div><div class="klein">{{ zahlen.vertraege_monatlich|euro }} regelmäßig pro Monat</div></a>
+  <a class="kachel kachel-link {{ 's-rand-in_arbeit' if zahlen.vertraege_laeuft_ab }}" data-kachel="vertraege_ablauf" data-titel="Laufen bald ab" data-breite="6" href="{{ url_for('main.vertraege_liste', filter='laeuft_ab') }}"><div class="label">Laufen bald ab</div><div class="wert">{{ zahlen.vertraege_laeuft_ab }}</div><div class="klein">Lizenzen/Garantien</div></a>
+  <div class="kachel" data-kachel="umsatz_jahr" data-titel="Umsatz laufendes Jahr" data-breite="3"><div class="label">Umsatz {{ jahr }}</div><div class="wert">{{ zahlen.umsatz_jahr|euro }}</div></div>
+  <div class="kachel" data-kachel="umsatz_vorjahr" data-titel="Umsatz Vorjahr" data-breite="3"><div class="label">Umsatz {{ jahr - 1 }}</div><div class="wert">{{ zahlen.umsatz_vorjahr|euro }}</div></div>
+  <a class="kachel kachel-link" data-kachel="offen" data-titel="Noch nicht bezahlt" data-breite="3" href="{{ url_for('main.offene_posten') }}"><div class="label">Noch nicht bezahlt</div><div class="wert">{{ zahlen.offen|euro }}</div><div class="klein">{{ zahlen.ueberfaellig }} Rechnung(en) überfällig</div></a>
+  <div class="kachel" data-kachel="kunden" data-titel="Kunden / Entwürfe" data-breite="3"><div class="label">Kunden / Entwürfe</div><div class="wert">{{ zahlen.kunden }} / {{ zahlen.entwuerfe }}</div></div>
+  {# Weitere Kacheln – zunächst ausgeblendet, über „Anpassen“ einblendbar #}
+  <a class="kachel kachel-link" data-kachel="anfragen" data-titel="Neue Anfragen" data-breite="3" data-standard="aus" href="{{ url_for('main.anfragen_liste') }}"><div class="label">Neue Anfragen</div><div class="wert">{{ zaehler.offene_anfragen }}</div><div class="klein">aus dem Kontaktformular</div></a>
+  <a class="kachel kachel-link {{ 's-rand-in_arbeit' if zaehler.posten_ueberfaellig }}" data-kachel="ueberfaellig" data-titel="Überfällige Rechnungen" data-breite="3" data-standard="aus" href="{{ url_for('main.offene_posten') }}"><div class="label">Überfällige Rechnungen</div><div class="wert">{{ zaehler.posten_ueberfaellig }}</div><div class="klein">Zahlungsziel überschritten</div></a>
+  <a class="kachel kachel-link" data-kachel="benachrichtigungen" data-titel="Offene Benachrichtigungen" data-breite="3" data-standard="aus" href="{{ url_for('main.benachrichtigungen') }}"><div class="label">Benachrichtigungen</div><div class="wert">{{ benachrichtigungen_offen }}</div><div class="klein">offen oder fehlgeschlagen</div></a>
+  <a class="kachel kachel-link" data-kachel="leihen" data-titel="Leihgeräte überfällig" data-breite="3" data-standard="aus" href="{{ url_for('main.leihgeraete') }}"><div class="label">Leihgeräte überfällig</div><div class="wert">{{ zaehler.leihen_ueberfaellig }}</div><div class="klein">Rückgabe überschritten</div></a>
+  <a class="kachel kachel-link" data-kachel="lager" data-titel="Lager unter Mindestbestand" data-breite="3" data-standard="aus" href="{{ url_for('main.lager') }}"><div class="label">Lager unter Mindestbestand</div><div class="wert">{{ zaehler.lager_unter_min }}</div><div class="klein">Artikel nachbestellen</div></a>
+  <div class="karte" data-kachel="schnellzugriff" data-titel="Schnellzugriff" data-breite="12" data-standard="aus"><h2>Schnellzugriff</h2>
+    <div class="leiste">
+      <a class="knopf zweit" href="{{ url_for('main.dokument_neu') }}">+ Rechnung</a>
+      <a class="knopf zweit" href="{{ url_for('main.kunde') }}">+ Kunde</a>
+      <a class="knopf zweit" href="{{ url_for('main.finanzen') }}">Finanzen</a>
+      <a class="knopf zweit" href="{{ url_for('main.offene_posten') }}">Offene Posten</a>
+      <a class="knopf zweit" href="{{ url_for('kalender.uebersicht') }}">Arbeitskalender</a>
+    </div></div>
 {% if einst.steuer_modus == 'kleinunternehmer' %}
 {% set anteil = (zahlen.umsatz_jahr / 10000000 * 100) %}
-<div class="karte">
+<div class="karte" data-kachel="kleinunternehmer" data-titel="Kleinunternehmergrenze" data-breite="12">
   <h2>Kleinunternehmergrenze {{ jahr }}</h2>
   <p class="klein">Grenzen nach § 19 UStG (Stand 2025): Vorjahr höchstens 25.000 €, laufendes Jahr höchstens 100.000 €. Wird die 100.000-€-Grenze im laufenden Jahr überschritten, endet die Befreiung sofort ab dem Umsatz, mit dem sie überschritten wird. Bitte im Zweifel mit dem Finanzamt/Steuerberater klären.</p>
   <div class="leiste">
@@ -44,7 +53,7 @@
   </div>
 </div>
 {% endif %}
-<div class="karte">
+<div class="karte" data-kachel="zuletzt" data-titel="Zuletzt bearbeitet" data-breite="12">
   <h2>Zuletzt bearbeitet</h2>
   <table class="liste">
     <tr><th>Nummer</th><th>Kunde</th><th>Datum</th><th>Status</th><th class="zahl">Betrag</th></tr>
@@ -56,5 +65,6 @@
     </tr>
     {% else %}<tr><td colspan="5" class="klein">Noch keine Dokumente.</td></tr>{% endfor %}
   </table>
+</div>
 </div>
 {% endblock %}

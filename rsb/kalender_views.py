@@ -383,9 +383,9 @@ def kosten_neu(aid):
     con = dbm.get_db()
     ak.laden(con, aid)
     einst = dbm.einstellungen(con)
-    kat = _f("kategorie")
-    if kat not in ak.KATEGORIEN:
-        raise EingabeFehler("Bitte eine Kategorie wählen.")
+    kat = " ".join(_f("kategorie").split())
+    if not kat or len(kat) > 60:  # Liste oder eigener Eintrag
+        raise EingabeFehler("Bitte eine Kategorie wählen oder eingeben.")
     modus = _f("modus") or "beleg"
     menge = _zahl(_f("abwesenheit") if kat == "verpflegung" else _f("naechte"))
     einzel = cent_aus_text(_f("preis_nacht")) if kat == "uebernachtung" and _f("preis_nacht") else None

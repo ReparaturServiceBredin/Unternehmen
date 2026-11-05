@@ -37,7 +37,7 @@
     <div class="s12 k-einnahme"><label>Barzahlung zu Rechnung (optional)</label><select name="dokument_id"><option value="">– keine (sonstige Bareinnahme) –</option>{% for d in offene_re %}<option value="{{ d.id }}">{{ d.nummer }} · {{ d|kname }} · offen {{ (d.summe_brutto - d.bezahlt_betrag)|euro }}</option>{% endfor %}</select></div>
     <div class="s8"><label id="k_text_label">Text</label><input type="text" name="text" required minlength="3" placeholder="z. B. Verkauf Ladekabel, Briefmarken, Bareinzahlung Sparkasse"></div>
     <div class="s4 k-ust"><label>Steuersatz (%)</label><input type="text" name="steuersatz" placeholder="{{ '19' if einst.steuer_modus == 'regel' else '–' }}"></div>
-    <div class="s6 k-ausgabe" hidden><label>Kostenart</label><select name="kostenart"><option value=""></option>{% for k in kostenarten %}<option>{{ k }}</option>{% endfor %}</select></div>
+    <div class="s6 k-ausgabe" hidden><label>Kostenart</label><select name="kostenart" data-frei data-vorgabe="kostenarten"><option value=""></option>{% for k in kostenarten %}<option>{{ k }}</option>{% endfor %}</select></div>
     <div class="s6"><label>Beleg (Foto/PDF)</label><input type="file" name="beleg" accept=".pdf,.jpg,.jpeg,.png"></div>
   </div><br><button>Buchen</button>
 </form>

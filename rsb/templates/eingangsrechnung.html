@@ -22,7 +22,7 @@
     <div class="s3"><label>Steuersatz (%)</label><input type="text" name="steuersatz" id="er_satz" value="{{ werte.steuersatz|menge if werte.steuersatz is number else '19' }}"></div>
     <div class="s3"><label>Steuer (€)</label><input type="text" name="steuer" id="er_steuer" value="{{ werte.steuer|euro(false) if werte.steuer is number else '' }}"></div>
     <div class="s3"><label>Brutto (€)</label><input type="text" name="brutto" id="er_brutto" required value="{{ werte.brutto|euro(false) if werte.brutto is number else '' }}"></div>
-    <div class="s6"><label>Kostenart</label><select name="kostenart"><option value=""></option>{% for k in kostenarten %}<option {{ 'selected' if werte.kostenart == k }}>{{ k }}</option>{% endfor %}</select></div>
+    <div class="s6"><label>Kostenart</label><select name="kostenart" data-frei data-vorgabe="kostenarten" data-wert="{{ werte.kostenart or '' }}"><option value=""></option>{% for k in kostenarten %}<option {{ 'selected' if werte.kostenart == k }}>{{ k }}</option>{% endfor %}</select></div>
     <div class="s6"><label>zu Bestellung</label><select name="bestellung_id"><option value="">–</option>{% for b in bestellungen %}<option value="{{ b.id }}" {{ 'selected' if werte.bestellung_id == b.id }}>{{ b.nummer }} · {{ b.lieferant }}</option>{% endfor %}</select></div>
     <div class="s12"><label>Beschreibung</label><input type="text" name="beschreibung" value="{{ werte.beschreibung or '' }}"></div>
   </div><br>

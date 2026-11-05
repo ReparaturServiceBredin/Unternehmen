@@ -77,7 +77,7 @@
         <form method="post" action="{{ url_for('main.auftrag_benachrichtigen', aid=a.id) }}" id="ben-form">{{ csrf() }}
           <div class="felder">
             <div class="s12"><label>Anlass</label><select name="anlass" id="ben-anlass">{% for k, n in anlaesse.items() %}<option value="{{ k }}" {{ 'selected' if k == ben_vorwahl }}>{{ n }}</option>{% endfor %}</select></div>
-            <div class="s5 nur-versand"><label>Versanddienst</label><select name="versanddienst"><option value="">–</option>{% for d in versanddienste %}<option>{{ d }}</option>{% endfor %}</select></div>
+            <div class="s5 nur-versand"><label>Versanddienst</label><select name="versanddienst" data-frei><option value="">–</option>{% for d in versanddienste %}<option>{{ d }}</option>{% endfor %}</select></div>
             <div class="s7 nur-versand"><label>Sendungsnummer</label><input type="text" name="sendungsnummer" autocomplete="off"></div>
             {% if not a.abgeholt_am %}<div class="s12 nur-versand"><label class="check"><input type="checkbox" name="als_versendet" value="1" checked> Gerät als versendet vermerken (statt Abholung; keine Abhol-Erinnerungen mehr)</label></div>{% endif %}
             {% set bs = ben_bausteine() %}{% if bs %}<div class="s12"><label>Textbausteine dazu</label>

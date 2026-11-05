@@ -29,6 +29,14 @@ ABRECHNUNG = {
 KATEGORIEN = ["Garantie/Versicherung", "Lizenz", "MSP", "Wartung", "Sonstiges"]
 
 
+def kategorien(con):
+    """Vorgaben plus alle selbst eingetragenen Kategorien (Verträge und Vertragsarten)."""
+    eigene = [r[0] for r in con.execute(
+        "SELECT kategorie FROM vertraege WHERE kategorie<>'' UNION SELECT kategorie FROM vertragsarten "
+        "WHERE kategorie<>'' ORDER BY 1") if r[0] and r[0] not in KATEGORIEN]
+    return KATEGORIEN[:-1] + eigene + KATEGORIEN[-1:]
+
+
 def plus_monate(d: date, monate: int) -> date:
     m = d.month - 1 + monate
     jahr, monat = d.year + m // 12, m % 12 + 1

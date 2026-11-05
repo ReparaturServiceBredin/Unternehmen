@@ -20,7 +20,7 @@
   {% endif %}
   {% set ts = 'wartet_teil' if w.status == 'in_arbeit' and w.wartet_teil_seit else (w.status or 'offen') %}
   <div class="s3"><label>Status</label><select name="status" id="f_status">{% for s, n in status_namen.items() %}<option value="{{ s }}" {{ 'selected' if ts == s }}>{{ n }}</option>{% endfor %}</select></div>
-  <div class="s3"><label>Leistungsart</label><select name="leistungsart">{% for l in leistungsarten %}<option {{ 'selected' if w.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
+  <div class="s3"><label>Leistungsart</label><select name="leistungsart" data-frei data-vorgabe="leistungsarten" data-wert="{{ w.leistungsart or '' }}">{% for l in leistungsarten %}<option {{ 'selected' if w.leistungsart == l }}>{{ l }}</option>{% endfor %}</select></div>
   <div><label>Gerät (Marke, Modell)</label><input type="text" name="geraet" value="{{ w.geraet or '' }}" placeholder="z. B. Xiaomi 14T Pro"></div>
   <div class="s3"><label>Seriennr. / IMEI</label><input type="text" name="seriennummer" id="f_sn" value="{{ w.seriennummer or '' }}" data-ohne="{{ w.id or '' }}" autocomplete="off"></div>
   <div class="s12" id="sn-hinweis" hidden></div>
@@ -36,7 +36,7 @@
     <div class="hilfe">Bis zu diesem Betrag ohne Rückfrage reparieren.</div></div>
   <div class="s3"><label>Kostenvoranschlag</label><label class="check" style="margin-top:8px"><input type="checkbox" name="kva_gewuenscht" value="1" {{ 'checked' if w.kva_gewuenscht and w.kva_gewuenscht|string != '0' }}> KVA gewünscht</label></div>
   {% set kva_typen = kva_gebuehren_liste() %}
-  <div class="s3"><label>Gerätetyp (für die KVA-Pauschale)</label><select name="geraetetyp" id="f_geraetetyp"><option value="">– wählen –</option>{% for t, c in kva_typen %}<option value="{{ t }}" data-cent="{{ c }}" {{ 'selected' if w.geraetetyp == t }}>{{ t }} ({{ c|euro }})</option>{% endfor %}</select></div>
+  <div class="s3"><label>Gerätetyp (für die KVA-Pauschale)</label><select name="geraetetyp" id="f_geraetetyp" data-frei data-wert="{{ w.geraetetyp or '' }}"><option value="">– wählen –</option>{% for t, c in kva_typen %}<option value="{{ t }}" data-cent="{{ c }}" {{ 'selected' if w.geraetetyp == t }}>{{ t }} ({{ c|euro }})</option>{% endfor %}</select></div>
   <div class="s3"><label>KVA-Pauschale (€, brutto)</label><input type="text" name="kva_gebuehr" id="f_kva_gebuehr" value="{{ betrag_feld(w.kva_gebuehr) if w.kva_gebuehr else '' }}" placeholder="laut Gerätetyp">
     <label class="check" style="margin-top:4px"><input type="checkbox" name="kva_kostenlos" value="1" id="f_kva_kostenlos" {{ 'checked' if w.kva_gebuehr is number and w.kva_gebuehr == 0 }}> kostenlos</label>
     <div class="hilfe">Bei Annahme des KVA verrechnet, bei Ablehnung fällig.</div></div>

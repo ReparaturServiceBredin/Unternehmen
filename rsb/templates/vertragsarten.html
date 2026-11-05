@@ -12,7 +12,7 @@
   <h2>{{ 'Vertragsart bearbeiten' if art else 'Neue Vertragsart' }}</h2>
   <div class="felder">
     <div class="s8"><label>Name</label><input type="text" name="name" required value="{{ art.name if art }}" placeholder="z. B. ESET Internet Security – 3 Geräte, 1 Jahr"></div>
-    <div class="s4"><label>Kategorie</label><select name="kategorie">{% for k in kategorien %}<option {{ 'selected' if art and art.kategorie == k }}>{{ k }}</option>{% endfor %}</select></div>
+    <div class="s4"><label>Kategorie</label><select name="kategorie" data-frei data-wert="{{ (art.kategorie or '') if art }}">{% for k in kategorien %}<option {{ 'selected' if art and art.kategorie == k }}>{{ k }}</option>{% endfor %}</select></div>
     <div class="s12"><label>Beschreibung</label><input type="text" name="beschreibung" value="{{ art.beschreibung or '' if art }}"></div>
     <div class="s6"><label>Abrechnung</label><select name="abrechnung">{% for k, (t, _) in abrechnung.items() %}<option value="{{ k }}" {{ 'selected' if art and art.abrechnung == k }}>{{ t }}</option>{% endfor %}</select></div>
     <div class="s3"><label>Laufzeit (Monate)</label><input type="number" min="0" name="laufzeit_monate" value="{{ art.laufzeit_monate or '' if art }}"></div>

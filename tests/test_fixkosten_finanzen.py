@@ -135,7 +135,7 @@ def test_bankabgleich_fixkosten(client, con):
 
 
 def _rechnung(client, con, kid, datum, positionen):
-    """positionen: (Bezeichnung, Preis, Menge, Artikel-ID, Teilekosten)."""
+    """positionen: (Bezeichnung, Preis, Menge, Artikel-ID, Teilekosten[, Leistungsart])."""
     r = client.get(f"/dokumente/neu?kunde_id={kid}")
     did = int(re.search(r"/dokumente/(\d+)", r.headers["Location"]).group(1))
     client.post(f"/dokumente/{did}", data={
@@ -145,7 +145,7 @@ def _rechnung(client, con, kid, datum, positionen):
         "p_beschreibung": ["" for _ in positionen], "p_menge": [p[2] for p in positionen],
         "p_einheit": ["Stk." for _ in positionen], "p_preis": [p[1] for p in positionen],
         "p_teilekosten": [p[4] for p in positionen], "p_steuersatz": ["19" for _ in positionen],
-        "p_leistungsart": ["Smartphone" for _ in positionen], "p_artikel_id": [p[3] for p in positionen]})
+        "p_leistungsart": [p[5] if len(p) > 5 else "Smartphone" for p in positionen], "p_artikel_id": [p[3] for p in positionen]})
     d = con.execute("SELECT * FROM dokumente WHERE id=?", (did,)).fetchone()
     assert d["status"] == "festgeschrieben", d["status"]
     return did
@@ -194,8 +194,9 @@ def test_finanzen_nachgerechnet(client, con):
     assert dbm.einstellungen(con)["finanzen_wareneinsatz"] == "belege"
     a = fin.auswertung(con, "monat", heute.year, heute.month)
     k = a["k"]
-    assert k["umsatz_kat"] == {"Reparaturen & Dienstleistungen": 10000, "Artikelverkauf": 4000, "Leihgebühren": 1500,
-                               "KVA-Gebühren": 2900}
+    # Einnahmen nach Leistungsart der Positionen (hier alles „Smartphone“), KVA und Leihgebühren eigene Zeilen
+    assert k["umsatz_kat"] == {"Smartphone": 14000, "KVA-Gebühren": 2900, "Leihgebühren": 1500}
+    assert list(k["umsatz_kat"]) == ["Smartphone", "KVA-Gebühren", "Leihgebühren"]
     assert k["umsatz_netto"] == 18400 and k["umsatz_brutto"] == 21896   # 184,00 + 19 % (Storno hebt R2 auf)
     assert k["wareneinsatz"] == 2000 and k["sonstige"] == 1000 + 1000 and k["fixkosten"] == 100000
     assert k["rohertrag"] == 16400 and k["ergebnis"] == 16400 - 100000 - 2000
@@ -247,3 +248,25 @@ def test_zeitraum_und_blaettern():
     assert fin.blaettern("quartal", 2026, 4, 1) == (2027, 1)
     assert fin._vorjahr(date(2024, 2, 1), date(2024, 2, 29)) == (date(2023, 2, 1), date(2023, 2, 28))
     assert fin._verschieben(date(2026, 4, 1), date(2026, 6, 30), "quartal") == (date(2026, 1, 1), date(2026, 3, 31))
+
+
+def test_einnahmen_nur_berechnete_leistungsarten(client, con):
+    with dbm.Transaktion(con):
+        dbm.einstellungen_speichern({"steuer_modus": "regel"}, con)
+    heute = fk.heute_datum()
+    leer = fin.auswertung(con, "monat", heute.year, heute.month)["k"]["umsatz_kat"]
+    assert leer == {}
+    assert "Im Zeitraum wurde nichts berechnet." in client.get("/finanzen").get_data(as_text=True)
+    kid = kunde_anlegen(client)
+    tag = heute.replace(day=2).isoformat()
+    post(client, "/artikel/neu", name="Kabel", preis="10,00", teilekosten="2,00", einheit="Stk.", typ="material",
+         steuersatz="19", aktiv="1")
+    kabel = con.execute("SELECT id FROM artikel WHERE name='Kabel'").fetchone()[0]
+    _rechnung(client, con, kid, tag, [("Workshop", "500,00", "1", "", "0", "Schulung"),
+                                      ("Analyse", "200,00", "2", "", "0", "Beratung"),
+                                      ("Kabel", "10,00", "3", str(kabel), "2,00", ""),
+                                      ("Kleinkram", "5,00", "1", "", "0", "")])
+    kat = fin.auswertung(con, "monat", heute.year, heute.month)["k"]["umsatz_kat"]
+    assert kat == {"Schulung": 50000, "Beratung": 40000, "Artikelverkauf": 3000, "Sonstige Leistungen": 500}
+    seite = client.get("/finanzen").get_data(as_text=True)
+    assert "Schulung" in seite and "Leihgebühren" not in seite and "KVA-Gebühren" not in seite

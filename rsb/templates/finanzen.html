@@ -43,22 +43,21 @@
   <p class="klein" style="margin:8px 0 0">{{ a.von.isoformat()|datum }} – {{ a.bis.isoformat()|datum }} · Vergleich: {{ a.vor_von.isoformat()|datum }} – {{ a.vor_bis.isoformat()|datum }}. Jede Zahl ist anklickbar und zeigt die Belege dahinter.</p>
 </div>
 
-<div class="raster fin-kacheln">
-  <a class="kachel kachel-link" href="{{ link('umsatz') }}"><div class="label">Umsatz netto</div><div class="wert">{{ a.k.umsatz_netto|euro }}</div><div class="klein">brutto {{ a.k.umsatz_brutto|euro }}</div>{{ veraenderung('umsatz_netto') }}</a>
-  <a class="kachel kachel-link" href="{{ link('ausgaben') }}"><div class="label">Ausgaben</div><div class="wert">{{ a.k.ausgaben|euro }}</div><div class="klein">Fixkosten, Wareneinsatz, sonstige</div>{{ veraenderung('ausgaben', true) }}</a>
-  <a class="kachel kachel-link" href="{{ link('umsatz') }}"><div class="label">Rohertrag</div><div class="wert">{{ a.k.rohertrag|euro }}</div><div class="klein">Umsatz − Wareneinsatz</div>{{ veraenderung('rohertrag') }}</a>
-  <a class="kachel kachel-link" href="{{ link('ausgaben') }}"><div class="label">Ergebnis</div><div class="wert" style="color:{{ 'var(--rot)' if a.k.ergebnis < 0 else 'var(--gruen)' }}">{{ a.k.ergebnis|euro }}</div><div class="klein">Rohertrag − Fixkosten − sonstige</div>{{ veraenderung('ergebnis') }}</a>
-</div>
+<div class="anpassbar fin-kacheln" data-anpassbar="finanzen">
+  <a class="kachel kachel-link" data-kachel="kpi_umsatz" data-titel="Umsatz netto" data-breite="3" href="{{ link('umsatz') }}"><div class="label">Umsatz netto</div><div class="wert">{{ a.k.umsatz_netto|euro }}</div><div class="klein">brutto {{ a.k.umsatz_brutto|euro }}</div>{{ veraenderung('umsatz_netto') }}</a>
+  <a class="kachel kachel-link" data-kachel="kpi_ausgaben" data-titel="Ausgaben" data-breite="3" href="{{ link('ausgaben') }}"><div class="label">Ausgaben</div><div class="wert">{{ a.k.ausgaben|euro }}</div><div class="klein">Fixkosten, Wareneinsatz, sonstige</div>{{ veraenderung('ausgaben', true) }}</a>
+  <a class="kachel kachel-link" data-kachel="kpi_rohertrag" data-titel="Rohertrag" data-breite="3" href="{{ link('umsatz') }}"><div class="label">Rohertrag</div><div class="wert">{{ a.k.rohertrag|euro }}</div><div class="klein">Umsatz − Wareneinsatz</div>{{ veraenderung('rohertrag') }}</a>
+  <a class="kachel kachel-link" data-kachel="kpi_ergebnis" data-titel="Ergebnis" data-breite="3" href="{{ link('ausgaben') }}"><div class="label">Ergebnis</div><div class="wert" style="color:{{ 'var(--rot)' if a.k.ergebnis < 0 else 'var(--gruen)' }}">{{ a.k.ergebnis|euro }}</div><div class="klein">Rohertrag − Fixkosten − sonstige</div>{{ veraenderung('ergebnis') }}</a>
 
-<div class="zweispaltig">
-  <div class="karte"><h2>Einnahmen</h2>
+
+  <div class="karte" data-kachel="einnahmen" data-titel="Einnahmen" data-breite="6"><h2>Einnahmen</h2>
     <table class="liste">
-      {% for kat, w in a.k.umsatz_kat.items() %}<tr><td>{{ kat }}</td><td class="zahl"><a href="{{ link('umsatz:' ~ kat) }}">{{ w|euro }}</a></td></tr>{% endfor %}
+      {% for kat, w in a.k.umsatz_kat.items() %}<tr><td>{{ kat }}</td><td class="zahl"><a href="{{ link('umsatz:' ~ kat) }}">{{ w|euro }}</a></td></tr>{% else %}<tr><td colspan="2" class="klein">Im Zeitraum wurde nichts berechnet.</td></tr>{% endfor %}
       <tr class="summe"><td>Umsatz netto {{ '(nach Zahlungseingang)' if p.basis == 'zahlung' else '(nach Rechnungsdatum)' }}</td><td class="zahl"><a href="{{ link('umsatz') }}">{{ a.k.umsatz_netto|euro }}</a></td></tr>
       <tr><td>Zahlungseingänge (Zufluss)</td><td class="zahl"><a href="{{ link('zufluss') }}">{{ a.zufluss|euro }}</a></td></tr>
     </table>
-    <p class="klein">Rechnungen abzüglich Stornos und Gutschriften. Aufteilung nach den Rechnungspositionen.</p></div>
-  <div class="karte"><h2>Ausgaben</h2>
+    <p class="klein">Rechnungen abzüglich Stornos und Gutschriften. Aufteilung nach der Leistungsart der Rechnungspositionen; es erscheinen nur Leistungsarten, die im Zeitraum berechnet wurden.</p></div>
+  <div class="karte" data-kachel="ausgaben_tabelle" data-titel="Ausgaben" data-breite="6"><h2>Ausgaben</h2>
     <table class="liste">
       <tr><td>Fixkosten {{ '(anteilig)' if p.fix_modus == 'anteilig' else '(im Fälligkeitsmonat)' }}</td><td class="zahl"><a href="{{ link('fixkosten') }}">{{ a.k.fixkosten|euro }}</a></td><td class="zahl">{{ veraenderung('fixkosten', true) }}</td></tr>
       <tr><td>Wareneinsatz / Material{% if waren_modus == 'ek' %} <span class="klein">(EK-Preise der Rechnungen)</span>{% endif %}</td><td class="zahl"><a href="{{ link('wareneinsatz') }}">{{ a.k.wareneinsatz|euro }}</a></td><td class="zahl">{{ veraenderung('wareneinsatz', true) }}</td></tr>
@@ -68,16 +67,15 @@
       <tr><td class="klein">davon Kassenausgaben</td><td class="zahl klein"><a href="{{ link('kasse') }}">{{ a.k.kasse|euro }}</a></td><td></td></tr>
     </table>
     {% if waren_modus == 'ek' %}<p class="klein">Wareneinsatz = Einkaufspreise (EK) der verkauften Positionen. {% if a.k.waren_beleg %}Eingangsrechnungen/Kassenbuchungen mit Wareneinsatz-Kostenart über <a href="{{ link('waren_beleg') }}">{{ a.k.waren_beleg|euro }}</a> zählen deshalb nicht noch einmal mit.{% endif %} Für die Steuer (EÜR) zählen weiterhin die echten Belege.</p>{% endif %}</div>
-</div>
 
-<div class="karte"><h2>Einnahmen und Ausgaben je Monat</h2>
+<div class="karte" data-kachel="diagramme" data-titel="Diagramme je Monat" data-breite="12"><h2>Einnahmen und Ausgaben je Monat</h2>
   <div class="fin-legende"><span><i class="ein"></i>Einnahmen (Umsatz netto)</span><span><i class="aus"></i>Ausgaben</span></div>
   <div class="diagramm-rahmen">{{ balken }}</div>
   <h2 style="margin-top:14px">Ergebnis je Monat</h2>
   <div class="diagramm-rahmen">{{ linie }}</div>
 </div>
 
-<div class="karte"><h2>Monate</h2>
+<div class="karte" data-kachel="monate" data-titel="Monatstabelle" data-breite="12"><h2>Monate</h2>
   <div style="overflow-x:auto"><table class="liste"><thead><tr><th>Monat</th><th class="zahl">Einnahmen</th><th class="zahl">Fixkosten</th><th class="zahl">Wareneinsatz</th><th class="zahl">Sonstige</th><th class="zahl">Ergebnis</th></tr></thead><tbody>
   {% for m in a.monate %}<tr><td>{{ m.titel }}</td>
     <td class="zahl"><a href="{{ link('monat:' ~ m.monat ~ ':einnahme') }}">{{ m.einnahmen|euro }}</a></td>
@@ -88,35 +86,30 @@
   <tr class="summe"><td>Summe</td>{% for k in ['einnahmen', 'fixkosten', 'wareneinsatz', 'sonstige', 'ergebnis'] %}<td class="zahl"><b>{{ a.monate|sum(attribute=k)|euro }}</b></td>{% endfor %}</tr>
   </tbody></table></div></div>
 
-<div class="zweispaltig">
-  <div class="karte"><h2>Ausgaben nach Kategorie</h2>
+  <div class="karte" data-kachel="kategorien" data-titel="Ausgaben nach Kategorie" data-breite="6"><h2>Ausgaben nach Kategorie</h2>
     {% for kat, w, gruppen in a.kategorien %}<a class="fin-kat" href="{{ link('ausgabe:' ~ kat) }}" title="{{ kat }}: {{ w|euro }}">
       <span class="fin-kat-name">{{ kat }}{% if 'fixkosten' in gruppen %} <span class="klein">(Fixkosten)</span>{% endif %}</span>
       <span class="fin-kat-balken"><i style="width:{{ (w / max_kat * 100)|round(1) if w > 0 else 0 }}%"></i></span>
       <span class="fin-kat-wert">{{ w|euro }}</span></a>
     {% else %}<p class="klein">Keine Ausgaben im Zeitraum.</p>{% endfor %}</div>
-  <div>
-    {% if not a.ku %}<div class="karte"><h2>Umsatzsteuer (Orientierung)</h2>
+    {% if not a.ku %}<div class="karte" data-kachel="ust" data-titel="Umsatzsteuer" data-breite="6"><h2>Umsatzsteuer (Orientierung)</h2>
       <table class="liste"><tr><td>vereinnahmte Umsatzsteuer</td><td class="zahl"><a href="{{ link('ust') }}">{{ a.k.ust|euro }}</a></td></tr>
         <tr><td>gezahlte Vorsteuer</td><td class="zahl"><a href="{{ link('vorsteuer') }}">{{ a.k.vorsteuer|euro }}</a></td></tr>
         <tr class="summe"><td>voraussichtliche Zahllast</td><td class="zahl">{{ (a.k.ust - a.k.vorsteuer)|euro }}</td></tr></table>
       <p class="klein">Nur zur Orientierung – maßgeblich ist die Umsatzsteuer-Voranmeldung.</p></div>{% endif %}
-    <div class="karte"><h2>Offene Posten zum {{ a.stichtag.isoformat()|datum }}</h2>
+    <div class="karte" data-kachel="offene_posten" data-titel="Offene Posten" data-breite="6"><h2>Offene Posten zum {{ a.stichtag.isoformat()|datum }}</h2>
       <table class="liste"><tr><td>Offene Forderungen ({{ a.forderungen|length }})</td><td class="zahl"><a href="{{ link('forderungen') }}">{{ a.forderungen|sum(attribute='offen')|euro }}</a></td></tr>
         <tr><td>Offene Verbindlichkeiten ({{ a.verbindlichkeiten|length }})</td><td class="zahl"><a href="{{ link('verbindlichkeiten') }}">{{ a.verbindlichkeiten|sum(attribute='offen')|euro }}</a></td></tr></table></div>
-    <div class="karte"><h2>Aufträge</h2>
+    <div class="karte" data-kachel="auftraege" data-titel="Aufträge" data-breite="6"><h2>Aufträge</h2>
       <table class="liste"><tr><td>Abgeschlossene Aufträge</td><td class="zahl"><a href="{{ link('auftraege') }}">{{ a.auftraege.anzahl }}</a></td></tr>
         <tr><td>Ø Auftragswert (netto, laut Rechnung)</td><td class="zahl">{{ a.auftraege.durchschnitt|euro }}</td></tr>
         <tr><td>Ø Marge der Rechnungen (Preis − Teilekosten)</td><td class="zahl">{{ ('%.1f'|format(a.auftraege.marge)|replace('.', ',') ~ ' %') if a.auftraege.marge is not none else '–' }}</td></tr></table></div>
-  </div>
-</div>
 
-<div class="zweispaltig">
-  <div class="karte"><h2>Break-even {{ be.monat }}</h2>
+  <div class="karte" data-kachel="breakeven" data-titel="Break-even" data-breite="6"><h2>Break-even {{ be.monat }}</h2>
     <p>Fixkosten pro Monat: <b>{{ be.fixkosten|euro }}</b>. Bei einer Rohertragsquote von {{ '%.0f'|format(be.quote * 100) }} % (letzte 12 Monate) braucht es <b>{{ be.noetiger_umsatz|euro }}</b> Umsatz netto im Monat.</p>
     <div class="fin-fortschritt" role="progressbar" aria-valuenow="{{ be.prozent|round|int }}" aria-valuemin="0" aria-valuemax="100" title="Rohertrag {{ be.rohertrag|euro }} von {{ be.fixkosten|euro }}"><i style="width:{{ be.prozent|round(1) }}%"></i></div>
     <p class="klein">Rohertrag bisher {{ be.rohertrag|euro }} ({{ be.prozent|round|int }} % der Fixkosten){% if be.fehlt %} – es fehlen noch {{ be.fehlt|euro }} Rohertrag{% else %} – Fixkosten gedeckt{% endif %}. Umsatz bisher {{ be.umsatz|euro }}.</p></div>
-  <div class="karte"><h2>Vorschau nächste 3 Monate</h2>
+  <div class="karte" data-kachel="vorschau" data-titel="Vorschau 3 Monate" data-breite="6"><h2>Vorschau nächste 3 Monate</h2>
     <table class="liste"><thead><tr><th>Monat</th><th class="zahl">Fixkosten fällig</th><th class="zahl">erwartete Eingänge</th></tr></thead><tbody>
     {% for m in vorschau %}<tr><td>{{ m.titel }}</td>
       <td class="zahl"><span title="{% for d, f, b in m.fixkosten %}{{ d.strftime('%d.%m.') }} {{ f.bezeichnung }} {{ b.brutto|euro }}&#10;{% endfor %}">{{ m.fix_summe|euro }}</span><div class="klein">{{ m.fixkosten|length }} Fälligkeit(en)</div></td>

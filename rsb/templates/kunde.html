@@ -26,7 +26,7 @@
       </select></div>
     <div class="s9" style="grid-column: span 9"><label>Firma</label><input type="text" name="firma" value="{{ (k.firma or '') if k }}"></div>
     <div class="s2"><label>Anrede</label>
-      <select name="anrede">{% for a in ['', 'Frau', 'Herr', 'Divers'] %}<option {{ 'selected' if k and k.anrede == a }}>{{ a }}</option>{% endfor %}</select></div>
+      <select name="anrede" data-frei data-wert="{{ (k.anrede or '') if k }}">{% for a in ['', 'Frau', 'Herr', 'Divers'] %}<option {{ 'selected' if k and k.anrede == a }}>{{ a }}</option>{% endfor %}</select></div>
     <div class="s4"><label>Vorname</label><input type="text" name="vorname" value="{{ (k.vorname or '') if k }}"></div>
     <div><label>Nachname</label><input type="text" name="nachname" value="{{ (k.nachname or '') if k }}"></div>
     <div class="s12"><label>Straße und Hausnummer</label><input type="text" name="strasse" value="{{ (k.strasse or '') if k }}"></div>

@@ -584,3 +584,39 @@ th a.sortieren.aktiv .pfeil { opacity: 1; }
 .sv { filter: blur(6px); user-select: none; -webkit-user-select: none; }
 .sv-feld { filter: blur(5px); pointer-events: none; user-select: none; }
 @media print { .sichtschutz main { visibility: visible; } }
+
+/* ---------------------------------------------------------------- Anpassen (anpassen.js) */
+/* Auswahl mit eigenem Eintrag */
+.frei-eingabe { display: flex; gap: 6px; align-items: center; }
+.frei-eingabe[hidden] { display: none; }
+.frei-eingabe input { flex: 1; min-width: 0; }
+.frei-eingabe button { flex: none; padding: 4px 9px; }
+/* Bausteine: 12er-Raster, Breite je Baustein */
+.anpassbar { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; align-items: stretch; }
+.anpassbar > [data-kachel] { grid-column: span var(--spalten, 12); min-width: 0; position: relative; }
+.anpassbar > .karte, .anpassbar > .kachel { margin: 0; }
+.anpassbar > .baustein-aus { display: none; }
+.anpassbar.anpassen-an > [data-kachel] { outline: 2px dashed var(--rand); outline-offset: 2px; cursor: move; }
+.anpassbar.anpassen-an > .baustein-aus { display: block; opacity: .45; }
+.anpassbar > .wird-gezogen { opacity: .5; }
+.baustein-werkzeug { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: -4px 0 8px; padding: 4px 6px;
+  background: var(--grau-hell); border-radius: 6px; font-size: 12.5px; cursor: default; }
+.baustein-werkzeug .baustein-name { flex: 1; font-weight: 600; min-width: 80px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.baustein-werkzeug .baustein-griff { cursor: grab; font-size: 16px; padding: 0 2px; }
+.baustein-werkzeug button { padding: 2px 8px; }
+.baustein-werkzeug select { width: auto; padding: 2px 4px; }
+.kachel .baustein-werkzeug { margin: -6px -6px 8px; }
+@media (max-width: 900px) {
+  .anpassbar > [data-kachel] { grid-column: span 12; }
+  .anpassbar > [data-kachel][data-akt-breite="3"], .anpassbar > [data-kachel][data-akt-breite="4"] { grid-column: span 6; }
+}
+/* Tabellenspalten */
+.spalte-aus { display: none; }
+.spalten-wahl { float: right; position: relative; margin: -4px 0 4px 8px; z-index: 5; }
+.spalten-wahl summary { cursor: pointer; color: var(--blau); list-style: none; user-select: none; }
+.spalten-wahl summary::-webkit-details-marker { display: none; }
+.spalten-wahl summary::before { content: "⚙ "; }
+.spalten-wahl .spalten-liste { position: absolute; right: 0; top: 100%; background: var(--flaeche); border: 1px solid var(--rand);
+  border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 18px rgba(0,0,0,.12); min-width: 200px; max-height: 320px; overflow: auto; }
+.spalten-liste label { display: flex; gap: 6px; align-items: center; padding: 3px 0; white-space: nowrap; font-weight: normal; }
+.spalten-liste input { width: auto; }
